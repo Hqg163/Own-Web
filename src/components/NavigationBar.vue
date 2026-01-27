@@ -1,0 +1,869 @@
+<template>
+  <div :class="themeClass" class="app-container">
+    <nav class="navbar">
+      <ul class="nav-links">
+        <li v-for="link in navLinks" :key="link.name">
+          <!-- <router-link 
+            :to="link.to" 
+            :class="['nav-link', themeClass]"
+            @click="handleNavClick(link)"
+          > -->
+          <router-link 
+            :to="link.to" 
+            :class="['nav-link', themeClass]"
+            @click.native.prevent="handleNavClick(link)"
+          >
+            {{ link.name }}
+          </router-link>
+        </li>
+      </ul>
+      <ul class="auth-links">
+        <li><a href="#login" @click.prevent="showLogin" :class="['auth-link', themeClass]">登录</a></li>
+        <li><a href="#register" @click.prevent="showRegister" :class="['auth-link', themeClass]">注册</a></li>
+      </ul>
+      <div class="theme-toggle">
+
+        <!-- 太阳图标 -->
+        <div class="theme-icon sun-icon" :class="{ active: !isDarkMode }" @click="switchToLightMode">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="5" fill="currentColor" />
+            <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <line x1="12" y1="2" x2="12" y2="5" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+              <line x1="4.22" y1="4.22" x2="6.34" y2="6.34" />
+              <line x1="17.66" y1="17.66" x2="19.78" y2="19.78" />
+              <line x1="2" y1="12" x2="5" y2="12" />
+              <line x1="19" y1="12" x2="22" y2="12" />
+              <line x1="4.22" y1="19.78" x2="6.34" y2="17.66" />
+              <line x1="17.66" y1="6.34" x2="19.78" y2="4.22" />
+            </g>
+          </svg>
+        </div>
+
+        <label class="switch">
+          <input type="checkbox" v-model="isDarkMode" @change="toggleTheme" />
+          <span class="slider round"></span>
+        </label>
+
+        <!-- 月亮图标 -->
+        <div class="theme-icon moon-icon" :class="{ active: isDarkMode }" @click="switchToDarkMode">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" />
+          </svg>
+        </div>
+
+        <span class="theme-label">{{ isDarkMode ?  '黑夜' : '白天'  }}</span>
+      </div>
+    </nav>
+
+    <!-- 登录弹窗 -->
+    <div v-if="showLoginModal" class="modal" @click.self="showLoginModal = false">
+      <div class="modal-content">
+        <span class="close" @click="showLoginModal = false">&times;</span>
+        <h2>登录</h2>
+        <form @submit.prevent="login">
+          <input type="email" v-model="loginEmail" placeholder="邮箱" required />
+          <input type="password" v-model="password" placeholder="密码" required />
+          <button type="submit">登录</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 注册弹窗 -->
+    <div v-if="showRegisterModal" class="modal" @click.self="showRegisterModal = false">
+      <div class="modal-content">
+        <span class="close" @click="showRegisterModal = false">&times;</span>
+        <h2>注册</h2>
+        <form @submit.prevent="register">
+          <input type="email" v-model="email" placeholder="邮箱" required />
+          <input type="password" v-model="password" placeholder="密码" required />
+          <button type="submit">注册</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import axios from 'axios';
+
+export default {
+  name: 'NavigationBar',
+  data() {
+    return {
+      isDarkMode: localStorage.getItem('theme') === 'dark',
+      showLoginModal: false,
+      showRegisterModal: false,
+      username: '',
+      password: '',
+      email: '',
+      navLinks: [
+        { 
+          name: '首页', 
+          to: '/' 
+        },
+        { 
+          name: '个人中心', 
+          to: '/personal',
+          requiresAuth: true  // 需要登录
+        },
+        { 
+          name: '创作中心', 
+          to: '/creation' 
+        },
+        { 
+          name: '关于', 
+          to: '/about' 
+        }
+      ]
+    };
+  },
+  computed: {
+    themeClass() {
+      return this.isDarkMode ? 'dark-mode' : 'light-mode';
+    },
+    isLoggedIn() {
+      return localStorage.getItem('isLoggedIn') === 'true';
+    }
+  },
+  methods: {
+    toggleTheme() {
+      // 这里需要更新 isDarkMode
+      // this.isDarkMode = !this.isDarkMode;
+      localStorage.setItem('theme', this.isDarkMode ? 'dark' : 'light');
+    },
+
+    // 新增：点击图标直接切换
+    switchToLightMode() {
+      if (this.isDarkMode) {
+        this.isDarkMode = false;
+        localStorage.setItem('theme', 'light');
+      }
+    },
+    switchToDarkMode() {
+      if (!this.isDarkMode) {
+        this.isDarkMode = true;
+        localStorage.setItem('theme', 'dark');
+      }
+    },
+
+    showLogin() {
+      this.showLoginModal = true;
+      this.showRegisterModal = false;
+    },
+    showRegister() {
+      this.showRegisterModal = true;
+      this.showLoginModal = false;
+    },
+
+    // 处理导航点击
+    handleNavClick(link) {
+      if (link.requiresAuth && !this.isLoggedIn) {
+        // 保存点击的目标路径，登录后跳转
+        localStorage.setItem('redirectAfterLogin', link.to);
+        this.showLogin();
+        return false;
+      }
+      this.$router.push(link.to);
+      // return true;
+    },
+    
+    // 修改登录方法
+    async login() {
+    try {
+        const response = await axios.post('/api/login', {
+          email: this.email,
+          password: this.password,
+        });
+        
+        console.log('登录成功:', response.data);
+        
+        // 保存登录状态和用户信息
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('userEmail', response.data.user.email);
+        localStorage.setItem('userId', response.data.user.id);
+        localStorage.setItem('userInfo', JSON.stringify(response.data.user));
+        
+        this.showLoginModal = false;
+        this.username = '';
+        this.password = '';
+        
+        // 检查是否有重定向目标
+        const redirectTo = localStorage.getItem('redirectAfterLogin');
+        if (redirectTo) {
+        localStorage.removeItem('redirectAfterLogin');
+        this.$router.push(redirectTo);
+        } else {
+        // 刷新页面或跳转到首页
+        location.reload();
+        }
+        
+    } catch (error) {
+        console.error('登录失败:', error.response?.data || error.message);
+        alert('登录失败，请检查用户名和密码');
+    }
+    },
+
+    async register() {
+      try {
+        const response = await axios.post('/api/register', {
+          email: this.email,
+          password: this.password,
+        });
+        console.log('注册成功:', response.data);
+        this.showRegisterModal = false;
+        alert('注册成功，请登录');
+        this.showLogin(); // 自动跳转到登录
+      } catch (error) {
+        console.error('注册失败:', error.response?.data || error.message);
+        alert('注册失败，请稍后重试');
+      }
+    },
+  },
+  mounted() {
+    const currentTheme = localStorage.getItem('theme');
+    if (currentTheme === 'dark') {
+      this.isDarkMode = true;
+    } else {
+      this.isDarkMode = false;
+      if (!currentTheme) {
+        localStorage.setItem('theme', 'light');
+      }
+    }
+  },
+};
+</script>
+
+<style scoped>
+.nav-link {
+  /* 移除a标签的默认样式 */
+  text-decoration: none;
+  /* 其他样式保持不变 */
+}
+
+/* 添加router-link激活状态样式 */
+.router-link-active.nav-link {
+  background: linear-gradient(145deg, #3b82f6, #2563eb);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.dark-mode .router-link-active.nav-link {
+  background: linear-gradient(145deg, #1e40af, #1e3a8a);
+}
+
+/* 基础样式 */
+.app-container {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  transition: background-color 0.3s, color 0.3s;
+  min-height: 100vh;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25px 20px;
+  transition: background-color 0.3s;
+}
+
+/* 导航链接通用样式 */
+.nav-links, .auth-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 20px;
+}
+
+.nav-link, .auth-link {
+  text-decoration: none;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border-radius: 25px;
+  padding: 10px 24px;
+  display: inline-block;
+  text-align: center;
+  min-width: 100px;
+  border: 2px solid transparent;
+}
+
+/* ==================== 白天模式样式 ==================== */
+.light-mode {
+  background-color: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  color: #333;
+}
+
+.light-mode .navbar {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 白天模式 - 导航按钮样式 */
+.light-mode .nav-link {
+  background: linear-gradient(145deg, #ffffff, #f0f0f0);
+  color: #4a5568;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .nav-link:hover {
+  background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+  color: #2d3748;
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* 白天模式 - 登录注册按钮样式 */
+.light-mode .auth-link {
+  background: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .auth-link:hover {
+  background: linear-gradient(to right, #00f2fe 0%, #4facfe 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* ==================== 黑夜模式样式 ==================== */
+.dark-mode {
+  background-color: #1a202c;
+  color: #e2e8f0;
+}
+
+.dark-mode .navbar {
+  background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* 黑夜模式 - 导航按钮样式（保持原样） */
+.dark-mode .nav-link {
+  background: linear-gradient(145deg, #2d3748, #4a5568);
+  color: #e2e8f0;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.dark-mode .nav-link:hover {
+  background: linear-gradient(145deg, #4a5568, #2d3748);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 7px 14px rgba(0, 0, 0, 0.3), 0 3px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* 黑夜模式 - 登录注册按钮样式（保持原样） */
+.dark-mode .auth-link {
+  background: linear-gradient(to right, #4b66ff, #8360ff);
+  color: #e2e8f0;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.dark-mode .auth-link:hover {
+  background: linear-gradient(to right, #8360ff, #4b66ff);
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 7px 14px rgba(0, 0, 0, 0.3), 0 3px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* ==================== 主题切换按钮 ==================== */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 25px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.light-mode .theme-toggle {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.dark-mode .theme-toggle {
+  background: rgba(45, 55, 72, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.theme-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 30px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to right, #d1e8ff, #a8c6ff);
+  transition: 0.4s;
+  border-radius: 34px;
+}
+
+/* 白天模式下的开关 */
+.light-mode .slider {
+  /* background: linear-gradient(to right, #e2e8f0, #cbd5e1); */
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 黑夜模式下的开关 */
+.dark-mode .slider {
+  /* background: linear-gradient(to right, #475569, #334155); */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+input:checked + .slider {
+  background: linear-gradient(to right, #4a5568, #2d3748);
+}
+
+input:checked + .slider:before {
+  transform: translateX(30px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+
+/* ==================== 图标样式 ==================== */
+.theme-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.5;
+}
+
+.theme-icon:hover {
+  transform: scale(1.1);
+}
+
+.theme-icon.active {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+/* 太阳图标样式 */
+.sun-icon {
+  color: #fbbf24; /* 太阳黄 */
+}
+
+.light-mode .sun-icon.active {
+  background: rgba(251, 191, 36, 0.15);
+  box-shadow: 0 0 15px rgba(251, 191, 36, 0.3);
+}
+
+.dark-mode .sun-icon {
+  color: #fbbf24;
+}
+
+.sun-icon:hover {
+  background: rgba(251, 191, 36, 0.1);
+}
+
+/* 月亮图标样式 */
+.moon-icon {
+  color: #94a3b8; /* 月亮银灰 */
+}
+
+.dark-mode .moon-icon.active {
+  color: #e2e8f0;
+  background: rgba(226, 232, 240, 0.1);
+  box-shadow: 0 0 15px rgba(148, 163, 184, 0.3);
+}
+
+.light-mode .moon-icon {
+  color: #64748b;
+}
+
+.moon-icon:hover {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+/* ==================== 文字标签 ==================== */
+.theme-label {
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 60px;
+  transition: color 0.3s;
+}
+
+.light-mode .theme-label {
+  color: #475569;
+}
+
+.dark-mode .theme-label {
+  color: #cbd5e1;
+}
+
+/* ==================== 弹窗样式 ==================== */
+.modal {
+  display: flex;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 30px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.dark-mode .modal-content {
+  background-color: #2d3748;
+  color: #e2e8f0;
+}
+
+.close {
+  position: absolute;
+  right: 20px;
+  top: 15px;
+  font-size: 24px;
+  cursor: pointer;
+  color: #999;
+}
+
+.dark-mode .close {
+  color: #a0aec0;
+}
+
+.close:hover {
+  color: #333;
+}
+
+.dark-mode .close:hover {
+  color: #fff;
+}
+
+form input {
+  width: 100%;
+  padding: 12px;
+  margin: 10px 0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.dark-mode form input {
+  background-color: #4a5568;
+  color: #e2e8f0;
+  border-color: #718096;
+}
+
+form button {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.dark-mode form button {
+  background: linear-gradient(to right, #4b66ff, #8360ff);
+}
+
+form button:hover {
+  opacity: 0.9;
+}
+
+/* ==================== 响应式设计 ==================== */
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+  }
+  
+  .nav-links, .auth-links {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .nav-link, .auth-link {
+    font-size: 14px;
+    padding: 8px 16px;
+    min-width: 80px;
+  }
+  
+  .theme-toggle {
+    margin-top: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-links, .auth-links {
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+  
+  .nav-link, .auth-link {
+    width: 100%;
+  }
+}
+</style>
+
+<!-- <style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #eecdcd;
+  color: white;
+  padding: 25px 20px;
+}
+
+.nav-links, .auth-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 20px; /* 使用 gap 替代 margin 来控制间距 */
+}
+
+.nav-links a {
+  color: white;
+  text-decoration: none;
+  font-size: 18px;
+  transition: color 0.3s ease;
+  border-radius: 25px; /* 半圆角边框 */
+  padding: 10px 20px; /* 内边距 */
+  background: linear-gradient(145deg, #000, #444); /* 黑色渐变背景 */
+  transition: background 0.3s ease; /* 背景过渡效果 */
+}
+
+.nav-links a:hover {
+  color: #ffcc00;
+  background: linear-gradient(145deg, #444, #888); /* 鼠标悬停时的背景 */
+}
+
+/* 其他样式... */
+
+/* 为登录和注册按钮添加半圆角边框和鼠标悬停效果 */
+.auth-links a {
+  color: white;
+  text-decoration: none;
+  font-size: 18px;
+  transition: color 0.3s ease;
+  border-radius: 25px; /* 半圆角边框 */
+  padding: 10px 20px; /* 内边距 */
+  background: linear-gradient(to right, #4b66ff, #8360ff); /* 蓝色渐变背景 */
+  transition: background 0.3s ease; /* 背景过渡效果 */
+  display: inline-block; /* 使链接表现为块级元素 */
+}
+
+.auth-links a:hover {
+  color: #ffcc00;
+  background: linear-gradient(to right, #8360ff, #4b66ff); /* 鼠标悬停时的背景 */
+}
+
+/* 主题切换按钮 */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 34px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #2196f3;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+/* 黑夜模式 */
+.dark-mode {
+  background-color: #333;
+  color: white;
+}
+
+.dark-mode nav {
+  background-color: #222;
+}
+
+.dark-mode .nav-links a, .dark-mode .auth-links a {
+  color: #ddd;
+}
+
+.dark-mode .nav-links a:hover, .dark-mode .auth-links a:hover {
+  color: #ffcc00;
+}
+
+/* 白天模式 */
+.light-mode {
+  background-color: #fff;
+  color: #333;
+}
+
+.light-mode nav {
+  background-color: #f8f8f8;
+}
+
+.light-mode .nav-links a, .light-mode .auth-links a {
+  color: #333;
+}
+
+.light-mode .nav-links a:hover, .light-mode .auth-links a:hover {
+  color: #007bff;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .nav-links, .auth-links {
+    margin-top: 10px;
+    flex-direction: column;
+  }
+
+  .nav-links li, .auth-links li {
+    margin: 5px 0;
+  }
+
+  .theme-toggle {
+    margin-top: 10px;
+  }
+}
+
+/* 登录和注册弹窗 */
+.modal {
+  display: none; /* 默认不显示 */
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgb(0,0,0);
+  background-color: rgba(0,0,0,0.4);
+}
+
+.modal-content {
+  background-color: #fefefe;
+  margin: 15% auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%;
+  max-width: 300px; /* 添加最大宽度 */
+  border-radius: 10px; /* 圆角边框 */
+}
+
+.close {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+}
+</style> -->
+
