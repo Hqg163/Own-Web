@@ -65,11 +65,9 @@ export default {
     }
   },
   created() {
-    // 如果已登录，跳转到个人中心
+    // 如果已登录，跳转到个人中心或保存的重定向页面
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
-    const redirectTo = localStorage.getItem('redirectAfterLogin')||'/personal'
-    localStorage.removeItem('redirectAfterLogin')
-    this.$router.push(redirectTo).catch(() => {})
+    const redirectTo = localStorage.getItem('redirectAfterLogin')
     
     if (isLoggedIn) {
       this.$router.push(redirectTo || '/personal')
@@ -90,15 +88,18 @@ export default {
         // 登录成功
         localStorage.setItem('isLoggedIn', 'true')
         localStorage.setItem('userEmail', this.email)
+        localStorage.setItem('userId', response.data.user.id)
+        localStorage.setItem('userInfo', JSON.stringify(response.data.user))
         
         // 检查是否有重定向目标
         const redirectTo = localStorage.getItem('redirectAfterLogin') || '/personal'
         localStorage.removeItem('redirectAfterLogin')
         
+        // 跳转到目标页面（个人中心或之前尝试访问的页面）
         this.$router.push(redirectTo)
         
       } catch (error) {
-        this.error = error.response?.data || '登录失败，请检查邮箱和密码'
+        this.error = error.response?.data?.error || '登录失败，请检查邮箱和密码'
       } finally {
         this.loading = false
       }

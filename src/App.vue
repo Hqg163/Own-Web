@@ -22,5 +22,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 防止水平滚动条 */
+  overflow-x: hidden;
 }
 </style>

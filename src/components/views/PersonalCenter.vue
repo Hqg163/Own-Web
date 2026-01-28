@@ -258,18 +258,12 @@ export default {
         notes: ''
       },
       
-      // 备份原始数据（用于取消修改）
       originalUserInfo: {}
-    }
-  },
-  computed: {
-    isLoggedIn() {
-      return localStorage.getItem('isLoggedIn') === 'true'
     }
   },
   created() {
     // 检查登录状态
-    if (!this.isLoggedIn) {
+    if (!localStorage.getItem('isLoggedIn')) {
       this.$router.push('/login')
       return
     }
@@ -277,24 +271,41 @@ export default {
     // 加载用户信息
     this.loadUserInfo()
     
-    // 监听主题变化
-    this.watchTheme()
+    // 监听主题变化（关键修复）
+    this.setupThemeListener()
+  },
+  beforeUnmount() {
+    // 清理事件监听
+    window.removeEventListener('theme-changed', this.handleThemeChange)
+    window.removeEventListener('storage', this.handleStorageChange)
   },
   methods: {
-    // 监听主题变化
-    watchTheme() {
-      window.addEventListener('storage', (e) => {
+    // 设置主题监听（同时支持自定义事件和 storage 事件）
+    setupThemeListener() {
+      // 监听同一窗口内的主题切换（从 NavigationBar 触发）
+      this.handleThemeChange = (e) => {
+        this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
+      }
+      window.addEventListener('theme-changed', this.handleThemeChange)
+      
+      // 监听多标签页间的 localStorage 变化
+      this.handleStorageChange = (e) => {
         if (e.key === 'theme') {
           this.themeClass = e.newValue === 'dark' ? 'dark-mode' : 'light-mode'
         }
-      })
+      }
+      window.addEventListener('storage', this.handleStorageChange)
+    },
+
+    // 监听主题变化（旧方法，保留兼容性）
+    watchTheme() {
+      // 此方法已被 setupThemeListener 替代
     },
     
     // 选择选项
     selectOption(optionId) {
       this.activeOption = optionId
       
-      // 如果切换到其他选项，取消编辑状态
       if (optionId !== 'personal-info') {
         this.isEditing = false
         this.isEditingPassword = false
@@ -302,25 +313,18 @@ export default {
       }
     },
     
-    // 修改loadUserInfo方法，加载用户信息
+    // 加载用户信息（保持原有逻辑）
     async loadUserInfo() {
-    try {
-        // 从localStorage获取用户ID（实际应从登录响应中获取）
+      try {
         const userId = localStorage.getItem('userId')
         
         if (userId) {
-        // 调用后端API获取用户信息
-        const response = await axios.get(`/api/user/${userId}`)
-        this.userInfo = response.data.user
-        
-        // 保持密码隐藏
-        this.userInfo.password = '********'
-        
-        // 备份原始数据
-        this.originalUserInfo = { ...this.userInfo }
+          const response = await axios.get(`/api/user/${userId}`)
+          this.userInfo = response.data.user
+          this.userInfo.password = '********'
+          this.originalUserInfo = { ...this.userInfo }
         } else {
-        // 如果没有用户ID，使用默认值
-        this.userInfo = {
+          this.userInfo = {
             username: '用户' + Math.floor(Math.random() * 1000),
             email: localStorage.getItem('userEmail') || '',
             password: '********',
@@ -328,120 +332,107 @@ export default {
             hobbies: '阅读, 音乐, 运动',
             occupation: 'developer',
             notes: '欢迎使用个人中心！'
+          }
+          this.originalUserInfo = { ...this.userInfo }
         }
-        this.originalUserInfo = { ...this.userInfo }
-        }
-    } catch (error) {
+      } catch (error) {
         console.error('加载用户信息失败:', error)
-    }
+      }
     },
     
-    // 切换编辑状态
+    // 切换编辑状态（保持原有逻辑）
     toggleEdit() {
       if (!this.isEditing) {
-        // 开始编辑
         this.isEditing = true
-        // 备份当前数据
         this.originalUserInfo = { ...this.userInfo }
       } else {
-        // 保存修改
         this.savePersonalInfo()
       }
     },
     
-    // 切换密码编辑状态
+    // 切换密码编辑状态（保持原有逻辑）
     togglePasswordEdit() {
       if (!this.isEditingPassword) {
-        // 开始编辑密码
         this.isEditingPassword = true
-        // 如果密码是星号，清空以便输入
         if (this.userInfo.password === '********') {
           this.userInfo.password = ''
         }
       } else {
-        // 取消密码编辑
         this.cancelPasswordEdit()
       }
     },
     
-    // 取消密码编辑
+    // 取消密码编辑（保持原有逻辑）
     cancelPasswordEdit() {
       this.isEditingPassword = false
-      // 恢复原始密码显示
       this.userInfo.password = '********'
     },
     
-    // 取消所有编辑
+    // 取消所有编辑（保持原有逻辑）
     cancelEdit() {
-      // 恢复所有数据
       this.userInfo = { ...this.originalUserInfo }
       this.isEditing = false
       this.isEditingPassword = false
       this.saveStatus = null
     },
     
-    // 保存个人信息
+    // 保存个人信息（保持原有逻辑）
     async savePersonalInfo() {
-        try {
-            // 验证必填项
-            if (!this.userInfo.username || !this.userInfo.email) {
-            this.showSaveStatus('error', '用户名和账号不能为空')
-            return
-            }
-            
-            if (this.isEditingPassword && !this.userInfo.password) {
-            this.showSaveStatus('error', '密码不能为空')
-            return
-            }
-            
-            const userId = localStorage.getItem('userId')
-            
-            if (!userId) {
-            this.showSaveStatus('error', '用户未登录')
-            return
-            }
-            
-            if (this.isEditingPassword) {
-            // 调用更新密码API
-            await axios.put(`/api/user/${userId}/password`, {
-                oldPassword: prompt('请输入当前密码以验证'),
-                newPassword: this.userInfo.password
-            })
-            
-            this.showSaveStatus('success', '密码修改成功，请重新登录')
-            
-            // 延迟跳转
-            setTimeout(() => {
-                localStorage.removeItem('isLoggedIn')
-                localStorage.removeItem('userId')
-                this.$router.push('/login')
-            }, 2000)
-            } else {
-            // 调用更新用户信息API
-            await axios.put(`/api/user/${userId}`, {
-                username: this.userInfo.username,
-                birthday: this.userInfo.birthday,
-                hobbies: this.userInfo.hobbies,
-                occupation: this.userInfo.occupation,
-                notes: this.userInfo.notes
-            })
-            
-            this.showSaveStatus('success', '个人信息保存成功')
-            }
-            
-            // 更新备份数据
-            this.originalUserInfo = { ...this.userInfo }
-            this.isEditing = false
-            this.isEditingPassword = false
-            
-        } catch (error) {
-            console.error('保存失败:', error)
-            const message = error.response?.data?.error || '保存失败，请重试'
-            this.showSaveStatus('error', message)
+      try {
+        if (!this.userInfo.username || !this.userInfo.email) {
+          this.showSaveStatus('error', '用户名和账号不能为空')
+          return
         }
+        
+        if (this.isEditingPassword && !this.userInfo.password) {
+          this.showSaveStatus('error', '密码不能为空')
+          return
+        }
+        
+        const userId = localStorage.getItem('userId')
+        
+        if (!userId) {
+          this.showSaveStatus('error', '用户未登录')
+          return
+        }
+        
+        if (this.isEditingPassword) {
+          await axios.put(`/api/user/${userId}/password`, {
+            oldPassword: prompt('请输入当前密码以验证'),
+            newPassword: this.userInfo.password
+          })
+          
+          this.showSaveStatus('success', '密码修改成功，请重新登录')
+          
+          setTimeout(() => {
+            localStorage.removeItem('isLoggedIn')
+            localStorage.removeItem('userId')
+            this.$router.push('/login')
+          }, 2000)
+        } else {
+          await axios.put(`/api/user/${userId}`, {
+            username: this.userInfo.username,
+            birthday: this.userInfo.birthday,
+            hobbies: this.userInfo.hobbies,
+            occupation: this.userInfo.occupation,
+            notes: this.userInfo.notes
+          })
+          
+          this.showSaveStatus('success', '个人信息保存成功')
+        }
+        
+        this.originalUserInfo = { ...this.userInfo }
+        this.isEditing = false
+        this.isEditingPassword = false
+        
+      } catch (error) {
+        console.error('保存失败:', error)
+        const message = error.response?.data?.error || '保存失败，请重试'
+        this.showSaveStatus('error', message)
+      }
     },
     
-    // 显示保存状态
+    // 显示保存状态（保持原有逻辑）
     showSaveStatus(type, message) {
       const icons = {
         success: '✅',
@@ -455,13 +446,12 @@ export default {
         message
       }
       
-      // 3秒后自动清除
       setTimeout(() => {
         this.saveStatus = null
       }, 3000)
     },
     
-    // 日期选择器相关方法
+    // 日期选择器相关方法（保持原有逻辑）
     showDatePicker() {
       this.showDatePickerModal = true
     },
@@ -481,22 +471,147 @@ export default {
 </script>
 
 <style scoped>
-/* 个人中心主容器 */
+/* 个人中心主容器 - 关键修复：添加背景色 */
 .personal-center {
   min-height: 100vh;
   transition: background-color 0.3s, color 0.3s;
+  background-color: #f5f7fa; /* 默认亮色背景 */
 }
 
-/* 主内容区域 */
+/* 关键修复：黑夜模式下设置深色背景 */
+.dark-mode {
+  background-color: #1a202c; /* 与导航栏一致 */
+  color: #e2e8f0;
+  
+  /* 保持原有的 CSS 变量定义 */
+  --sidebar-bg: #1f2937;
+  --sidebar-border: #374151;
+  --profile-border: #374151;
+  --avatar-border: #60a5fa;
+  --option-hover: #374151;
+  --option-active-bg: #1e40af;
+  --option-active-border: #3b82f6;
+  --option-active-text: #ffffff;
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-disabled: #6b7280;
+  
+  --content-bg: #1f2937;
+  --content-border: #374151;
+  --title-border: #60a5fa;
+  
+  --input-bg: #111827;
+  --input-border: #4b5563;
+  --input-disabled-bg: #374151;
+  --input-editable-bg: #111827;
+  --input-editable-border: #60a5fa;
+  --input-focus-border: #3b82f6;
+  --input-focus-shadow: rgba(59, 130, 246, 0.2);
+  
+  --btn-primary-bg: #2563eb;
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #1d4ed8;
+  
+  --btn-secondary-bg: #374151;
+  --btn-secondary-text: #d1d5db;
+  --btn-secondary-border: #4b5563;
+  --btn-secondary-hover: #4b5563;
+  
+  --btn-cancel-bg: #374151;
+  --btn-cancel-text: #9ca3af;
+  --btn-cancel-enabled-bg: #7f1d1d;
+  --btn-cancel-enabled-text: #fecaca;
+  --btn-cancel-enabled-hover: #991b1b;
+  
+  --actions-border: #374151;
+  
+  --status-success-bg: #064e3b;
+  --status-success-text: #a7f3d0;
+  --status-success-border: #047857;
+  
+  --status-error-bg: #7f1d1d;
+  --status-error-text: #fecaca;
+  --status-error-border: #991b1b;
+  
+  --status-warning-bg: #78350f;
+  --status-warning-text: #fde68a;
+  --status-warning-border: #92400e;
+  
+  --modal-border: #374151;
+}
+
+/* 亮色模式背景（明确设置，保持统一） */
+.light-mode {
+  background-color: #f5f7fa;
+  color: #1f2937;
+  
+  /* 保持原有的 CSS 变量定义 */
+  --sidebar-bg: #ffffff;
+  --sidebar-border: #e5e7eb;
+  --profile-border: #f3f4f6;
+  --avatar-border: #3b82f6;
+  --option-hover: #f8fafc;
+  --option-active-bg: #eff6ff;
+  --option-active-border: #3b82f6;
+  --option-active-text: #1d4ed8;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-disabled: #9ca3af;
+  
+  --content-bg: #ffffff;
+  --content-border: #e5e7eb;
+  --title-border: #3b82f6;
+  
+  --input-bg: #ffffff;
+  --input-border: #d1d5db;
+  --input-disabled-bg: #f9fafb;
+  --input-editable-bg: #ffffff;
+  --input-editable-border: #3b82f6;
+  --input-focus-border: #2563eb;
+  --input-focus-shadow: rgba(59, 130, 246, 0.1);
+  
+  --btn-primary-bg: #3b82f6;
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #2563eb;
+  
+  --btn-secondary-bg: #f3f4f6;
+  --btn-secondary-text: #4b5563;
+  --btn-secondary-border: #d1d5db;
+  --btn-secondary-hover: #e5e7eb;
+  
+  --btn-cancel-bg: #f3f4f6;
+  --btn-cancel-text: #6b7280;
+  --btn-cancel-enabled-bg: #fef2f2;
+  --btn-cancel-enabled-text: #dc2626;
+  --btn-cancel-enabled-hover: #fee2e2;
+  
+  --actions-border: #e5e7eb;
+  
+  --status-success-bg: #d1fae5;
+  --status-success-text: #065f46;
+  --status-success-border: #a7f3d0;
+  
+  --status-error-bg: #fee2e2;
+  --status-error-text: #991b1b;
+  --status-error-border: #fecaca;
+  
+  --status-warning-bg: #fef3c7;
+  --status-warning-text: #92400e;
+  --status-warning-border: #fde68a;
+  
+  --modal-border: #e5e7eb;
+}
+
+/* 主内容区域 - 间距调整（如果需要紧贴导航栏，改为 0 auto） */
 .personal-content {
   display: flex;
   max-width: 1200px;
-  margin: 20px auto;
+  margin: 10px auto;      /* 原来是 20px，改为 10px 更紧凑，如需紧贴改为 0 auto */
   padding: 0 20px;
   gap: 30px;
 }
 
-/* ==================== 左侧选项栏 ==================== */
+/* 左侧选项栏 */
 .options-sidebar {
   flex: 0 0 250px;
   background: var(--sidebar-bg);
@@ -504,7 +619,13 @@ export default {
   padding: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--sidebar-border);
+  transition: background-color 0.3s, border-color 0.3s;
 }
+
+/* ... 剩余样式代码保持不变 ... */
+/* 用户资料、选项列表、内容区域等样式保持原样 */
+
+/* ==================== 其余样式与之前相同 ==================== */
 
 /* 用户资料 */
 .user-profile {
@@ -587,7 +708,7 @@ export default {
   color: var(--text-primary);
 }
 
-/* ==================== 右侧内容区域 ==================== */
+/* 右侧内容区域 */
 .content-area {
   flex: 1;
   background: var(--content-bg);
@@ -595,6 +716,7 @@ export default {
   padding: 30px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--content-border);
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .content-title {
@@ -890,126 +1012,61 @@ export default {
   }
 }
 
-/* ==================== 主题变量 ==================== */
-.light-mode {
-  --sidebar-bg: #ffffff;
-  --sidebar-border: #e5e7eb;
-  --profile-border: #f3f4f6;
-  --avatar-border: #3b82f6;
-  --option-hover: #f8fafc;
-  --option-active-bg: #eff6ff;
-  --option-active-border: #3b82f6;
-  --option-active-text: #1d4ed8;
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
-  --text-disabled: #9ca3af;
-  
-  --content-bg: #ffffff;
-  --content-border: #e5e7eb;
-  --title-border: #3b82f6;
-  
-  --input-bg: #ffffff;
-  --input-border: #d1d5db;
-  --input-disabled-bg: #f9fafb;
-  --input-editable-bg: #ffffff;
-  --input-editable-border: #3b82f6;
-  --input-focus-border: #2563eb;
-  --input-focus-shadow: rgba(59, 130, 246, 0.1);
-  
-  --btn-primary-bg: #3b82f6;
-  --btn-primary-text: #ffffff;
-  --btn-primary-hover: #2563eb;
-  
-  --btn-secondary-bg: #f3f4f6;
-  --btn-secondary-text: #4b5563;
-  --btn-secondary-border: #d1d5db;
-  --btn-secondary-hover: #e5e7eb;
-  
-  --btn-cancel-bg: #f3f4f6;
-  --btn-cancel-text: #6b7280;
-  --btn-cancel-enabled-bg: #fef2f2;
-  --btn-cancel-enabled-text: #dc2626;
-  --btn-cancel-enabled-hover: #fee2e2;
-  
-  --actions-border: #e5e7eb;
-  
-  --status-success-bg: #d1fae5;
-  --status-success-text: #065f46;
-  --status-success-border: #a7f3d0;
-  
-  --status-error-bg: #fee2e2;
-  --status-error-text: #991b1b;
-  --status-error-border: #fecaca;
-  
-  --status-warning-bg: #fef3c7;
-  --status-warning-text: #92400e;
-  --status-warning-border: #fde68a;
-  
-  --modal-border: #e5e7eb;
+/* 弹窗样式 */
+.modal {
+  display: flex;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  align-items: center;
+  justify-content: center;
 }
 
-.dark-mode {
-  --sidebar-bg: #1f2937;
-  --sidebar-border: #374151;
-  --profile-border: #374151;
-  --avatar-border: #60a5fa;
-  --option-hover: #374151;
-  --option-active-bg: #1e40af;
-  --option-active-border: #3b82f6;
-  --option-active-text: #ffffff;
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --text-disabled: #6b7280;
-  
-  --content-bg: #1f2937;
-  --content-border: #374151;
-  --title-border: #60a5fa;
-  
-  --input-bg: #111827;
-  --input-border: #4b5563;
-  --input-disabled-bg: #374151;
-  --input-editable-bg: #111827;
-  --input-editable-border: #60a5fa;
-  --input-focus-border: #3b82f6;
-  --input-focus-shadow: rgba(59, 130, 246, 0.2);
-  
-  --btn-primary-bg: #2563eb;
-  --btn-primary-text: #ffffff;
-  --btn-primary-hover: #1d4ed8;
-  
-  --btn-secondary-bg: #374151;
-  --btn-secondary-text: #d1d5db;
-  --btn-secondary-border: #4b5563;
-  --btn-secondary-hover: #4b5563;
-  
-  --btn-cancel-bg: #374151;
-  --btn-cancel-text: #9ca3af;
-  --btn-cancel-enabled-bg: #7f1d1d;
-  --btn-cancel-enabled-text: #fecaca;
-  --btn-cancel-enabled-hover: #991b1b;
-  
-  --actions-border: #374151;
-  
-  --status-success-bg: #064e3b;
-  --status-success-text: #a7f3d0;
-  --status-success-border: #047857;
-  
-  --status-error-bg: #7f1d1d;
-  --status-error-text: #fecaca;
-  --status-error-border: #991b1b;
-  
-  --status-warning-bg: #78350f;
-  --status-warning-text: #fde68a;
-  --status-warning-border: #92400e;
-  
-  --modal-border: #374151;
+.modal-content {
+  background-color: var(--sidebar-bg);
+  padding: 30px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  position: relative;
+  border: 1px solid var(--content-border);
 }
 
-/* ==================== 响应式设计 ==================== */
+.close {
+  position: absolute;
+  right: 15px;
+  top: 10px;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.close:hover {
+  color: var(--text-primary);
+  background: var(--option-hover);
+}
+
+/* 响应式设计 */
 @media (max-width: 768px) {
   .personal-content {
     flex-direction: column;
     padding: 10px;
+    margin: 5px auto; /* 移动端更紧凑 */
   }
   
   .options-sidebar {

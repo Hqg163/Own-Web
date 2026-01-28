@@ -1,40 +1,61 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import Layout from '../layouts/Layout.vue'
+// ❌ 修正：Home 应该是 Home.vue，不是 NavigationBar
 import Home from '../views/Home.vue'
+import PersonalCenter from '../views/PersonalCenter.vue'
+import Login from '../views/Login.vue'
+import About from '../views/About.vue'        // 导入 About
+import Creation from '../views/Creation.vue'  // 导入 Creation
 
 const routes = [
   {
     path: '/',
-    component: Layout,
-    redirect: '/home',
-    children: [
-      { path: 'home', name: 'Home', component: Home },
-      { path: 'personal', name: 'PersonalCenter', component: () => import('../views/PersonalCenter.vue'), meta: { requiresAuth: true } },
-      { path: 'creation', name: 'Creation', component: () => import('../views/Creation.vue') },
-      { path: 'about', name: 'About', component: () => import('../views/About.vue') }
-    ]
+    name: 'Home',
+    component: Home  // ✅ 使用 Home.vue 作为首页
   },
-  { path: '/login', name: 'Login', component: () => import('../views/Login.vue'), meta: { guestOnly: true } }
+  {
+    path: '/personal',
+    name: 'PersonalCenter',
+    component: PersonalCenter,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: { guestOnly: true }
+  },
+  {
+    path: '/about',
+    name: 'About',
+    component: About  // 添加关于页面路由
+  },
+  {
+    path: '/creation',
+    name: 'Creation',
+    component: Creation  // 添加创作中心路由
+  }
 ]
 
 const router = createRouter({
   history: createWebHashHistory(),
-  routes
+  routes,
+  scrollBehavior() {
+    return { top: 0 }
+  }
 })
 
 // 路由守卫：检查登录状态
 router.beforeEach((to, from, next) => {
   const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
   
-  // 需要登录但未登录
   if (to.meta.requiresAuth && !isLoggedIn) {
+    localStorage.setItem('redirectAfterLogin', to.fullPath)
     next('/login')
     return
   }
   
-  // 仅限未登录用户但已登录
   if (to.meta.guestOnly && isLoggedIn) {
-    next('/')
+    next('/personal')
     return
   }
   
