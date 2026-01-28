@@ -67,7 +67,9 @@ export default {
   created() {
     // 如果已登录，跳转到个人中心
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
-    const redirectTo = localStorage.getItem('redirectAfterLogin')
+    const redirectTo = localStorage.getItem('redirectAfterLogin')||'/personal'
+    localStorage.removeItem('redirectAfterLogin')
+    this.$router.push(redirectTo).catch(() => {})
     
     if (isLoggedIn) {
       this.$router.push(redirectTo || '/personal')

@@ -20,6 +20,16 @@ const routes = [
     name: 'Login',
     component: Login,
     meta: { guestOnly: true } // 仅限未登录用户
+  },
+  {
+    path: '/creation',
+    name: 'Creation',
+    component: () => import('../views/Creation.vue')
+  }
+  {
+    path: '/about',
+    name: 'About',
+    component: () => import('../views/About.vue')
   }
 ]
 

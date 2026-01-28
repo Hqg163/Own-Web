@@ -162,7 +162,7 @@ export default {
         // 保存点击的目标路径，登录后跳转
         localStorage.setItem('redirectAfterLogin', link.to);
         this.showLogin();
-        return false;
+        return;
       }
       this.$router.push(link.to);
       // return true;
