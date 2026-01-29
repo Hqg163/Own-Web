@@ -1,6 +1,5 @@
 <template>
   <div :class="themeClass" class="page-container">
-    <NavigationBar />
     <div class="content">
       <h1>关于我们</h1>
       <p class="placeholder">开发中...</p>

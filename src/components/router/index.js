@@ -1,22 +1,40 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import Layout from '../layouts/Layout.vue'
 // ❌ 修正：Home 应该是 Home.vue，不是 NavigationBar
 import Home from '../views/Home.vue'
 import PersonalCenter from '../views/PersonalCenter.vue'
 import Login from '../views/Login.vue'
+import Register from '../views/Register.vue'
 import About from '../views/About.vue'        // 导入 About
 import Creation from '../views/Creation.vue'  // 导入 Creation
 
 const routes = [
   {
     path: '/',
-    name: 'Home',
-    component: Home  // ✅ 使用 Home.vue 作为首页
-  },
-  {
-    path: '/personal',
-    name: 'PersonalCenter',
-    component: PersonalCenter,
-    meta: { requiresAuth: true }
+    component: Layout,  // 使用 Layout 作为父路由
+    children: [
+      {
+        path: '',  // 默认子路由
+        name: 'Home',
+        component: Home
+      },
+      {
+        path: 'personal',
+        name: 'PersonalCenter',
+        component: PersonalCenter,
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'creation',
+        name: 'Creation',
+        component: Creation
+      },
+      {
+        path: 'about',
+        name: 'About',
+        component: About
+      }
+    ]
   },
   {
     path: '/login',
@@ -25,14 +43,10 @@ const routes = [
     meta: { guestOnly: true }
   },
   {
-    path: '/about',
-    name: 'About',
-    component: About  // 添加关于页面路由
-  },
-  {
-    path: '/creation',
-    name: 'Creation',
-    component: Creation  // 添加创作中心路由
+    path: '/register',
+    name: 'Register',
+    component: Register,  // 添加注册路由
+    meta: { guestOnly: true }
   }
 ]
 

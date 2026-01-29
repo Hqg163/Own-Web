@@ -1,6 +1,5 @@
 <template>
   <div :class="themeClass" class="home-container">
-    <NavigationBar />
     <div class="home-content">
       <h1>Welcome to Own-Web</h1>
       <p>这里是您的个人网站首页</p>

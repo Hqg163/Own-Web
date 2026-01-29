@@ -1,11 +1,11 @@
 <template>
-  <div :class="themeClass" class="login-page">
+  <div :class="themeClass" class="register-container">
     
-    <div class="login-container">
-      <div class="login-card">
-        <h2>欢迎登录</h2>
+    <div class="register-content">
+      <div class="register-card">
+        <h2>注册</h2>
         
-        <form @submit.prevent="handleLogin" class="login-form">
+        <form @submit.prevent="handleRegister" class="register-form">
           <div class="form-group">
             <label>邮箱</label>
             <input 
@@ -16,16 +16,17 @@
             />
           </div>
           
+          <!-- 密码 -->
           <div class="form-group">
             <label>密码</label>
             <div class="password-input-wrapper">
               <input 
                 :type="passwordVisible ? 'text' : 'password'"
                 v-model="password" 
-                placeholder="请输入密码"
+                placeholder="请输入密码（至少6位）"
                 required
+                minlength="6"
               />
-              <!-- 眼睛图标按钮 -->
               <button 
                 type="button"
                 class="eye-icon-btn"
@@ -50,36 +51,48 @@
               </button>
             </div>
           </div>
-          
-          <div class="form-options">
-            <label class="remember-me">
-              <input type="checkbox" v-model="rememberMe" />
-              <span>记住我</span>
-            </label>
-            <a href="#" class="forgot-password">忘记密码？</a>
+
+          <!-- 确认密码 -->
+          <div class="form-group">
+            <label>确认密码</label>
+            <div class="password-input-wrapper">
+              <input 
+                :type="confirmPasswordVisible ? 'text' : 'password'"
+                v-model="confirmPassword" 
+                placeholder="请再次输入密码"
+                required
+              />
+              <button 
+                type="button"
+                class="eye-icon-btn"
+                @click="confirmPasswordVisible = !confirmPasswordVisible"
+              >
+                <svg v-if="confirmPasswordVisible" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <!-- 闭眼：隐藏密码（只有下眼睑 ⌣ + 四根向下睫毛） -->
+                <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <!-- 下眼睑：向上弯的弧线（⌣ 形状） -->
+                  <path d="M4 14 Q12 20 20 14"></path>
+                  <!-- 四根向下的睫毛（从下眼睑向下垂） -->
+                  <path d="M6 15 L6 19"></path>
+                  <path d="M10 17 L10 21"></path>
+                  <path d="M14 17 L14 21"></path>
+                  <path d="M18 15 L18 19"></path>
+                </svg>
+              </button>
+            </div>
           </div>
           
-          <button type="submit" class="login-btn" :disabled="loading">
-            {{ loading ? '登录中...' : '立即登录' }}
+          <button type="submit" class="register-btn" :disabled="loading">
+            {{ loading ? '注册中...' : '注册' }}
           </button>
           
-          <div class="divider">
-            <span>或</span>
-          </div>
-          
-          <div class="social-login">
-            <button type="button" class="social-btn wechat">
-              微信登录
-            </button>
-            <button type="button" class="social-btn github">
-              GitHub登录
-            </button>
-          </div>
-          
-          <div class="login-footer">
+          <div class="register-links">
             <router-link to="/">返回首页</router-link>
             <span>|</span>
-            <router-link to="/register">还没有账号？立即注册</router-link>
+            <router-link to="/login">已有账号？立即登录</router-link>
           </div>
         </form>
         
@@ -96,7 +109,7 @@ import NavigationBar from '../NavigationBar.vue'
 import axios from 'axios'
 
 export default {
-  name: 'Login',
+  name: 'Register',
   components: {
     NavigationBar
   },
@@ -105,65 +118,56 @@ export default {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
       email: '',
       password: '',
-      passwordVisible: false,
-      rememberMe: false,
+      passwordVisible: false,   // 密码显隐控制
+      confirmPassword: '',
+      confirmPasswordVisible: false,   // 确认密码显隐控制
       loading: false,
       error: ''
     }
   },
   created() {
-    // 监听主题变化（关键：确保从其他页面跳转过来也能响应主题）
+    // 监听主题变化
     window.addEventListener('theme-changed', this.handleThemeChange)
     
-    // 如果已登录，跳转到个人中心或保存的重定向页面
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
-    const redirectTo = localStorage.getItem('redirectAfterLogin')
-    
-    if (isLoggedIn) {
-      this.$router.push(redirectTo || '/personal')
+    // 如果已登录，跳转到首页
+    if (localStorage.getItem('isLoggedIn')) {
+      this.$router.push('/')
     }
   },
   beforeUnmount() {
-    // 清理事件监听，防止内存泄漏
     window.removeEventListener('theme-changed', this.handleThemeChange)
   },
   methods: {
-    // 处理主题变化
     handleThemeChange(e) {
       this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
     },
     
-    async handleLogin() {
+    async handleRegister() {
+      // 验证密码
+      if (this.password !== this.confirmPassword) {
+        this.error = '两次输入的密码不一致'
+        return
+      }
+      
+      if (this.password.length < 6) {
+        this.error = '密码长度至少6位'
+        return
+      }
+      
       this.loading = true
       this.error = ''
       
       try {
-        // 调用登录API
-        const response = await axios.post('/api/login', {
+        await axios.post('/api/register', {
           email: this.email,
           password: this.password
         })
         
-        // 登录成功处理
-        localStorage.setItem('isLoggedIn', 'true')
-        localStorage.setItem('userEmail', this.email)
-        localStorage.setItem('userId', response.data.user.id)
-        localStorage.setItem('userInfo', JSON.stringify(response.data.user))
-        
-        // 如果选了"记住我"，可以设置更长时间的存储（实际项目中使用cookie或更安全的存储）
-        if (this.rememberMe) {
-          localStorage.setItem('rememberUser', this.email)
-        }
-        
-        // 检查是否有重定向目标
-        const redirectTo = localStorage.getItem('redirectAfterLogin') || '/personal'
-        localStorage.removeItem('redirectAfterLogin')
-        
-        // 跳转到目标页面
-        this.$router.push(redirectTo)
+        alert('注册成功，请登录')
+        this.$router.push('/login')
         
       } catch (error) {
-        this.error = error.response?.data?.error || '登录失败，请检查邮箱和密码'
+        this.error = error.response?.data?.error || '注册失败，请稍后重试'
       } finally {
         this.loading = false
       }
@@ -204,8 +208,8 @@ input[type="password"] {
   -moz-appearance: none;
 }
 
-/* 页面根容器 - 全屏背景 */
-.login-page {
+/* 可以直接复制 Login.vue 的样式，把 login 改成 register */
+.register-container {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -213,19 +217,18 @@ input[type="password"] {
 }
 
 /* 白天模式背景 */
-.login-page.light-mode {
+.register-container.light-mode {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   color: #333;
 }
 
 /* 黑夜模式背景 */
-.login-page.dark-mode {
+.register-container.dark-mode {
   background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
   color: #e2e8f0;
 }
 
-/* 登录内容区 */
-.login-container {
+.register-content {
   flex: 1;
   display: flex;
   align-items: center;
@@ -233,49 +236,43 @@ input[type="password"] {
   padding: 40px 20px;
 }
 
-/* 登录卡片 */
-.login-card {
+.register-card {
   width: 100%;
-  max-width: 420px;
+  max-width: 400px;
   padding: 40px;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   transition: all 0.3s;
 }
 
-/* 白天模式卡片 */
-.light-mode .login-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+.light-mode .register-card {
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
   --text-primary: #1f2937;
   --text-secondary: #6b7280;
   --input-bg: #ffffff;
   --input-border: #d1d5db;
   --input-focus-border: #3b82f6;
-  --input-focus-shadow: rgba(59, 130, 246, 0.1);
 }
 
-/* 黑夜模式卡片 */
-.dark-mode .login-card {
-  background: #1f2937;
-  border: 1px solid #374151;
+.dark-mode .register-card {
+  --card-bg: #1f2937;
+  --card-border: #374151;
   --text-primary: #f9fafb;
   --text-secondary: #d1d5db;
   --input-bg: #111827;
   --input-border: #4b5563;
   --input-focus-border: #60a5fa;
-  --input-focus-shadow: rgba(96, 165, 250, 0.2);
 }
 
-.login-card h2 {
+.register-card h2 {
   text-align: center;
   margin-bottom: 30px;
   color: var(--text-primary);
-  font-size: 28px;
-  font-weight: 700;
 }
 
-/* 表单样式 */
 .form-group {
   margin-bottom: 20px;
 }
@@ -285,12 +282,11 @@ input[type="password"] {
   margin-bottom: 8px;
   color: var(--text-primary);
   font-weight: 500;
-  font-size: 14px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 12px 16px;
+  padding: 12px 15px;
   border: 1px solid var(--input-border);
   border-radius: 8px;
   font-size: 15px;
@@ -302,53 +298,13 @@ input[type="password"] {
 .form-group input:focus {
   outline: none;
   border-color: var(--input-focus-border);
-  box-shadow: 0 0 0 3px var(--input-focus-shadow);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.form-group input::placeholder {
-  color: var(--text-secondary);
-  opacity: 0.6;
-}
-
-/* 选项行（记住我 + 忘记密码） */
-.form-options {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  font-size: 14px;
-}
-
-.remember-me {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.remember-me input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-.forgot-password {
-  color: #3b82f6;
-  text-decoration: none;
-  transition: color 0.3s;
-}
-
-.forgot-password:hover {
-  color: #2563eb;
-  text-decoration: underline;
-}
-
-/* 登录按钮 */
-.login-btn {
+.register-btn {
   width: 100%;
   padding: 14px;
-  background: linear-gradient(to right, #3b82f6, #60a5fa);
+  background: linear-gradient(to right, #8360ff, #4b66ff);
   color: white;
   border: none;
   border-radius: 8px;
@@ -356,116 +312,54 @@ input[type="password"] {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  margin-bottom: 20px;
+  margin-top: 10px;
 }
 
-.login-btn:hover:not(:disabled) {
+.register-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 5px 15px rgba(131, 96, 255, 0.3);
 }
 
-.login-btn:disabled {
+.register-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-/* 分隔线 */
-.divider {
-  position: relative;
-  text-align: center;
-  margin: 20px 0;
-}
-
-.divider::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(to right, transparent, var(--input-border), transparent);
-}
-
-.divider span {
-  position: relative;
-  background: var(--input-bg);
-  padding: 0 10px;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-/* 第三方登录 */
-.social-login {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.social-btn {
-  padding: 10px;
-  border: 1px solid var(--input-border);
-  border-radius: 8px;
-  background: var(--input-bg);
-  color: var(--text-primary);
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.social-btn:hover {
-  background: var(--input-focus-shadow);
-  border-color: var(--input-focus-border);
-}
-
-/* 底部链接 */
-.login-footer {
+.register-links {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 10px;
+  margin-top: 20px;
   font-size: 14px;
-  color: var(--text-secondary);
 }
 
-.login-footer a {
+.register-links a {
   color: #3b82f6;
   text-decoration: none;
-  transition: color 0.3s;
 }
 
-.login-footer a:hover {
-  color: #2563eb;
+.register-links a:hover {
   text-decoration: underline;
 }
 
-/* 错误提示 */
+.register-links span {
+  color: var(--text-secondary);
+}
+
 .error-message {
   margin-top: 15px;
-  padding: 12px;
+  padding: 10px;
   background: #fee2e2;
   color: #dc2626;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 14px;
   text-align: center;
-  border: 1px solid #fecaca;
 }
 
 .dark-mode .error-message {
   background: #7f1d1d;
   color: #fecaca;
-  border-color: #991b1b;
-}
-
-/* 响应式 */
-@media (max-width: 480px) {
-  .login-card {
-    padding: 30px 20px;
-  }
-  
-  .social-login {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* 隐藏浏览器默认的眼睛图标 */
