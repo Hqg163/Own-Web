@@ -27,6 +27,8 @@
       
       <!-- 右侧内容区域 -->
       <div class="content-area">
+        
+        <!-- ==================== 个人信息 ==================== -->
         <div v-if="activeOption === 'personal-info'" class="info-content">
           <h2 class="content-title">个人信息</h2>
           
@@ -46,7 +48,7 @@
               />
             </div>
             
-            <!-- 账号（邮箱） -->
+            <!-- 邮箱 -->
             <div class="form-group">
               <label class="form-label">
                 账号（邮箱）
@@ -86,19 +88,16 @@
                   placeholder="********"
                   required
                 />
-                <!-- 只有一个眼睛按钮 -->
                 <button 
                   v-if="isEditingPassword"
                   type="button" 
                   class="eye-icon-btn"
                   @click="passwordVisible = !passwordVisible"
                 >
-                  <!-- 划斜线 = 当前密码隐藏 -->
                   <svg v-if="!passwordVisible" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
                     <line x1="1" y1="1" x2="23" y2="23"></line>
                   </svg>
-                  <!-- 睁开 = 当前密码显示 -->
                   <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                     <circle cx="12" cy="12" r="3"></circle>
@@ -120,7 +119,8 @@
                 </button>
               </div>
             </div>
-            <!-- 生日选择器 - 修复对齐版 -->
+
+            <!-- 生日选择器 -->
             <div class="form-group date-form-group" ref="dateFormGroup">
               <label class="form-label">生日</label>
               <div 
@@ -151,7 +151,6 @@
                   
                   <div class="datepicker-body">
                     <div class="wheel-container">
-                      <!-- 年 -->
                       <div class="wheel-column">
                         <div class="wheel-title">年</div>
                         <div class="wheel-scroll" ref="yearScroll" @scroll.passive="handleYearScroll">
@@ -165,7 +164,6 @@
                         </div>
                       </div>
                       
-                      <!-- 月 -->
                       <div class="wheel-column">
                         <div class="wheel-title">月</div>
                         <div class="wheel-scroll" ref="monthScroll" @scroll.passive="handleMonthScroll">
@@ -179,7 +177,6 @@
                         </div>
                       </div>
                       
-                      <!-- 日 -->
                       <div class="wheel-column">
                         <div class="wheel-title">日</div>
                         <div class="wheel-scroll" ref="dayScroll" @scroll.passive="handleDayScroll">
@@ -282,7 +279,7 @@
             </div>
           </form>
 
-          <!-- 身份验证弹窗（替代原生prompt） -->
+          <!-- 身份验证弹窗 -->
           <transition name="modal">
             <div v-if="showVerifyModal" class="verify-modal-overlay" @click.self="cancelVerify">
               <div class="verify-modal">
@@ -297,19 +294,15 @@
                     class="verify-input"
                     @keyup.enter="confirmPasswordChange"
                   />
-                  <!-- 只有一个按钮！ -->
                   <button 
                     type="button" 
                     class="eye-icon-btn verify-eye-btn"
                     @click="verifyPasswordVisible = !verifyPasswordVisible"
                   >
-                    <!-- 带斜线的眼睛：密码隐藏时显示 -->
                     <svg v-if="!verifyPasswordVisible" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
                       <line x1="1" y1="1" x2="23" y2="23"></line>
                     </svg>
-                    
-                    <!-- 睁开的眼睛：密码显示时显示 -->
                     <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                       <circle cx="12" cy="12" r="3"></circle>
@@ -324,13 +317,153 @@
               </div>
             </div>
           </transition>
-
         </div>
-        
-        <!-- 学习区 -->
-        <div v-else-if="activeOption === 'study'" class="placeholder-content">
-          <h2>学习区</h2>
-          <p>正在开发中...</p>
+
+        <!-- ==================== 学习区（新增） ==================== -->
+        <div v-else-if="activeOption === 'study'" class="study-content-wrapper">
+          <h2 class="content-title">学习区</h2>
+          
+          <div class="study-layout">
+            <!-- 头部：分类标签 + 搜索 + 邮件 -->
+            <div class="study-header-bar">
+              <div class="category-tabs-wrapper">
+                <button 
+                  v-for="cat in studyCategories" 
+                  :key="cat.id"
+                  :class="['study-category-btn', { active: currentStudyCategory === cat.id }]"
+                  @click="switchStudyCategory(cat.id)"
+                >
+                  {{ cat.name }}
+                </button>
+              </div>
+              
+              <div class="study-header-actions">
+                <div class="study-search-box">
+                  <input 
+                    type="text" 
+                    v-model="studySearchQuery" 
+                    placeholder="搜索文件..." 
+                    @keyup.enter="handleStudySearch"
+                  />
+                  <button class="search-icon-btn" @click="handleStudySearch">🔍</button>
+                </div>
+                
+                <div class="study-email-btns">
+                  <button class="email-action-btn send-btn" @click="showSendEmail = true">
+                    📧 发送邮件
+                  </button>
+                  <button class="email-action-btn inbox-btn" @click="showInbox = true">
+                    📥 收件箱
+                    <span v-if="unreadEmailCount > 0" class="email-badge">{{ unreadEmailCount }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 工具栏 -->
+            <div class="study-toolbar">
+              <div class="toolbar-left-group">
+                <button class="study-tool-btn upload-download-btn" @click="showUploadDialog = true">
+                  ⬆️⬇️ 上传/下载
+                </button>
+                <button class="study-tool-btn edit-md-btn" @click="openMarkdownEditor">
+                  ✏️ 编辑
+                </button>
+              </div>
+              
+              <div class="toolbar-right-group">
+                <button 
+                  v-if="currentStudyCategory === 'all'" 
+                  class="study-tool-btn add-category-btn"
+                  @click="showAddCategoryDialog = true"
+                >
+                  ➕ 添加分类
+                </button>
+                
+                <template v-if="currentStudyCategory !== 'all'">
+                  <button 
+                    v-if="!isBatchDeleteMode" 
+                    class="study-tool-btn batch-delete-btn" 
+                    :disabled="currentStudyFiles.length === 0"
+                    @click="startBatchDelete"
+                  >
+                    🗑️ 批量删除
+                  </button>
+                  <template v-else>
+                    <button 
+                      class="study-tool-btn confirm-delete-btn" 
+                      :disabled="selectedStudyFiles.length === 0"
+                      @click="confirmBatchDelete"
+                    >
+                      ⚠️ 确认删除
+                    </button>
+                    <button class="study-tool-btn cancel-btn" @click="cancelBatchDelete">
+                      取消
+                    </button>
+                  </template>
+                </template>
+              </div>
+            </div>
+
+            <!-- 文件展示区 -->
+            <div class="study-files-container">
+              <!-- 所有分类视图 -->
+              <template v-if="currentStudyCategory === 'all'">
+                <div 
+                  v-for="cat in studyCategories.filter(c => c.id !== 'all')" 
+                  :key="cat.id" 
+                  class="study-category-block"
+                >
+                  <h4 class="study-cat-title">{{ cat.name }}</h4>
+                  <div class="study-files-grid" v-if="studyFilesByCategory[cat.id] && studyFilesByCategory[cat.id].length > 0">
+                    <div 
+                      v-for="file in studyFilesByCategory[cat.id]" 
+                      :key="file.id"
+                      class="study-file-card"
+                      @click="openStudyFile(file)"
+                    >
+                      <div class="study-file-icon" :class="getStudyFileIconClass(file.file_type)">
+                        {{ getStudyFileIcon(file.file_type) }}
+                      </div>
+                      <div class="study-file-name" :title="file.original_name">{{ file.original_name }}</div>
+                      <div class="study-file-meta">{{ formatStudyDate(file.created_at) }}</div>
+                    </div>
+                  </div>
+                  <div v-else class="study-empty-block">
+                    <span class="empty-icon">📭</span>
+                    <span>此类别现在空空如也哟~~</span>
+                  </div>
+                </div>
+              </template>
+              
+              <!-- 单个分类视图 -->
+              <template v-else>
+                <div class="study-files-grid" v-if="currentStudyFiles.length > 0">
+                  <div 
+                    v-for="file in currentStudyFiles" 
+                    :key="file.id"
+                    class="study-file-card"
+                    :class="{ 'selectable': isBatchDeleteMode, 'selected': selectedStudyFiles.includes(file.id) }"
+                    @click="isBatchDeleteMode ? toggleStudyFileSelection(file.id) : openStudyFile(file)"
+                  >
+                    <div v-if="isBatchDeleteMode" class="selection-indicator">
+                      <span v-if="selectedStudyFiles.includes(file.id)">✓</span>
+                    </div>
+                    
+                    <div class="study-file-icon" :class="getStudyFileIconClass(file.file_type)">
+                      {{ getStudyFileIcon(file.file_type) }}
+                    </div>
+                    <div class="study-file-name" :title="file.original_name">{{ file.original_name }}</div>
+                    <div class="study-file-meta">{{ formatStudyDate(file.created_at) }}</div>
+                  </div>
+                </div>
+                <div v-else class="study-empty-block main-empty">
+                  <span class="empty-icon">📭</span>
+                  <span>此类别现在空空如也哟~~</span>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
         
         <!-- 娱乐区 -->
@@ -340,12 +473,381 @@
         </div>
       </div>
     </div>
+
+    <!-- 学习区弹窗组件 -->
+    
+    <!-- 上传/下载选择 -->
+    <div v-if="showUploadDialog" class="modal-overlay" @click.self="showUploadDialog = false">
+      <div class="modal-content">
+        <h3>选择操作</h3>
+        <div class="choice-buttons">
+          <button class="choice-card upload-card" @click="switchToUploadMode">
+            <span class="choice-icon">⬆️</span>
+            <span>上传文件</span>
+          </button>
+          <button class="choice-card download-card" @click="switchToDownloadMode">
+            <span class="choice-icon">⬇️</span>
+            <span>下载文件</span>
+          </button>
+        </div>
+        <button class="modal-close-btn" @click="showUploadDialog = false">取消</button>
+      </div>
+    </div>
+
+    <!-- 上传文件弹窗 -->
+    <div v-if="showUploadForm" class="modal-overlay" @click.self="cancelUpload">
+      <div class="modal-content">
+        <h3>上传文件</h3>
+        <div class="modal-form-group">
+          <label>文件名称（可选）</label>
+          <input type="text" v-model="uploadFormData.customName" placeholder="输入自定义名称" />
+        </div>
+        <div class="modal-form-group">
+          <label>选择分类</label>
+          <select v-model="uploadFormData.categoryId">
+            <option v-for="cat in studyCategories.filter(c => c.id !== 'all')" :key="cat.id" :value="cat.id">
+              {{ cat.name }}
+            </option>
+          </select>
+        </div>
+        <div class="modal-form-group">
+          <label>选择文件</label>
+          <input type="file" @change="handleFileSelect" class="file-input" />
+          <div v-if="uploadFormData.selectedFile" class="selected-file-info">
+            已选择: {{ uploadFormData.selectedFile.name }}
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" @click="cancelUpload">取消</button>
+          <button class="btn-primary" :disabled="!uploadFormData.selectedFile || uploadingFile" @click="confirmUpload">
+            {{ uploadingFile ? '上传中...' : '确认上传' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 下载文件弹窗 -->
+    <div v-if="showDownloadForm" class="modal-overlay" @click.self="cancelDownload">
+      <div class="modal-content download-modal">
+        <h3>选择要下载的文件</h3>
+        <div class="download-tree-view">
+          <div class="tree-root" @click="toggleAllDownloadExpansion">
+            <span class="tree-toggle-icon">{{ allDownloadExpanded ? '▼' : '▶' }}</span>
+            <span class="tree-icon">📁</span>
+            <span>所有</span>
+          </div>
+          <div v-show="allDownloadExpanded" class="tree-children">
+            <div v-for="cat in studyCategories.filter(c => c.id !== 'all')" :key="cat.id" class="tree-category-item">
+              <div class="tree-category-header" @click="toggleDownloadCategory(cat.id)">
+                <span class="tree-toggle-icon">{{ expandedDownloadCats.includes(cat.id) ? '▼' : '▶' }}</span>
+                <span class="tree-icon">📂</span>
+                <span>{{ cat.name }}</span>
+              </div>
+              <div v-show="expandedDownloadCats.includes(cat.id)" class="tree-files">
+                <div 
+                  v-for="file in studyFilesByCategory[cat.id] || []" 
+                  :key="file.id"
+                  class="tree-file-row"
+                  :class="{ selected: selectedDownloadFiles.includes(file.id) }"
+                  @click="selectDownloadFile(file.id)"
+                >
+                  <span class="tree-file-icon">{{ getStudyFileIcon(file.file_type) }}</span>
+                  <span class="tree-file-name">{{ file.original_name }}</span>
+                  <span v-if="selectedDownloadFiles.includes(file.id)" class="selected-check">✓</span>
+                </div>
+                <div v-if="!studyFilesByCategory[cat.id] || studyFilesByCategory[cat.id].length === 0" class="tree-empty">
+                  暂无文件
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" @click="cancelDownload">取消</button>
+          <button class="btn-primary" :disabled="selectedDownloadFiles.length === 0" @click="confirmDownload">
+            下载到本地
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 添加分类弹窗 -->
+    <div v-if="showAddCategoryDialog" class="modal-overlay" @click.self="showAddCategoryDialog = false">
+      <div class="modal-content">
+        <h3>添加新分类</h3>
+        <div class="modal-form-group">
+          <label>分类名称</label>
+          <input 
+            type="text" 
+            v-model="newStudyCategoryName" 
+            placeholder="输入分类名称"
+            @keyup.enter="confirmAddCategory"
+          />
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" @click="showAddCategoryDialog = false">取消</button>
+          <button class="btn-primary" :disabled="!newStudyCategoryName.trim()" @click="confirmAddCategory">
+            确定
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="showDeleteConfirmDialog" class="modal-overlay" @click.self="showDeleteConfirmDialog = false">
+      <div class="modal-content">
+        <h3>确认删除</h3>
+        <p>你确定要删除这 {{ selectedStudyFiles.length }} 个文件吗？</p>
+        <div class="modal-actions">
+          <button class="btn-secondary" @click="showDeleteConfirmDialog = false">取消</button>
+          <button class="btn-danger" :disabled="deletingFiles" @click="executeBatchDelete">
+            {{ deletingFiles ? '删除中...' : '确认' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Markdown编辑器 -->
+    <div v-if="showMarkdownEditor" class="fullscreen-modal">
+      <div class="fullscreen-header">
+        <button class="back-btn" @click="closeMarkdownEditor">
+          <span>←</span> 返回
+        </button>
+        <h3>Markdown编辑器</h3>
+        <div class="header-actions">
+          <button class="btn-secondary" @click="closeMarkdownEditor">取消编辑</button>
+          <button class="btn-primary" @click="showPublishMarkdownDialog = true">发布</button>
+        </div>
+      </div>
+      
+      <div class="md-toolbar">
+        <button @click="insertMdSyntax('**', '**')" title="粗体"><b>B</b></button>
+        <button @click="insertMdSyntax('*', '*')" title="斜体"><i>I</i></button>
+        <button @click="insertMdSyntax('# ')">H1</button>
+        <button @click="insertMdSyntax('## ')">H2</button>
+        <button @click="insertMdSyntax('- ')">• 列表</button>
+        <button @click="insertMdSyntax('> ')">引用</button>
+        <button @click="insertMdSyntax('```\n', '\n```')">代码块</button>
+        <button @click="insertMdSyntax('[', '](url)')">链接</button>
+        <button @click="insertMdSyntax('![alt](', ')')">图片</button>
+      </div>
+      
+      <div class="md-editor-body">
+        <textarea 
+          ref="mdTextarea"
+          v-model="markdownContent" 
+          placeholder="开始编写 Markdown..."
+          class="md-input"
+        ></textarea>
+        <div class="md-preview" v-html="renderedMarkdown"></div>
+      </div>
+    </div>
+
+    <!-- 发布Markdown弹窗 -->
+    <div v-if="showPublishMarkdownDialog" class="modal-overlay" @click.self="showPublishMarkdownDialog = false">
+      <div class="modal-content">
+        <h3>发布文章</h3>
+        <div class="modal-form-group">
+          <label>标题</label>
+          <input type="text" v-model="publishMdForm.title" placeholder="输入标题" />
+        </div>
+        <div class="modal-form-group">
+          <label>选择分类</label>
+          <select v-model="publishMdForm.categoryId">
+            <option v-for="cat in studyCategories.filter(c => c.id !== 'all')" :key="cat.id" :value="cat.id">
+              {{ cat.name }}
+            </option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" @click="showPublishMarkdownDialog = false">取消</button>
+          <button class="btn-primary" :disabled="!publishMdForm.title.trim()" @click="confirmPublishMarkdown">
+            发布
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 文件预览器 -->
+    <div v-if="viewingStudyFile" class="fullscreen-modal file-viewer" @click.self="closeFileViewer">
+      <div class="fullscreen-header">
+        <button class="back-btn" @click="closeFileViewer">
+          <span>←</span> 返回
+        </button>
+        <span class="viewer-filename">{{ viewingStudyFile.original_name }}</span>
+        <div class="viewer-nav-btns">
+          <button :disabled="!hasPrevStudyFile" @click="prevStudyFile">← 上一个</button>
+          <button :disabled="!hasNextStudyFile" @click="nextStudyFile">下一个 →</button>
+        </div>
+      </div>
+      
+      <div class="viewer-content-area">
+        <img v-if="isImageType(viewingStudyFile.file_type)" :src="studyFileContent.url" class="preview-img" />
+        <video v-else-if="isVideoType(viewingStudyFile.file_type)" controls class="preview-video">
+          <source :src="studyFileContent.url" />
+        </video>
+        <audio v-else-if="isAudioType(viewingStudyFile.file_type)" controls class="preview-audio">
+          <source :src="studyFileContent.url" />
+        </audio>
+        <div v-else-if="studyFileContent.type === 'text' || studyFileContent.type === 'markdown'" class="preview-text-content">
+          <pre v-if="studyFileContent.type === 'text'">{{ studyFileContent.content }}</pre>
+          <div v-else v-html="renderedFileMarkdown"></div>
+        </div>
+        <div v-else class="preview-unsupported">
+          <div class="big-file-icon">📄</div>
+          <p>当前不方便预览此格式文件 ({{ viewingStudyFile.file_type }})</p>
+          <button class="btn-primary" @click="downloadCurrentStudyFile">下载到本地</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 发送邮件 -->
+    <div v-if="showSendEmail" class="fullscreen-modal">
+      <div class="fullscreen-header">
+        <button class="back-btn" @click="closeSendEmail">
+          <span>←</span> 返回
+        </button>
+        <h3>发送邮件</h3>
+        <button class="btn-primary" :disabled="!emailForm.recipient || !emailForm.subject" @click="sendEmail">
+          确认发送
+        </button>
+      </div>
+      
+      <div class="email-compose-form">
+        <div class="compose-row">
+          <label>收件人：</label>
+          <input type="email" v-model="emailForm.recipient" placeholder="recipient@example.com" />
+        </div>
+        <div class="compose-row">
+          <label>主题：</label>
+          <input type="text" v-model="emailForm.subject" placeholder="邮件主题" />
+        </div>
+        <div class="compose-row">
+          <label>内容：</label>
+          <textarea v-model="emailForm.content" placeholder="邮件内容..." rows="12"></textarea>
+        </div>
+        <div class="compose-row attachments-section">
+          <label>附件：</label>
+          <div class="attachments-list">
+            <div v-for="(att, idx) in emailForm.attachments" :key="idx" class="attachment-tag-item">
+              <span>{{ att.name }}</span>
+              <button class="remove-attachment" @click="removeEmailAttachment(idx)">×</button>
+            </div>
+            <button class="add-att-btn" @click="showAttOptions = !showAttOptions">➕ 添加附件</button>
+            <div v-if="showAttOptions" class="att-options-menu">
+              <button @click="addLocalAttachment">本地上传</button>
+              <button @click="openInternalFileSelector">站内选择</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" ref="emailFileInput" style="display: none" @change="handleEmailFileSelect" />
+      </div>
+    </div>
+
+    <!-- 站内文件选择器 -->
+    <div v-if="showInternalSelector" class="modal-overlay" @click.self="closeInternalSelector">
+      <div class="modal-content internal-selector-modal">
+        <h3>选择站内文件</h3>
+        <div class="internal-file-tree">
+          <div v-for="cat in studyCategories.filter(c => c.id !== 'all')" :key="cat.id" class="selector-cat">
+            <div class="selector-cat-name">{{ cat.name }}</div>
+            <div class="selector-file-list">
+              <div 
+                v-for="file in studyFilesByCategory[cat.id] || []" 
+                :key="file.id"
+                class="selector-file-row"
+                @click="selectInternalFileForEmail(file)"
+              >
+                <span>{{ getStudyFileIcon(file.file_type) }}</span>
+                <span>{{ file.original_name }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="btn-secondary" @click="closeInternalSelector">关闭</button>
+      </div>
+    </div>
+
+    <!-- 收件箱 -->
+    <div v-if="showInbox" class="fullscreen-modal">
+      <div class="fullscreen-header">
+        <button class="back-btn" @click="closeInbox">
+          <span>←</span> 返回
+        </button>
+        <h3>收件箱</h3>
+        <div class="inbox-filter-tabs">
+          <button 
+            v-for="filter in ['all', 'unread', 'read']" 
+            :key="filter"
+            :class="['filter-tab', { active: emailFilter === filter }]"
+            @click="emailFilter = filter"
+          >
+            {{ filter === 'all' ? '全部' : filter === 'unread' ? '未读' : '已读' }}
+          </button>
+        </div>
+      </div>
+      
+      <div class="inbox-content">
+        <div v-if="!viewingEmail" class="email-list-view">
+          <div 
+            v-for="email in filteredEmails" 
+            :key="email.id"
+            class="email-row"
+            :class="{ unread: !email.is_read }"
+            @click="viewEmail(email)"
+          >
+            <div class="email-row-main">
+              <span class="email-sender-name">{{ email.sender_name || email.sender_email }}</span>
+              <span class="email-subject-line">{{ email.subject }}</span>
+              <span v-if="!email.is_read" class="unread-indicator"></span>
+            </div>
+            <div class="email-row-meta">
+              <span v-if="email.has_attachments" class="has-attachment-icon">📎</span>
+              <span class="email-time">{{ formatEmailTime(email.created_at) }}</span>
+            </div>
+          </div>
+          <div v-if="filteredEmails.length === 0" class="empty-inbox-msg">
+            <p>暂无邮件</p>
+          </div>
+        </div>
+        
+        <div v-else class="email-detail-view">
+          <div class="email-detail-nav">
+            <button :disabled="!hasPrevEmail" @click="prevEmail">← 上一封</button>
+            <button :disabled="!hasNextEmail" @click="nextEmail">下一封 →</button>
+          </div>
+          <div class="email-detail-content">
+            <h2>{{ viewingEmail.subject }}</h2>
+            <div class="email-meta-info">
+              <div><strong>发件人：</strong>{{ viewingEmail.sender_name || viewingEmail.sender_email }}</div>
+              <div><strong>时间：</strong>{{ formatEmailTime(viewingEmail.created_at) }}</div>
+            </div>
+            <div class="email-body-text" v-html="viewingEmail.content.replace(/\\n/g, '<br>')"></div>
+            
+            <div v-if="viewingEmail.attachments && JSON.parse(viewingEmail.attachments).length > 0" class="email-attachments-section">
+              <h4>附件：</h4>
+              <div v-for="(att, idx) in JSON.parse(viewingEmail.attachments)" :key="idx" class="email-att-item">
+                <span>{{ att.name }}</span>
+                <button class="btn-small" @click="downloadEmailAttachment(att)">下载</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast提示 -->
+    <div v-if="studyToast.show" class="study-toast" :class="studyToast.type">
+      {{ studyToast.message }}
+    </div>
   </div>
 </template>
+
 
 <script>
 import NavigationBar from '../NavigationBar.vue'
 import axios from 'axios'
+import { marked } from 'marked'
 
 const clickOutside = {
   mounted(el, binding) {
@@ -397,11 +899,81 @@ export default {
         notes: ''
       },
       originalUserInfo: {},
-      passwordVisible: false,        // 控制新密码显隐
-      verifyPasswordVisible: false,  // 控制验证密码显隐
-      showVerifyModal: false,        // 控制验证弹窗显示
-      verifyPassword: '',            // 存储输入的当前密码
-      pendingPassword: '',           // 临时存储待修改的新密码
+      passwordVisible: false,
+      verifyPasswordVisible: false,
+      showVerifyModal: false,
+      verifyPassword: '',
+      pendingPassword: '',
+      
+      // 学习区数据
+      studyCategories: [{ id: 'all', name: '所有' }],
+      currentStudyCategory: 'all',
+      studyFiles: [],
+      studyFilesByCategory: {},
+      studySearchQuery: '',
+      
+      // 上传/下载
+      showUploadDialog: false,
+      showUploadForm: false,
+      showDownloadForm: false,
+      uploadFormData: {
+        customName: '',
+        categoryId: '',
+        selectedFile: null
+      },
+      uploadingFile: false,
+      allDownloadExpanded: true,
+      expandedDownloadCats: [],
+      selectedDownloadFiles: [],
+      
+      // 批量删除
+      isBatchDeleteMode: false,
+      selectedStudyFiles: [],
+      showDeleteConfirmDialog: false,
+      deletingFiles: false,
+      
+      // 添加分类
+      showAddCategoryDialog: false,
+      newStudyCategoryName: '',
+      
+      // Markdown编辑器
+      showMarkdownEditor: false,
+      markdownContent: '',
+      showPublishMarkdownDialog: false,
+      publishMdForm: {
+        title: '',
+        categoryId: ''
+      },
+      
+      // 文件预览
+      viewingStudyFile: null,
+      studyFileContent: null,
+      currentStudyFileIndex: 0,
+      
+      // 邮件
+      showSendEmail: false,
+      showInbox: false,
+      emailFilter: 'all',
+      emails: [],
+      viewingEmail: null,
+      emailForm: {
+        recipient: '',
+        subject: '',
+        content: '',
+        attachments: []
+      },
+      showAttOptions: false,
+      showInternalSelector: false,
+      
+      // 提示
+      studyToast: {
+        show: false,
+        message: '',
+        type: 'success'
+      },
+      
+      userId: null,
+      userEmail: null
     }
   },
   computed: {
@@ -437,6 +1009,47 @@ export default {
       const date = new Date(this.scrollSelectedYear, this.scrollSelectedMonth - 1, this.scrollSelectedDay)
       const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
       return weekdays[date.getDay()]
+    },
+    
+    // 学习区计算属性
+    currentStudyFiles() {
+      if (this.currentStudyCategory === 'all') return this.studyFiles
+      return this.studyFilesByCategory[this.currentStudyCategory] || []
+    },
+    renderedMarkdown() {
+      return marked(this.markdownContent || '')
+    },
+    renderedFileMarkdown() {
+      if (this.studyFileContent && this.studyFileContent.content) {
+        return marked(this.studyFileContent.content)
+      }
+      return ''
+    },
+    filteredEmails() {
+      if (this.emailFilter === 'all') return this.emails
+      if (this.emailFilter === 'unread') return this.emails.filter(e => !e.is_read)
+      if (this.emailFilter === 'read') return this.emails.filter(e => e.is_read)
+      return this.emails
+    },
+    unreadEmailCount() {
+      return this.emails.filter(e => !e.is_read).length
+    },
+    hasPrevEmail() {
+      if (!this.viewingEmail) return false
+      const idx = this.filteredEmails.findIndex(e => e.id === this.viewingEmail.id)
+      return idx > 0
+    },
+    hasNextEmail() {
+      if (!this.viewingEmail) return false
+      const idx = this.filteredEmails.findIndex(e => e.id === this.viewingEmail.id)
+      return idx < this.filteredEmails.length - 1 && idx !== -1
+    },
+    hasPrevStudyFile() {
+      return this.currentStudyFileIndex > 0
+    },
+    hasNextStudyFile() {
+      const files = this.currentStudyCategory === 'all' ? this.studyFiles : this.currentStudyFiles
+      return this.currentStudyFileIndex < files.length - 1
     }
   },
   watch: {
@@ -476,7 +1089,12 @@ export default {
       this.$router.push('/login')
       return
     }
+    this.userId = localStorage.getItem('userId')
+    this.userEmail = localStorage.getItem('userEmail')
     this.loadUserInfo()
+    this.loadStudyCategories()
+    this.loadStudyFiles()
+    this.loadEmails()
     this.setupThemeListener()
   },
   beforeUnmount() {
@@ -503,7 +1121,14 @@ export default {
         this.isEditingPassword = false
         this.cancelEdit()
       }
+      // 切换选项时重置学习区状态
+      if (optionId === 'study') {
+        this.isBatchDeleteMode = false
+        this.selectedStudyFiles = []
+      }
     },
+    
+    // ==================== 个人信息方法（原有） ====================
     async loadUserInfo() {
       try {
         const userId = localStorage.getItem('userId')
@@ -512,22 +1137,71 @@ export default {
           this.userInfo = response.data.user
           this.userInfo.password = '********'
           this.originalUserInfo = { ...this.userInfo }
-        } else {
-          this.userInfo = {
-            username: '用户' + Math.floor(Math.random() * 1000),
-            email: localStorage.getItem('userEmail') || '',
-            password: '********',
-            birthday: '',
-            hobbies: '阅读, 音乐, 运动',
-            occupation: 'developer',
-            notes: '欢迎使用个人中心！'
-          }
-          this.originalUserInfo = { ...this.userInfo }
         }
       } catch (error) {
         console.error('加载用户信息失败:', error)
       }
     },
+    toggleEdit() {
+      if (!this.isEditing) {
+        this.isEditing = true
+        this.originalUserInfo = { ...this.userInfo }
+      } else {
+        this.savePersonalInfo()
+      }
+    },
+    togglePasswordEdit() {
+      if (!this.isEditingPassword) {
+        this.isEditingPassword = true
+        if (this.userInfo.password === '********') this.userInfo.password = ''
+      } else {
+        this.cancelPasswordEdit()
+      }
+    },
+    cancelPasswordEdit() {
+      this.isEditingPassword = false
+      this.userInfo.password = '********'
+    },
+    cancelEdit() {
+      this.userInfo = { ...this.originalUserInfo }
+      this.isEditing = false
+      this.isEditingPassword = false
+      this.saveStatus = null
+      this.closeDatePicker()
+    },
+    async savePersonalInfo() {
+      try {
+        if (this.isEditingPassword) {
+          this.showSaveStatus('warning', '请先完成或取消密码修改')
+          return
+        }
+        if (!this.userInfo.username || !this.userInfo.email) {
+          this.showSaveStatus('error', '用户名和账号不能为空')
+          return
+        }
+        const userId = localStorage.getItem('userId')
+        await axios.put(`/api/user/${userId}`, {
+          username: this.userInfo.username,
+          birthday: this.userInfo.birthday,
+          hobbies: this.userInfo.hobbies,
+          occupation: this.userInfo.occupation,
+          notes: this.userInfo.notes
+        })
+        this.showSaveStatus('success', '个人信息保存成功')
+        this.originalUserInfo = { ...this.userInfo }
+        this.isEditing = false
+      } catch (error) {
+        console.error('保存失败:', error)
+        this.showSaveStatus('error', error.response?.data?.error || '保存失败')
+      }
+    },
+    showSaveStatus(type, message) {
+      const icons = { success: '✅', error: '❌', warning: '⚠️' }
+      this.saveStatus = { type, icon: icons[type], message }
+      setTimeout(() => this.saveStatus = null, 3000)
+    },
+    
+    // 日期选择器方法
     toggleDatePicker() {
       this.showDatePicker = !this.showDatePicker
     },
@@ -607,84 +1281,42 @@ export default {
       this.userInfo.birthday = `${this.selectedYear}-${m}-${d}`
       this.closeDatePicker()
     },
-    toggleEdit() {
-      if (!this.isEditing) {
-        this.isEditing = true
-        this.originalUserInfo = { ...this.userInfo }
-      } else {
-        this.savePersonalInfo()
-      }
-    },
-    togglePasswordEdit() {
-      if (!this.isEditingPassword) {
-        this.isEditingPassword = true
-        if (this.userInfo.password === '********') this.userInfo.password = ''
-      } else {
-        this.cancelPasswordEdit()
-      }
-    },
-    cancelPasswordEdit() {
-      this.isEditingPassword = false
-      this.userInfo.password = '********'
-    },
-    cancelEdit() {
-      this.userInfo = { ...this.originalUserInfo }
-      this.isEditing = false
-      this.isEditingPassword = false
-      this.saveStatus = null
-      this.closeDatePicker()
-    },
-
-    // 准备修改密码（先打开验证弹窗）
+    
+    // 密码修改
     preparePasswordChange() {
       if (!this.userInfo.password) {
         this.showSaveStatus('error', '密码不能为空')
         return
       }
-      
       if (this.userInfo.password.length < 6) {
         this.showSaveStatus('error', '新密码长度至少6位')
         return
       }
-      
       this.pendingPassword = this.userInfo.password
       this.verifyPassword = ''
       this.verifyPasswordVisible = false
       this.showVerifyModal = true
     },
-
-    // 取消验证
     cancelVerify() {
       this.showVerifyModal = false
       this.verifyPassword = ''
       this.pendingPassword = ''
     },
-
-    // 确认修改密码（验证通过后）
     async confirmPasswordChange() {
       if (!this.verifyPassword) {
         this.showSaveStatus('error', '请输入当前密码')
         return
       }
-
       try {
         const userId = localStorage.getItem('userId')
-        if (!userId) {
-          this.showSaveStatus('error', '用户未登录')
-          return
-        }
-
         await axios.put(`/api/user/${userId}/password`, {
           oldPassword: this.verifyPassword,
           newPassword: this.pendingPassword
         })
-
         this.showVerifyModal = false
         this.showSaveStatus('success', '密码修改成功，请重新登录')
         this.isEditingPassword = false
         this.userInfo.password = '********'
-        this.passwordVisible = false
-        
         setTimeout(() => {
           localStorage.removeItem('isLoggedIn')
           localStorage.removeItem('userId')
@@ -692,97 +1324,422 @@ export default {
           localStorage.removeItem('userInfo')
           this.$router.push('/login')
         }, 2000)
-
       } catch (error) {
-        console.error('修改密码失败:', error)
-        const message = error.response?.data?.error || '修改失败，请检查当前密码是否正确'
-        this.showSaveStatus('error', message)
-        // 不清除弹窗，让用户可以重新输入
+        this.showSaveStatus('error', error.response?.data?.error || '修改失败')
       }
     },
 
-    async savePersonalInfo() {
+    // ==================== 学习区方法 ====================
+    async loadStudyCategories() {
       try {
-        // 如果正在修改密码，提示用户先完成或取消密码修改
-        if (this.isEditingPassword) {
-          this.showSaveStatus('warning', '请先完成或取消密码修改')
-          return
-        }
-
-        if (!this.userInfo.username || !this.userInfo.email) {
-          this.showSaveStatus('error', '用户名和账号不能为空')
-          return
-        }
-        
-        const userId = localStorage.getItem('userId')
-        if (!userId) {
-          this.showSaveStatus('error', '用户未登录')
-          return
-        }
-        
-        // 只保存基本信息（不含密码）
-        await axios.put(`/api/user/${userId}`, {
-          username: this.userInfo.username,
-          birthday: this.userInfo.birthday,
-          hobbies: this.userInfo.hobbies,
-          occupation: this.userInfo.occupation,
-          notes: this.userInfo.notes
-        })
-        
-        this.showSaveStatus('success', '个人信息保存成功')
-        this.originalUserInfo = { ...this.userInfo }
-        this.isEditing = false
-
-      } catch (error) {
-        console.error('保存失败:', error)
-        const message = error.response?.data?.error || '保存失败，请重试'
-        this.showSaveStatus('error', message)
+        const res = await axios.get(`/api/categories/${this.userId}`)
+        const cats = res.data.categories
+        const defaultCats = cats.filter(c => c.is_default).sort((a, b) => a.sort_order - b.sort_order)
+        const customCats = cats.filter(c => !c.is_default).sort((a, b) => a.sort_order - b.sort_order)
+        this.studyCategories = [
+          { id: 'all', name: '所有' },
+          ...defaultCats,
+          ...customCats
+        ]
+      } catch (err) {
+        this.showStudyToast('加载分类失败', 'error')
       }
     },
-    showSaveStatus(type, message) {
-      const icons = { success: '✅', error: '❌', warning: '⚠️' }
-      this.saveStatus = { type, icon: icons[type], message }
-      setTimeout(() => this.saveStatus = null, 3000)
+    async loadStudyFiles() {
+      try {
+        const res = await axios.get(`/api/files/${this.userId}`)
+        this.studyFiles = res.data.files
+        this.studyFilesByCategory = {}
+        this.studyCategories.forEach(cat => {
+          if (cat.id !== 'all') {
+            this.studyFilesByCategory[cat.id] = this.studyFiles.filter(f => f.category_id === cat.id)
+          }
+        })
+      } catch (err) {
+        this.showStudyToast('加载文件失败', 'error')
+      }
+    },
+    async loadEmails() {
+      try {
+        const res = await axios.get(`/api/emails/${this.userEmail}`)
+        this.emails = res.data.emails
+      } catch (err) {
+        console.error('加载邮件失败', err)
+      }
+    },
+    switchStudyCategory(catId) {
+      this.currentStudyCategory = catId
+      this.isBatchDeleteMode = false
+      this.selectedStudyFiles = []
+    },
+    handleStudySearch() {
+      if (this.studySearchQuery.trim()) {
+        axios.get(`/api/files/${this.userId}?search=${this.studySearchQuery}`).then(res => {
+          this.studyFiles = res.data.files
+        })
+      } else {
+        this.loadStudyFiles()
+      }
+    },
+    getStudyFileIcon(ext) {
+      const iconMap = {
+        '.pdf': '📕', '.doc': '📘', '.docx': '📘', '.txt': '📄',
+        '.md': '📝', '.js': '📜', '.html': '🌐', '.css': '🎨',
+        '.py': '🐍', '.c': '🔧', '.cpp': '🔧', '.h': '🔧',
+        '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️', '.gif': '🖼️',
+        '.mp4': '🎬', '.avi': '🎬', '.mp3': '🎵', '.wav': '🎵',
+        '.zip': '📦', '.rar': '📦', '.ppt': '📊', '.pptx': '📊',
+        '.xls': '📊', '.xlsx': '📊', '.json': '📋', '.xml': '📋'
+      }
+      return iconMap[ext.toLowerCase()] || '📄'
+    },
+    getStudyFileIconClass(ext) {
+      const classMap = {
+        '.pdf': 'pdf', '.doc': 'doc', '.docx': 'doc', '.txt': 'text',
+        '.md': 'markdown', '.js': 'code', '.html': 'code', '.css': 'code',
+        '.py': 'code', '.c': 'code', '.cpp': 'code', '.h': 'code',
+        '.jpg': 'image', '.jpeg': 'image', '.png': 'image', '.gif': 'image',
+        '.mp4': 'video', '.avi': 'video', '.mp3': 'audio', '.wav': 'audio',
+        '.zip': 'archive', '.rar': 'archive'
+      }
+      return classMap[ext.toLowerCase()] || 'default'
+    },
+    formatStudyDate(dateStr) {
+      const date = new Date(dateStr)
+      return `${date.getMonth() + 1}/${date.getDate()}`
+    },
+    formatEmailTime(dateStr) {
+      const date = new Date(dateStr)
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+    },
+    
+    // 批量删除
+    startBatchDelete() {
+      this.isBatchDeleteMode = true
+      this.selectedStudyFiles = []
+    },
+    cancelBatchDelete() {
+      this.isBatchDeleteMode = false
+      this.selectedStudyFiles = []
+    },
+    toggleStudyFileSelection(fileId) {
+      const idx = this.selectedStudyFiles.indexOf(fileId)
+      if (idx > -1) {
+        this.selectedStudyFiles.splice(idx, 1)
+      } else {
+        this.selectedStudyFiles.push(fileId)
+      }
+    },
+    confirmBatchDelete() {
+      if (this.selectedStudyFiles.length === 0) return
+      this.showDeleteConfirmDialog = true
+    },
+    async executeBatchDelete() {
+      this.deletingFiles = true
+      try {
+        await axios.delete('/api/files', {
+          data: { fileIds: this.selectedStudyFiles, userId: this.userId }
+        })
+        this.showStudyToast('删除成功')
+        this.loadStudyFiles()
+        this.showDeleteConfirmDialog = false
+        this.isBatchDeleteMode = false
+        this.selectedStudyFiles = []
+      } catch (err) {
+        this.showStudyToast(err.response?.data?.error || '删除失败', 'error')
+      } finally {
+        this.deletingFiles = false
+      }
+    },
+    
+    // 添加分类
+    async confirmAddCategory() {
+      if (!this.newStudyCategoryName.trim()) return
+      try {
+        await axios.post('/api/categories', {
+          userId: this.userId,
+          name: this.newStudyCategoryName.trim()
+        })
+        this.showStudyToast('分类添加成功')
+        this.loadStudyCategories()
+        this.showAddCategoryDialog = false
+        this.newStudyCategoryName = ''
+      } catch (err) {
+        this.showStudyToast(err.response?.data?.error || '添加失败', 'error')
+      }
+    },
+    
+    // 上传下载
+    switchToUploadMode() {
+      this.showUploadDialog = false
+      this.showUploadForm = true
+      if (this.currentStudyCategory !== 'all') {
+        this.uploadFormData.categoryId = this.currentStudyCategory
+      } else {
+        const firstCat = this.studyCategories.find(c => c.id !== 'all')
+        this.uploadFormData.categoryId = firstCat ? firstCat.id : ''
+      }
+    },
+    handleFileSelect(event) {
+      this.uploadFormData.selectedFile = event.target.files[0]
+    },
+    cancelUpload() {
+      this.showUploadForm = false
+      this.uploadFormData = { customName: '', categoryId: '', selectedFile: null }
+    },
+    async confirmUpload() {
+      if (!this.uploadFormData.selectedFile) return
+      this.uploadingFile = true
+      const formData = new FormData()
+      formData.append('file', this.uploadFormData.selectedFile)
+      formData.append('userId', this.userId)
+      formData.append('categoryId', this.uploadFormData.categoryId)
+      if (this.uploadFormData.customName) {
+        formData.append('customName', this.uploadFormData.customName)
+      }
+      try {
+        await axios.post('/api/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        this.showStudyToast('上传成功')
+        this.loadStudyFiles()
+        this.cancelUpload()
+      } catch (err) {
+        this.showStudyToast(err.response?.data?.error || '上传失败', 'error')
+      } finally {
+        this.uploadingFile = false
+      }
+    },
+    switchToDownloadMode() {
+      this.showUploadDialog = false
+      this.showDownloadForm = true
+      this.selectedDownloadFiles = []
+      this.expandedDownloadCats = this.studyCategories.filter(c => c.id !== 'all').map(c => c.id)
+      this.allDownloadExpanded = true
+    },
+    toggleAllDownloadExpansion() {
+      this.allDownloadExpanded = !this.allDownloadExpanded
+      if (this.allDownloadExpanded) {
+        this.expandedDownloadCats = this.studyCategories.filter(c => c.id !== 'all').map(c => c.id)
+      } else {
+        this.expandedDownloadCats = []
+      }
+    },
+    toggleDownloadCategory(catId) {
+      const idx = this.expandedDownloadCats.indexOf(catId)
+      if (idx > -1) {
+        this.expandedDownloadCats.splice(idx, 1)
+      } else {
+        this.expandedDownloadCats.push(catId)
+      }
+    },
+    selectDownloadFile(fileId) {
+      this.selectedDownloadFiles = [fileId]
+    },
+    cancelDownload() {
+      this.showDownloadForm = false
+      this.selectedDownloadFiles = []
+    },
+    confirmDownload() {
+      if (this.selectedDownloadFiles.length === 0) return
+      this.selectedDownloadFiles.forEach(fileId => {
+        window.open(`/api/download/${fileId}?userId=${this.userId}`, '_blank')
+      })
+      this.showStudyToast('开始下载')
+      this.cancelDownload()
+    },
+    
+    // Markdown编辑器
+    openMarkdownEditor() {
+      this.showMarkdownEditor = true
+      this.markdownContent = ''
+    },
+    closeMarkdownEditor() {
+      this.showMarkdownEditor = false
+      this.markdownContent = ''
+    },
+    insertMdSyntax(before, after = '') {
+      const textarea = this.$refs.mdTextarea
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const text = this.markdownContent
+      const beforeText = text.substring(0, start)
+      const selectedText = text.substring(start, end)
+      const afterText = text.substring(end)
+      this.markdownContent = beforeText + before + selectedText + after + afterText
+      this.$nextTick(() => {
+        textarea.focus()
+        const newCursor = start + before.length + selectedText.length
+        textarea.setSelectionRange(newCursor, newCursor)
+      })
+    },
+    async confirmPublishMarkdown() {
+      if (!this.publishMdForm.title.trim()) {
+        this.showStudyToast('请输入标题', 'error')
+        return
+      }
+      try {
+        await axios.post('/api/upload-markdown', {
+          userId: this.userId,
+          categoryId: this.publishMdForm.categoryId,
+          title: this.publishMdForm.title,
+          content: this.markdownContent
+        })
+        this.showStudyToast('发布成功')
+        this.loadStudyFiles()
+        this.showPublishMarkdownDialog = false
+        this.closeMarkdownEditor()
+      } catch (err) {
+        this.showStudyToast(err.response?.data?.error || '发布失败', 'error')
+      }
+    },
+    
+    // 文件预览
+    isImageType(ext) {
+      return ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].includes(ext.toLowerCase())
+    },
+    isVideoType(ext) {
+      return ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv'].includes(ext.toLowerCase())
+    },
+    isAudioType(ext) {
+      return ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.wma'].includes(ext.toLowerCase())
+    },
+    async openStudyFile(file) {
+      this.viewingStudyFile = file
+      this.currentStudyFileIndex = this.currentStudyFiles.findIndex(f => f.id === file.id)
+      try {
+        const res = await axios.get(`/api/file-content/${file.id}?userId=${this.userId}`)
+        this.studyFileContent = res.data
+      } catch (err) {
+        this.showStudyToast('加载文件失败', 'error')
+        this.studyFileContent = { type: 'error' }
+      }
+    },
+    closeFileViewer() {
+      this.viewingStudyFile = null
+      this.studyFileContent = null
+    },
+    prevStudyFile() {
+      if (!this.hasPrevStudyFile) return
+      this.currentStudyFileIndex--
+      const files = this.currentStudyCategory === 'all' ? this.studyFiles : this.currentStudyFiles
+      this.openStudyFile(files[this.currentStudyFileIndex])
+    },
+    nextStudyFile() {
+      if (!this.hasNextStudyFile) return
+      this.currentStudyFileIndex++
+      const files = this.currentStudyCategory === 'all' ? this.studyFiles : this.currentStudyFiles
+      this.openStudyFile(files[this.currentStudyFileIndex])
+    },
+    downloadCurrentStudyFile() {
+      if (this.viewingStudyFile) {
+        window.open(`/api/download/${this.viewingStudyFile.id}?userId=${this.userId}`, '_blank')
+      }
+    },
+    
+    // 邮件系统
+    closeSendEmail() {
+      this.showSendEmail = false
+      this.emailForm = { recipient: '', subject: '', content: '', attachments: [] }
+    },
+    addLocalAttachment() {
+      this.$refs.emailFileInput.click()
+    },
+    handleEmailFileSelect(event) {
+      const file = event.target.files[0]
+      if (file) {
+        this.emailForm.attachments.push({
+          name: file.name,
+          type: 'local',
+          file: file
+        })
+      }
+      this.showAttOptions = false
+      event.target.value = ''
+    },
+    openInternalFileSelector() {
+      this.showInternalSelector = true
+      this.showAttOptions = false
+    },
+    closeInternalSelector() {
+      this.showInternalSelector = false
+    },
+    selectInternalFileForEmail(file) {
+      this.emailForm.attachments.push({
+        name: file.original_name,
+        type: 'internal',
+        fileId: file.id
+      })
+      this.closeInternalSelector()
+    },
+    removeEmailAttachment(idx) {
+      this.emailForm.attachments.splice(idx, 1)
+    },
+    async sendEmail() {
+      if (!this.emailForm.recipient || !this.emailForm.subject) return
+      try {
+        const userRes = await axios.get(`/api/user/${this.userId}`)
+        const user = userRes.data.user
+        await axios.post('/api/emails', {
+          senderId: this.userId,
+          senderEmail: this.userEmail,
+          senderName: user.username,
+          recipientEmail: this.emailForm.recipient,
+          subject: this.emailForm.subject,
+          content: this.emailForm.content,
+          attachments: this.emailForm.attachments
+        })
+        this.showStudyToast('邮件发送成功')
+        this.closeSendEmail()
+      } catch (err) {
+        this.showStudyToast(err.response?.data?.error || '发送失败', 'error')
+      }
+    },
+    closeInbox() {
+      this.showInbox = false
+      this.viewingEmail = null
+    },
+    async viewEmail(email) {
+      this.viewingEmail = email
+      if (!email.is_read) {
+        try {
+          await axios.put(`/api/emails/${email.id}/read`)
+          email.is_read = true
+          const idx = this.emails.findIndex(e => e.id === email.id)
+          if (idx > -1) this.emails[idx].is_read = true
+        } catch (err) {
+          console.error('标记已读失败', err)
+        }
+      }
+    },
+    prevEmail() {
+      if (!this.hasPrevEmail) return
+      const idx = this.filteredEmails.findIndex(e => e.id === this.viewingEmail.id)
+      this.viewingEmail = this.filteredEmails[idx - 1]
+    },
+    nextEmail() {
+      if (!this.hasNextEmail) return
+      const idx = this.filteredEmails.findIndex(e => e.id === this.viewingEmail.id)
+      this.viewingEmail = this.filteredEmails[idx + 1]
+    },
+    downloadEmailAttachment(att) {
+      if (att.type === 'internal' && att.fileId) {
+        window.open(`/api/download/${att.fileId}?userId=${this.userId}`, '_blank')
+      }
+    },
+    showStudyToast(message, type = 'success') {
+      this.studyToast = { show: true, message, type }
+      setTimeout(() => {
+        this.studyToast.show = false
+      }, 3000)
     }
   }
 }
 </script>
 
+
 <style scoped>
-
-/* 隐藏浏览器自带的密码显示按钮（Chrome/Edge/Safari） */
-input::-webkit-credentials-auto-fill-button,
-input[type="password"]::-ms-reveal,
-input[type="password"]::-ms-clear {
-  display: none !important;
-  visibility: hidden;
-  pointer-events: none;
-  position: absolute;
-  right: 0;
-}
-
-/* Firefox */
-input[type="password"] {
-  -moz-appearance: none;
-}
-
-/* 隐藏浏览器自带的密码眼睛 */
-input::-webkit-credentials-auto-fill-button {
-  visibility: hidden;
-  display: none !important;
-  pointer-events: none;
-  position: absolute;
-  right: 0;
-}
-
-/* 确保我们的眼睛按钮在最上层 */
-.eye-icon-btn {
-  z-index: 10;
-}
-
-/* =========================================
-   基础样式
-   ========================================= */
+/* ==================== 基础变量和布局 ==================== */
 .personal-center {
   min-height: 100vh;
   transition: background-color 0.3s, color 0.3s;
@@ -909,12 +1866,13 @@ input::-webkit-credentials-auto-fill-button {
 
 .personal-content {
   display: flex;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 10px auto;
   padding: 0 20px;
   gap: 30px;
 }
 
+/* ==================== 左侧边栏 ==================== */
 .options-sidebar {
   flex: 0 0 250px;
   background: var(--sidebar-bg);
@@ -923,6 +1881,7 @@ input::-webkit-credentials-auto-fill-button {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--sidebar-border);
   transition: background-color 0.3s, border-color 0.3s;
+  height: fit-content;
 }
 
 .user-profile {
@@ -951,6 +1910,7 @@ input::-webkit-credentials-auto-fill-button {
   margin: 10px 0 5px;
   font-size: 18px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .user-profile .email {
@@ -1004,6 +1964,7 @@ input::-webkit-credentials-auto-fill-button {
   color: var(--text-primary);
 }
 
+/* ==================== 右侧内容区 ==================== */
 .content-area {
   flex: 1;
   background: var(--content-bg);
@@ -1012,6 +1973,7 @@ input::-webkit-credentials-auto-fill-button {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--content-border);
   transition: background-color 0.3s, border-color 0.3s;
+  min-height: 600px;
 }
 
 .content-title {
@@ -1023,6 +1985,7 @@ input::-webkit-credentials-auto-fill-button {
   border-bottom: 2px solid var(--title-border);
 }
 
+/* ==================== 个人信息表单 ==================== */
 .info-form {
   max-width: 600px;
 }
@@ -1044,10 +2007,43 @@ input::-webkit-credentials-auto-fill-button {
   margin-left: 4px;
 }
 
-/* =========================================
-   日期选择器样式 - 修复对齐版
-   ========================================= */
+.info-form input,
+.info-form select,
+.info-form textarea {
+  width: 100%;
+  padding: 12px 15px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  font-size: 15px;
+  transition: all 0.3s;
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
 
+.info-form input:disabled,
+.info-form select:disabled,
+.info-form textarea:disabled {
+  background: var(--input-disabled-bg);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.info-form input.editable:not(:disabled),
+.info-form select.editable:not(:disabled),
+.info-form textarea.editable:not(:disabled) {
+  background: var(--input-editable-bg);
+  border-color: var(--input-editable-border);
+}
+
+.info-form input:focus:not(:disabled),
+.info-form select:focus:not(:disabled),
+.info-form textarea:focus:not(:disabled) {
+  outline: none;
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 3px var(--input-focus-shadow);
+}
+
+/* 日期选择器样式 - 保留原有 */
 .date-form-group {
   position: relative;
 }
@@ -1112,11 +2108,11 @@ input::-webkit-credentials-auto-fill-button {
   cursor: not-allowed;
 }
 
+/* 日期选择器下拉 */
 .datepicker-dropdown {
   position: absolute;
   top: calc(100% + 8px);
-  right: 0;
-  left: auto;
+  left: 0;
   width: 320px;
   background: var(--datepicker-bg);
   border: 1px solid var(--datepicker-border);
@@ -1170,10 +2166,6 @@ input::-webkit-credentials-auto-fill-button {
   position: relative;
 }
 
-/* =========================================
-   滚轮关键样式 - 修复对齐
-   ========================================= */
-
 .wheel-container {
   display: flex;
   height: 180px;
@@ -1188,7 +2180,6 @@ input::-webkit-credentials-auto-fill-button {
   display: flex;
   flex-direction: column;
   position: relative;
-  /* 确保三列高度完全一致 */
   height: 100%;
 }
 
@@ -1201,24 +2192,17 @@ input::-webkit-credentials-auto-fill-button {
   border-bottom: 1px solid var(--datepicker-border);
   background: rgba(128, 128, 128, 0.05);
   flex-shrink: 0;
-  height: 28px; /* 固定高度 */
+  height: 28px;
   box-sizing: border-box;
   z-index: 3;
 }
 
-/* 关键：计算精确的 padding
-   容器高 180px，title 占 28px，剩余 152px
-   中间 item 36px，上下各需要 (152-36)/2 = 58px 的padding
-   这样中间 item 才能正好在可视区域垂直中心
-*/
 .wheel-scroll {
   flex: 1;
   overflow-y: auto;
   scroll-snap-type: y mandatory;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  
-  /* 严格计算：上下各留 58px，中间 36px，总共 152px */
   padding: 58px 0;
   scroll-padding-top: 58px;
   scroll-padding-bottom: 58px;
@@ -1226,11 +2210,9 @@ input::-webkit-credentials-auto-fill-button {
   position: relative;
 }
 
-/* 隐藏滚动条 */
 .wheel-scroll::-webkit-scrollbar { display: none; }
 .wheel-scroll { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* 关键：所有 item 严格的 36px 高，flex 居中，绝对基线对齐 */
 .wheel-item {
   height: 36px;
   min-height: 36px;
@@ -1246,47 +2228,33 @@ input::-webkit-credentials-auto-fill-button {
   line-height: 36px;
 }
 
-/* 去掉显式背景框，只用颜色变化标识选中 */
 .wheel-item.active {
-  color: var(--datepicker-wheel-active);  /* 蓝色文字 */
+  color: var(--datepicker-wheel-active);
   font-weight: 700;
   opacity: 1;
-  /* 下面这些造成"框"的效果全部去掉 */
-  background: transparent;      /* 去掉背景色 */
-  box-shadow: none;             /* 去掉边框 */
-  border-radius: 0;             /* 去掉圆角 */
-  width: 100%;                  /* 撑满宽度，不要margin */
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  width: 100%;
   margin: 0;
-  transform: none;              /* 也不要缩放，避免对齐问题 */
+  transform: none;
 }
 
-/* 中间定位横线 - 显示出来，加边框 */
 .wheel-highlight {
   position: absolute;
-  top: 86px; /* title(28) + 上padding(58) */
+  top: 86px;
   left: 0;
   right: 0;
   height: 36px;
-  /* 改成带边框的样式，让用户能看到定位线 */
-  background: transparent; /* 背景透明或很淡 */
-  border-top: 2px solid var(--datepicker-wheel-active);   /* 上边框 */
-  border-bottom: 2px solid var(--datepicker-wheel-active); /* 下边框 */
+  background: transparent;
+  border-top: 2px solid var(--datepicker-wheel-active);
+  border-bottom: 2px solid var(--datepicker-wheel-active);
   pointer-events: none;
-  z-index: 1; /* 放上层，让用户能看到 */
+  z-index: 1;
   opacity: 0.6;
   box-sizing: border-box;
 }
 
-/* 确保高亮条位置计算准确：
-   title 28px + (152px/2) - (36px/2) = 28 + 76 - 18 = 86px 从顶部
-   另一种写法：top: 28px + 58px = 86px;
-*/
-.wheel-highlight {
-  top: 86px; /* 精确像素定位：title(28) + 上padding(58) */
-  transform: none; /* 移除 transform 避免模糊或偏移 */
-}
-
-/* 底部 */
 .datepicker-footer {
   display: flex;
   justify-content: space-between;
@@ -1341,57 +2309,7 @@ input::-webkit-credentials-auto-fill-button {
   filter: brightness(1.1);
 }
 
-.datepicker-pop-enter-active,
-.datepicker-pop-leave-active {
-  transition: all 0.2s ease;
-}
-
-.datepicker-pop-enter-from,
-.datepicker-pop-leave-to {
-  opacity: 0;
-  transform: translateY(-10px) scale(0.95);
-}
-
-/* =========================================
-   其他表单元素
-   ========================================= */
-
-.info-form input,
-.info-form select,
-.info-form textarea {
-  width: 100%;
-  padding: 12px 15px;
-  border: 1px solid var(--input-border);
-  border-radius: 8px;
-  font-size: 15px;
-  transition: all 0.3s;
-  background: var(--input-bg);
-  color: var(--text-primary);
-}
-
-.info-form input:disabled,
-.info-form select:disabled,
-.info-form textarea:disabled {
-  background: var(--input-disabled-bg);
-  color: var(--text-disabled);
-  cursor: not-allowed;
-}
-
-.info-form input.editable:not(:disabled),
-.info-form select.editable:not(:disabled),
-.info-form textarea.editable:not(:disabled) {
-  background: var(--input-editable-bg);
-  border-color: var(--input-editable-border);
-}
-
-.info-form input:focus:not(:disabled),
-.info-form select:focus:not(:disabled),
-.info-form textarea:focus:not(:disabled) {
-  outline: none;
-  border-color: var(--input-focus-border);
-  box-shadow: 0 0 0 3px var(--input-focus-shadow);
-}
-
+/* 密码区域 */
 .password-group {
   position: relative;
 }
@@ -1418,59 +2336,6 @@ input::-webkit-credentials-auto-fill-button {
   background: var(--btn-secondary-hover);
 }
 
-.password-toggle:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.password-hint {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 5px;
-}
-
-/* 密码操作按钮容器 */
-.password-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 10px;
-}
-
-/* 完成修改按钮样式 */
-.btn-complete-password {
-  padding: 8px 16px;
-  background: linear-gradient(to right, #3b82f6, #60a5fa);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-}
-
-.btn-complete-password:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
-  filter: brightness(1.1);
-}
-
-.btn-complete-password:active {
-  transform: translateY(0);
-}
-
-/* 暗色模式适配 */
-.dark-mode .btn-complete-password {
-  background: linear-gradient(to right, #2563eb, #3b82f6);
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
-}
-
-.dark-mode .btn-complete-password:hover {
-  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.4);
-}
-
-/* 密码输入框容器（相对定位用于放置眼睛图标） */
 .password-input-wrapper {
   position: relative;
   display: flex;
@@ -1479,10 +2344,9 @@ input::-webkit-credentials-auto-fill-button {
 
 .password-input-wrapper input {
   width: 100%;
-  padding-right: 40px; /* 给眼睛图标留空间 */
+  padding-right: 40px;
 }
 
-/* 眼睛图标按钮 */
 .eye-icon-btn {
   position: absolute;
   right: 12px;
@@ -1506,16 +2370,21 @@ input::-webkit-credentials-auto-fill-button {
   background: rgba(128, 128, 128, 0.1);
 }
 
-/* 修改后的完成修改按钮（更小更紧凑） */
+.password-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 5px;
+}
+
 .password-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px; /* 原来是10px，现在更近 */
+  margin-top: 8px;
 }
 
 .btn-complete-password {
-  padding: 6px 14px; /* 原来是8px 16px，现在更小 */
-  font-size: 13px;   /* 原来是14px */
+  padding: 6px 14px;
+  font-size: 13px;
   background: linear-gradient(to right, #3b82f6, #60a5fa);
   color: white;
   border: none;
@@ -1523,7 +2392,7 @@ input::-webkit-credentials-auto-fill-button {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s;
-  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.2); /* 更轻的阴影 */
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.2);
 }
 
 .btn-complete-password:hover {
@@ -1532,125 +2401,7 @@ input::-webkit-credentials-auto-fill-button {
   filter: brightness(1.1);
 }
 
-/* 身份验证弹窗样式 */
-.verify-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
-}
-
-.verify-modal {
-  background: var(--content-bg, #ffffff);
-  border: 1px solid var(--content-border, #e5e7eb);
-  border-radius: 12px;
-  padding: 24px;
-  width: 90%;
-  max-width: 360px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-}
-
-.dark-mode .verify-modal {
-  background: #1f2937;
-  border-color: #374151;
-  color: #e2e8f0;
-}
-
-.verify-modal h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  color: inherit;
-}
-
-.verify-desc {
-  margin: 0 0 16px 0;
-  font-size: 14px;
-  color: var(--text-secondary);
-  opacity: 0.8;
-}
-
-/* 验证弹窗输入框 */
-.verify-input-wrapper {
-  position: relative;
-  margin-bottom: 20px;
-}
-
-.verify-input {
-  width: 100%;
-  padding: 10px 40px 10px 12px;
-  border: 1px solid var(--input-border, #d1d5db);
-  border-radius: 8px;
-  font-size: 15px;
-  background: var(--input-bg, #ffffff);
-  color: var(--text-primary);
-  transition: all 0.3s;
-}
-
-.verify-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.verify-eye-btn {
-  right: 8px;
-}
-
-/* 验证弹窗按钮 */
-.verify-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
-.btn-verify-cancel,
-.btn-verify-confirm {
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s;
-  border: none;
-}
-
-.btn-verify-cancel {
-  background: var(--btn-secondary-bg, #f3f4f6);
-  color: var(--text-secondary);
-}
-
-.btn-verify-cancel:hover {
-  background: var(--btn-secondary-hover, #e5e7eb);
-}
-
-.btn-verify-confirm {
-  background: linear-gradient(to right, #3b82f6, #60a5fa);
-  color: white;
-}
-
-.btn-verify-confirm:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
-}
-
-/* 弹窗动画 */
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
+/* 表单操作按钮 */
 .form-actions {
   display: flex;
   gap: 15px;
@@ -1738,6 +2489,1342 @@ input::-webkit-credentials-auto-fill-button {
   font-weight: 500;
 }
 
+/* 验证弹窗 */
+.verify-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.verify-modal {
+  background: var(--content-bg);
+  border: 1px solid var(--content-border);
+  border-radius: 12px;
+  padding: 24px;
+  width: 90%;
+  max-width: 360px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .verify-modal {
+  background: #1f2937;
+  border-color: #374151;
+  color: #e2e8f0;
+}
+
+.verify-modal h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: inherit;
+}
+
+.verify-desc {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+
+.verify-input-wrapper {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.verify-input {
+  width: 100%;
+  padding: 10px 40px 10px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  font-size: 15px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  transition: all 0.3s;
+}
+
+.verify-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.verify-eye-btn {
+  right: 8px;
+}
+
+.verify-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.btn-verify-cancel,
+.btn-verify-confirm {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: none;
+}
+
+.btn-verify-cancel {
+  background: var(--btn-secondary-bg);
+  color: var(--text-secondary);
+}
+
+.btn-verify-cancel:hover {
+  background: var(--btn-secondary-hover);
+}
+
+.btn-verify-confirm {
+  background: linear-gradient(to right, #3b82f6, #60a5fa);
+  color: white;
+}
+
+.btn-verify-confirm:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* ==================== 学习区样式 ==================== */
+.study-content-wrapper {
+  animation: fadeIn 0.3s ease;
+}
+
+.study-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 学习区头部栏 */
+.study-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--content-border);
+}
+
+.category-tabs-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1;
+}
+
+.study-category-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--content-border);
+  background: var(--content-bg);
+  color: var(--text-primary);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.study-category-btn:hover {
+  background: var(--option-hover);
+  transform: translateY(-2px);
+}
+
+.study-category-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.study-header-actions {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.study-search-box {
+  display: flex;
+  align-items: center;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 25px;
+  padding: 5px 15px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.study-search-box input {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  outline: none;
+  width: 150px;
+  padding: 5px;
+  font-size: 14px;
+}
+
+.search-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.7;
+  transition: opacity 0.3s;
+}
+
+.search-icon-btn:hover {
+  opacity: 1;
+}
+
+.study-email-btns {
+  display: flex;
+  gap: 10px;
+}
+
+.email-action-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+  background: var(--content-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--content-border);
+  position: relative;
+  white-space: nowrap;
+}
+
+.send-btn:hover {
+  background: #10b981;
+  color: white;
+  border-color: #10b981;
+}
+
+.inbox-btn:hover {
+  background: #8b5cf6;
+  color: white;
+  border-color: #8b5cf6;
+}
+
+.email-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* 学习区工具栏 */
+.study-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: rgba(128, 128, 128, 0.05);
+  border-radius: 10px;
+  border: 1px solid var(--content-border);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.toolbar-left-group,
+.toolbar-right-group {
+  display: flex;
+  gap: 10px;
+}
+
+.study-tool-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--content-border);
+  background: var(--content-bg);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.study-tool-btn:hover:not(:disabled) {
+  background: var(--option-hover);
+  transform: translateY(-1px);
+}
+
+.study-tool-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.upload-download-btn {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.upload-download-btn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.edit-md-btn {
+  background: #10b981;
+  color: white;
+  border-color: #10b981;
+}
+
+.edit-md-btn:hover {
+  background: #059669;
+}
+
+.add-category-btn {
+  background: #f59e0b;
+  color: white;
+  border-color: #f59e0b;
+}
+
+.add-category-btn:hover {
+  background: #d97706;
+}
+
+.batch-delete-btn {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.batch-delete-btn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.confirm-delete-btn {
+  background: #ef4444;
+  color: white;
+  border-color: #ef4444;
+}
+
+.confirm-delete-btn:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+/* 学习区文件容器 */
+.study-files-container {
+  max-height: calc(100vh - 400px);
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.study-category-block {
+  margin-bottom: 30px;
+  padding: 20px;
+  background: rgba(128, 128, 128, 0.03);
+  border-radius: 12px;
+  border: 1px solid var(--content-border);
+}
+
+.study-cat-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 15px;
+  padding-left: 10px;
+  border-left: 4px solid #3b82f6;
+}
+
+.study-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 20px;
+}
+
+.study-file-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 15px 10px;
+  border-radius: 12px;
+  background: var(--content-bg);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.study-file-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.study-file-card.selectable {
+  border: 2px dashed var(--content-border);
+}
+
+.study-file-card.selected {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.selection-indicator {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #9ca3af;
+  background: var(--content-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: white;
+  transition: all 0.3s;
+}
+
+.study-file-card.selected .selection-indicator {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.study-file-icon {
+  font-size: 40px;
+  margin-bottom: 8px;
+  transition: transform 0.3s;
+}
+
+.study-file-card:hover .study-file-icon {
+  transform: scale(1.1);
+}
+
+.study-file-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  text-align: center;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.study-file-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.study-empty-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  color: var(--text-secondary);
+  background: rgba(128, 128, 128, 0.05);
+  border-radius: 10px;
+  border: 2px dashed var(--content-border);
+}
+
+.study-empty-block.main-empty {
+  grid-column: 1 / -1;
+}
+
+.study-empty-block .empty-icon {
+  font-size: 48px;
+  margin-bottom: 10px;
+}
+
+/* 文件类型颜色 */
+.study-file-icon.pdf { color: #ef4444; }
+.study-file-icon.doc, .study-file-icon.docx { color: #3b82f6; }
+.study-file-icon.image { color: #10b981; }
+.study-file-icon.video { color: #8b5cf6; }
+.study-file-icon.audio { color: #f59e0b; }
+.study-file-icon.code { color: #06b6d4; }
+.study-file-icon.archive { color: #6b7280; }
+.study-file-icon.markdown { color: #ec4899; }
+.study-file-icon.text { color: #64748b; }
+
+/* ==================== 弹窗通用样式 ==================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: var(--content-bg);
+  border: 1px solid var(--content-border);
+  border-radius: 16px;
+  padding: 25px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+.modal-form-group {
+  margin-bottom: 20px;
+}
+
+.modal-form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.modal-form-group input,
+.modal-form-group select {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 15px;
+  transition: all 0.3s;
+}
+
+.modal-form-group input:focus,
+.modal-form-group select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.file-input {
+  padding: 10px 0 !important;
+  border: none !important;
+}
+
+.selected-file-info {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-primary, .btn-secondary, .btn-danger {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-secondary {
+  background: var(--btn-secondary-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--btn-secondary-border);
+}
+
+.btn-secondary:hover {
+  background: var(--btn-secondary-hover);
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal-close-btn {
+  width: 100%;
+  margin-top: 15px;
+  padding: 10px;
+  background: var(--btn-secondary-bg);
+  border: 1px solid var(--btn-secondary-border);
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.modal-close-btn:hover {
+  background: var(--btn-secondary-hover);
+}
+
+/* 上传/下载选择弹窗 */
+.choice-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin: 20px 0;
+}
+
+.choice-card {
+  padding: 30px 20px;
+  border: 2px solid var(--content-border);
+  border-radius: 12px;
+  background: var(--content-bg);
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.choice-card:hover {
+  border-color: #3b82f6;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.choice-icon {
+  font-size: 36px;
+}
+
+/* 下载树形视图 */
+.download-tree-view {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--content-border);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.tree-root,
+.tree-category-header,
+.tree-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.3s;
+}
+
+.tree-root:hover,
+.tree-category-header:hover,
+.tree-file-row:hover {
+  background: var(--option-hover);
+}
+
+.tree-children {
+  margin-left: 25px;
+  border-left: 1px solid var(--content-border);
+  padding-left: 10px;
+}
+
+.tree-toggle-icon {
+  font-size: 12px;
+  color: var(--text-secondary);
+  width: 16px;
+  text-align: center;
+}
+
+.tree-icon {
+  font-size: 18px;
+}
+
+.tree-file-icon {
+  font-size: 16px;
+}
+
+.tree-file-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.tree-file-row.selected {
+  background: var(--option-active-bg);
+  border-radius: 6px;
+}
+
+.selected-check {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.tree-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 5px 10px;
+  font-style: italic;
+}
+
+/* ==================== 全屏模态框（编辑器/预览/邮件） ==================== */
+.fullscreen-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--content-bg);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+}
+
+.fullscreen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 25px;
+  border-bottom: 1px solid var(--content-border);
+  background: var(--content-bg);
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid var(--content-border);
+  background: var(--btn-secondary-bg);
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.back-btn:hover {
+  background: var(--btn-secondary-hover);
+}
+
+.back-btn span {
+  font-size: 18px;
+}
+
+.fullscreen-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Markdown编辑器工具栏 */
+.md-toolbar {
+  display: flex;
+  gap: 10px;
+  padding: 10px 25px;
+  border-bottom: 1px solid var(--content-border);
+  background: rgba(128, 128, 128, 0.05);
+  overflow-x: auto;
+}
+
+.md-toolbar button {
+  padding: 6px 12px;
+  border: 1px solid var(--content-border);
+  background: var(--content-bg);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s;
+  min-width: 36px;
+}
+
+.md-toolbar button:hover {
+  background: var(--option-active-bg);
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+/* Markdown编辑器主体 */
+.md-editor-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+}
+
+.md-input,
+.md-preview {
+  padding: 20px;
+  overflow-y: auto;
+  background: var(--content-bg);
+  color: var(--text-primary);
+}
+
+.md-input {
+  border: none;
+  border-right: 1px solid var(--content-border);
+  resize: none;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  outline: none;
+}
+
+.md-preview {
+  background: var(--content-bg);
+}
+
+.md-preview :deep(h1) { border-bottom: 2px solid var(--content-border); padding-bottom: 10px; margin-top: 0; }
+.md-preview :deep(h2) { border-bottom: 1px solid var(--content-border); padding-bottom: 8px; }
+.md-preview :deep(code) { 
+  background: rgba(128, 128, 128, 0.1); 
+  padding: 2px 6px; 
+  border-radius: 4px; 
+  font-family: monospace;
+}
+.md-preview :deep(pre) { 
+  background: rgba(128, 128, 128, 0.1); 
+  padding: 15px; 
+  border-radius: 8px; 
+  overflow-x: auto;
+}
+.md-preview :deep(pre code) { background: none; padding: 0; }
+.md-preview :deep(blockquote) { 
+  border-left: 4px solid #3b82f6; 
+  margin: 0; 
+  padding-left: 20px; 
+  color: var(--text-secondary); 
+}
+.md-preview :deep(ul), 
+.md-preview :deep(ol) { padding-left: 25px; }
+.md-preview :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+}
+.md-preview :deep(th),
+.md-preview :deep(td) {
+  border: 1px solid var(--content-border);
+  padding: 8px;
+  text-align: left;
+}
+.md-preview :deep(th) {
+  background: rgba(128, 128, 128, 0.1);
+}
+
+/* 邮件编辑表单 */
+.email-compose-form {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.compose-row {
+  margin-bottom: 20px;
+}
+
+.compose-row label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.compose-row input,
+.compose-row textarea {
+  width: 100%;
+  padding: 12px 15px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 15px;
+  transition: all 0.3s;
+}
+
+.compose-row input:focus,
+.compose-row textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.attachments-section {
+  position: relative;
+}
+
+.attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.attachment-tag-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--option-active-bg);
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.remove-attachment {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-att-btn {
+  padding: 8px 16px;
+  border: 1px dashed var(--content-border);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.add-att-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.att-options-menu {
+  position: absolute;
+  margin-top: 5px;
+  background: var(--content-bg);
+  border: 1px solid var(--content-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.att-options-menu button {
+  display: block;
+  width: 100%;
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.3s;
+}
+
+.att-options-menu button:hover {
+  background: var(--option-hover);
+}
+
+/* 站内文件选择器 */
+.internal-selector-modal {
+  max-height: 500px;
+}
+
+.internal-file-tree {
+  max-height: 350px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+.selector-cat {
+  margin-bottom: 15px;
+}
+
+.selector-cat-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  padding: 5px 10px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 6px;
+}
+
+.selector-file-list {
+  margin-left: 15px;
+}
+
+.selector-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  margin: 3px 0;
+  transition: background 0.3s;
+}
+
+.selector-file-row:hover {
+  background: var(--option-hover);
+}
+
+/* 收件箱 */
+.inbox-filter-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.filter-tab {
+  padding: 6px 16px;
+  border: 1px solid var(--content-border);
+  background: var(--content-bg);
+  color: var(--text-primary);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.filter-tab.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.inbox-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.email-list-view {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.email-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--content-border);
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.email-row:hover {
+  background: var(--option-hover);
+}
+
+.email-row.unread {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.email-row-main {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.email-sender-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 120px;
+}
+
+.email-subject-line {
+  color: var(--text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unread-indicator {
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.email-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.has-attachment-icon {
+  font-size: 14px;
+}
+
+.empty-inbox-msg {
+  text-align: center;
+  padding: 60px;
+  color: var(--text-secondary);
+}
+
+/* 邮件详情 */
+.email-detail-view {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.email-detail-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 30px;
+}
+
+.email-detail-nav button {
+  padding: 8px 16px;
+  border: 1px solid var(--content-border);
+  background: var(--content-bg);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.email-detail-nav button:hover:not(:disabled) {
+  background: var(--option-hover);
+}
+
+.email-detail-nav button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.email-detail-content h2 {
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+.email-meta-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: rgba(128, 128, 128, 0.05);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.email-body-text {
+  line-height: 1.8;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+.email-attachments-section {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid var(--content-border);
+}
+
+.email-attachments-section h4 {
+  margin-bottom: 15px;
+  color: var(--text-primary);
+}
+
+.email-att-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background: rgba(128, 128, 128, 0.05);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+/* 文件预览器 */
+.file-viewer {
+  background: rgba(0, 0, 0, 0.95) !important;
+}
+
+.file-viewer .fullscreen-header {
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.viewer-filename {
+  font-size: 16px;
+  font-weight: 500;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: white;
+}
+
+.viewer-nav-btns {
+  display: flex;
+  gap: 10px;
+}
+
+.viewer-nav-btns button {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.viewer-nav-btns button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.viewer-nav-btns button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.viewer-content-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 20px;
+}
+
+.preview-img {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+}
+
+.preview-video {
+  max-width: 90%;
+  max-height: 90%;
+}
+
+.preview-audio {
+  width: 60%;
+}
+
+.preview-text-content {
+  width: 80%;
+  max-height: 90%;
+  background: var(--content-bg);
+  padding: 30px;
+  border-radius: 12px;
+  overflow: auto;
+}
+
+.preview-text-content pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  color: var(--text-primary);
+  font-family: monospace;
+  line-height: 1.6;
+}
+
+.preview-unsupported {
+  text-align: center;
+  color: white;
+}
+
+.big-file-icon {
+  font-size: 80px;
+  margin-bottom: 20px;
+}
+
+/* Toast提示 */
+.study-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 500;
+  z-index: 5000;
+  animation: slideDown 0.3s ease;
+}
+
+.study-toast.success {
+  background: #10b981;
+}
+
+.study-toast.error {
+  background: #ef4444;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* Placeholder内容 */
 .placeholder-content {
   text-align: center;
   padding: 60px 20px;
@@ -1753,6 +3840,28 @@ input::-webkit-credentials-auto-fill-button {
   font-size: 18px;
 }
 
+/* 动画 */
+.datepicker-pop-enter-active,
+.datepicker-pop-leave-active {
+  transition: all 0.2s ease;
+}
+
+.datepicker-pop-enter-from,
+.datepicker-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+}
+
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -1764,11 +3873,10 @@ input::-webkit-credentials-auto-fill-button {
   }
 }
 
-@media (max-width: 768px) {
+/* ==================== 响应式设计 ==================== */
+@media (max-width: 1024px) {
   .personal-content {
     flex-direction: column;
-    padding: 10px;
-    margin: 5px auto;
   }
   
   .options-sidebar {
@@ -1776,37 +3884,80 @@ input::-webkit-credentials-auto-fill-button {
     width: 100%;
   }
   
-  .content-area {
-    padding: 20px;
+  .md-editor-body {
+    grid-template-columns: 1fr;
   }
   
-  .form-actions {
+  .md-input {
+    border-right: none;
+    border-bottom: 1px solid var(--content-border);
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .study-header-bar {
     flex-direction: column;
   }
   
-  .datepicker-dropdown {
+  .study-header-actions {
     width: 100%;
-    right: 0;
+    flex-wrap: wrap;
   }
   
-  .wheel-container {
-    height: 160px; /* 移动端稍矮 */
+  .study-search-box input {
+    width: 120px;
   }
   
-  .wheel-scroll {
-    padding: 62px 0; /* 配合160px高度：(160-36)/2 = 62 */
-    scroll-padding-top: 62px;
-    scroll-padding-bottom: 62px;
+  .study-files-grid {
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 15px;
   }
   
-  .wheel-item {
-    height: 32px;
-    min-height: 32px;
-    line-height: 32px;
+  .study-file-icon {
+    font-size: 32px;
   }
   
-  .wheel-highlight {
-    height: 32px;
+  .fullscreen-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .viewer-filename {
+    max-width: 100%;
+    order: 3;
+    width: 100%;
+    text-align: center;
+  }
+  
+  .choice-buttons {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .content-area {
+    padding: 15px;
+  }
+  
+  .study-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .toolbar-left-group,
+  .toolbar-right-group {
+    justify-content: center;
+  }
+  
+  .email-row-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+  
+  .email-sender-name {
+    min-width: auto;
   }
 }
 </style>
