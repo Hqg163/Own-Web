@@ -28,7 +28,7 @@
           </li>
         </template>
         
-        <!-- 已登录显示用户信息（优化样式） -->
+        <!-- 已登录显示用户信息 -->
         <template v-else>
           <li class="user-info">
             <span class="user-greeting">你好, {{ currentUser.username || '用户' }}</span>
@@ -81,6 +81,9 @@ export default {
   data() {
     return {
       isDarkMode: localStorage.getItem('theme') === 'dark',
+      // 修改1：添加响应式的登录状态数据
+      loginStatus: localStorage.getItem('isLoggedIn') === 'true',
+      userData: JSON.parse(localStorage.getItem('userInfo') || '{}'),
       navLinks: [
         { name: '首页', to: '/' },
         { name: '个人中心', to: '/personal', requiresAuth: true },
@@ -93,15 +96,31 @@ export default {
     themeClass() {
       return this.isDarkMode ? 'dark-mode' : 'light-mode';
     },
+    // 修改2：使用data中的loginStatus而不是直接读取localStorage
     isLoggedIn() {
-      return localStorage.getItem('isLoggedIn') === 'true';
+      return this.loginStatus;
     },
     currentUser() {
-      const userInfo = localStorage.getItem('userInfo');
-      return userInfo ? JSON.parse(userInfo) : {};
+      return this.userData;
+    }
+  },
+  // 修改3：添加watch监听路由变化
+  watch: {
+    '$route': {
+      immediate: true,
+      handler() {
+        // 每次路由变化时重新检查登录状态
+        this.refreshAuthState();
+      }
     }
   },
   methods: {
+    // 修改4：添加刷新状态的方法
+    refreshAuthState() {
+      this.loginStatus = localStorage.getItem('isLoggedIn') === 'true';
+      this.userData = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    },
+    
     isActive(path) {
       return this.$route.path === path;
     },
@@ -152,13 +171,15 @@ export default {
       localStorage.removeItem('userId');
       localStorage.removeItem('userEmail');
       
+      // 修改5：立即更新组件内部状态（关键！）
+      this.loginStatus = false;
+      this.userData = {};
+      
       // 如果在需要登录的页面，跳回首页
       if (this.$route.meta.requiresAuth) {
         this.$router.push('/');
-      } else {
-        // 刷新当前页以更新状态
-        this.$router.go(0);
       }
+      // 删除 this.$router.go(0)，避免页面刷新，依靠watch来更新
     },
 
     handleNavClick(link) {
@@ -173,6 +194,8 @@ export default {
   mounted() {
     const currentTheme = localStorage.getItem('theme');
     this.isDarkMode = currentTheme === 'dark';
+    // 初始化时检查一次状态
+    this.refreshAuthState();
   }
 };
 </script>
@@ -359,6 +382,7 @@ export default {
   gap: 10px;
   padding: 6px 12px;
   background: rgba(128, 128, 128, 0.1);
+  /* background: rgba(120, 36, 188, 0.1); */
   border-radius: 20px;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(128, 128, 128, 0.2);
@@ -370,6 +394,10 @@ export default {
   color: inherit;
   min-width: 35px;
   text-align: center;
+}
+
+.navbar.dark-mode .theme-label{
+  color: #e2e8f0;
 }
 
 .switch {

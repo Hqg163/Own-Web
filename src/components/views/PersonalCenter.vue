@@ -1866,7 +1866,7 @@ export default {
 
 .personal-content {
   display: flex;
-  max-width: 1400px;
+  max-width: 1200px;  /* 改回原来的1200px，或者删除这行使用默认宽度 */
   margin: 10px auto;
   padding: 0 20px;
   gap: 30px;
@@ -1967,6 +1967,7 @@ export default {
 /* ==================== 右侧内容区 ==================== */
 .content-area {
   flex: 1;
+  min-width: 0;
   background: var(--content-bg);
   border-radius: 12px;
   padding: 30px;
@@ -1987,7 +1988,8 @@ export default {
 
 /* ==================== 个人信息表单 ==================== */
 .info-form {
-  max-width: 600px;
+  max-width: 100%; /* 原来是600px，现在改为100%占满 */
+  width: 100%;
 }
 
 .form-group {
@@ -2797,6 +2799,10 @@ export default {
   background: #059669;
 }
 
+.light-mode .edit-md-btn:hover {
+  color: #2d3748;
+}
+
 .add-category-btn {
   background: #f59e0b;
   color: white;
@@ -2805,6 +2811,10 @@ export default {
 
 .add-category-btn:hover {
   background: #d97706;
+}
+
+.light-mode .add-category-btn:hover {
+  color: #1a202c;
 }
 
 .batch-delete-btn {
