@@ -425,7 +425,9 @@
                       <div class="study-file-icon" :class="getStudyFileIconClass(file.file_type)">
                         {{ getStudyFileIcon(file.file_type) }}
                       </div>
-                      <div class="study-file-name" :title="file.original_name">{{ file.original_name }}</div>
+                      <div class="study-file-name" :title="getDisplayFileName(file)">
+                        {{ getDisplayFileName(file) }}
+                      </div>
                       <div class="study-file-meta">{{ formatStudyDate(file.created_at) }}</div>
                     </div>
                   </div>
@@ -453,7 +455,9 @@
                     <div class="study-file-icon" :class="getStudyFileIconClass(file.file_type)">
                       {{ getStudyFileIcon(file.file_type) }}
                     </div>
-                    <div class="study-file-name" :title="file.original_name">{{ file.original_name }}</div>
+                    <div class="study-file-name" :title="getDisplayFileName(file)">
+                      {{ getDisplayFileName(file) }}
+                    </div>
                     <div class="study-file-meta">{{ formatStudyDate(file.created_at) }}</div>
                   </div>
                 </div>
@@ -552,7 +556,7 @@
                   @click="selectDownloadFile(file.id)"
                 >
                   <span class="tree-file-icon">{{ getStudyFileIcon(file.file_type) }}</span>
-                  <span class="tree-file-name">{{ file.original_name }}</span>
+                  <span class="tree-file-name">{{ getDisplayFileName(file) }}</span>
                   <span v-if="selectedDownloadFiles.includes(file.id)" class="selected-check">✓</span>
                 </div>
                 <div v-if="!studyFilesByCategory[cat.id] || studyFilesByCategory[cat.id].length === 0" class="tree-empty">
@@ -682,21 +686,69 @@
       </div>
       
       <div class="viewer-content-area">
-        <img v-if="isImageType(viewingStudyFile.file_type)" :src="studyFileContent.url" class="preview-img" />
-        <video v-else-if="isVideoType(viewingStudyFile.file_type)" controls class="preview-video">
+        <!-- 图片预览 -->
+        <img 
+          v-if="isImageType(viewingStudyFile.file_type)" 
+          :src="studyFileContent.url" 
+          class="preview-img"
+          @error="handleImageError"
+        />
+        
+        <!-- 视频预览 -->
+        <video 
+          v-else-if="isVideoType(viewingStudyFile.file_type)" 
+          controls 
+          class="preview-video"
+          :type="getVideoMimeType(viewingStudyFile.file_type)"
+        >
           <source :src="studyFileContent.url" />
+          您的浏览器不支持视频播放
         </video>
-        <audio v-else-if="isAudioType(viewingStudyFile.file_type)" controls class="preview-audio">
-          <source :src="studyFileContent.url" />
+        
+        <!-- 音频预览 -->
+        <audio 
+          v-else-if="isAudioType(viewingStudyFile.file_type)" 
+          controls 
+          class="preview-audio"
+        >
+          <source :src="studyFileContent.url" :type="getAudioMimeType(viewingStudyFile.file_type)" />
+          您的浏览器不支持音频播放
         </audio>
+        
+        <!-- PDF预览（修复） -->
+        <!-- 修改 PDF 预览部分 -->
+        <div v-else-if="isPdfType(viewingStudyFile.file_type)" class="preview-pdf-container">
+          <!-- 使用 embed 替代 iframe，兼容性更好 -->
+          <embed 
+            :src="studyFileContent.url" 
+            type="application/pdf"
+            width="100%" 
+            height="100%"
+            style="border: none;"
+          />
+        </div>
+        
+        <!-- Office文档提示（新增） -->
+        <div v-else-if="isOfficeType(viewingStudyFile.file_type)" class="preview-unsupported office-preview">
+          <div class="big-file-icon">📊</div>
+          <h3>Office 文档</h3>
+          <p>浏览器无法直接预览 {{ viewingStudyFile.file_type.toUpperCase() }} 格式文件</p>
+          <p class="sub-hint">建议下载后使用相应软件打开</p>
+          <button class="btn-primary" @click="downloadCurrentStudyFile">📥 下载到本地</button>
+        </div>
+        
+        <!-- 文本/Markdown预览 -->
         <div v-else-if="studyFileContent.type === 'text' || studyFileContent.type === 'markdown'" class="preview-text-content">
           <pre v-if="studyFileContent.type === 'text'">{{ studyFileContent.content }}</pre>
-          <div v-else v-html="renderedFileMarkdown"></div>
+          <div v-else v-html="renderedFileMarkdown" class="markdown-body"></div>
         </div>
+        
+        <!-- 其他不支持的格式 -->
         <div v-else class="preview-unsupported">
           <div class="big-file-icon">📄</div>
-          <p>当前不方便预览此格式文件 ({{ viewingStudyFile.file_type }})</p>
-          <button class="btn-primary" @click="downloadCurrentStudyFile">下载到本地</button>
+          <h3>无法预览此格式</h3>
+          <p>当前不方便预览 {{ viewingStudyFile.file_type.toUpperCase() }} 格式文件</p>
+          <button class="btn-primary" @click="downloadCurrentStudyFile">📥 下载到本地查看</button>
         </div>
       </div>
     </div>
@@ -1381,15 +1433,19 @@ export default {
         this.loadStudyFiles()
       }
     },
+    // 添加更多代码文件图标映射（可选，优化显示）
     getStudyFileIcon(ext) {
       const iconMap = {
         '.pdf': '📕', '.doc': '📘', '.docx': '📘', '.txt': '📄',
         '.md': '📝', '.js': '📜', '.html': '🌐', '.css': '🎨',
         '.py': '🐍', '.c': '🔧', '.cpp': '🔧', '.h': '🔧',
+        '.java': '☕', '.json': '📋', '.xml': '📋', '.ts': '📘',
+        '.vue': '💚', '.php': '🐘', '.go': '🐹', '.rs': '⚙️',
+        '.rb': '💎', '.swift': '🦉', '.kt': '🎯', '.sql': '🗃️',
         '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️', '.gif': '🖼️',
         '.mp4': '🎬', '.avi': '🎬', '.mp3': '🎵', '.wav': '🎵',
-        '.zip': '📦', '.rar': '📦', '.ppt': '📊', '.pptx': '📊',
-        '.xls': '📊', '.xlsx': '📊', '.json': '📋', '.xml': '📋'
+        '.zip': '📦', '.rar': '📦', '.ppt': '📽️', '.pptx': '📽️',
+        '.xls': '📊', '.xlsx': '📊'
       }
       return iconMap[ext.toLowerCase()] || '📄'
     },
@@ -1403,6 +1459,33 @@ export default {
         '.zip': 'archive', '.rar': 'archive'
       }
       return classMap[ext.toLowerCase()] || 'default'
+    },
+    handleImageError() {
+      this.showStudyToast('图片加载失败', 'error');
+    },
+    // 获取视频MIME类型
+    getVideoMimeType(ext) {
+      const mimeMap = {
+        '.mp4': 'video/mp4',
+        '.avi': 'video/x-msvideo',
+        '.mov': 'video/quicktime',
+        '.wmv': 'video/x-ms-wmv',
+        '.flv': 'video/x-flv',
+        '.mkv': 'video/x-matroska'
+      }
+      return mimeMap[ext.toLowerCase()] || 'video/mp4'
+    },
+    // 获取音频MIME类型
+    getAudioMimeType(ext) {
+      const mimeMap = {
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.ogg': 'audio/ogg',
+        '.flac': 'audio/flac',
+        '.aac': 'audio/aac',
+        '.wma': 'audio/x-ms-wma'
+      }
+      return mimeMap[ext.toLowerCase()] || 'audio/mpeg'
     },
     formatStudyDate(dateStr) {
       const date = new Date(dateStr)
@@ -1489,17 +1572,22 @@ export default {
     },
     async confirmUpload() {
       if (!this.uploadFormData.selectedFile) return
+  
       this.uploadingFile = true
       const formData = new FormData()
       formData.append('file', this.uploadFormData.selectedFile)
-      formData.append('userId', this.userId)
+      formData.append('userId', this.userId)  // 确保这行存在
       formData.append('categoryId', this.uploadFormData.categoryId)
+      
       if (this.uploadFormData.customName) {
         formData.append('customName', this.uploadFormData.customName)
       }
       try {
         await axios.post('/api/upload', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+          headers: { 
+            'Content-Type': 'multipart/form-data',
+            'x-user-id': this.userId  // 添加 header 作为备用
+          }
         })
         this.showStudyToast('上传成功')
         this.loadStudyFiles()
@@ -1547,6 +1635,15 @@ export default {
       })
       this.showStudyToast('开始下载')
       this.cancelDownload()
+    },
+    // 在 methods 中添加一个计算显示名称的方法
+    getDisplayFileName(file) {
+      // 如果 original_name 没有扩展名，显示时加上
+      const ext = file.file_type || ''
+      if (ext && ext !== 'unknown' && !file.original_name.toLowerCase().endsWith(ext.toLowerCase())) {
+        return file.original_name + ext
+      }
+      return file.original_name
     },
     
     // Markdown编辑器
@@ -1604,15 +1701,55 @@ export default {
     isAudioType(ext) {
       return ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.wma'].includes(ext.toLowerCase())
     },
+    // 添加PDF检测
+    isPdfType(ext) {
+      return ['.pdf'].includes(ext.toLowerCase())
+    },
+
+    // 添加Office文档检测（浏览器无法直接预览，需要提示下载）
+    isOfficeType(ext) {
+      return ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'].includes(ext.toLowerCase())
+    },
     async openStudyFile(file) {
-      this.viewingStudyFile = file
-      this.currentStudyFileIndex = this.currentStudyFiles.findIndex(f => f.id === file.id)
+      this.viewingStudyFile = file;
+      this.currentStudyFileIndex = this.currentStudyFiles.findIndex(f => f.id === file.id);
+      
+      let fileUrl = file.file_path || '';
+      
+      // 标准化路径
+      if (!fileUrl.startsWith('/')) {
+        fileUrl = '/' + fileUrl;
+      }
+      
+      // 修复重复 /uploads
+      fileUrl = fileUrl.replace(/^\/uploads\/uploads\//, '/uploads/');
+      
+      console.log('预览文件:', file.original_name, 'URL:', fileUrl);
+      
+      // 对于可直接预览的二进制文件
+      if (this.isImageType(file.file_type) || this.isVideoType(file.file_type) || 
+          this.isAudioType(file.file_type) || this.isPdfType(file.file_type)) {
+        
+        // 关键修复：只使用相对路径，不拼接 origin
+        const fullUrl = `${fileUrl}?t=${Date.now()}`;
+        
+        console.log('完整预览URL:', fullUrl);
+        
+        this.studyFileContent = {
+          type: 'binary',
+          url: fullUrl,  // 例如: /uploads/temp/其它/file-xxx.pdf?t=123
+          file: file
+        };
+        return;
+      }
+      
+      // 文本文件继续走API
       try {
-        const res = await axios.get(`/api/file-content/${file.id}?userId=${this.userId}`)
-        this.studyFileContent = res.data
+        const res = await axios.get(`/api/file-content/${file.id}?userId=${this.userId}`);
+        this.studyFileContent = res.data;
       } catch (err) {
-        this.showStudyToast('加载文件失败', 'error')
-        this.studyFileContent = { type: 'error' }
+        this.showStudyToast('加载文件失败', 'error');
+        this.studyFileContent = { type: 'error' };
       }
     },
     closeFileViewer() {
@@ -2963,6 +3100,13 @@ export default {
   margin-bottom: 10px;
 }
 
+.file-ext-tag {
+  font-size: 10px;
+  color: #888;
+  margin-left: 4px;
+  opacity: 0.8;
+}
+
 /* 文件类型颜色 */
 .study-file-icon.pdf { color: #ef4444; }
 .study-file-icon.doc, .study-file-icon.docx { color: #3b82f6; }
@@ -3789,6 +3933,122 @@ button:disabled {
   color: var(--text-primary);
   font-family: monospace;
   line-height: 1.6;
+}
+
+/* PDF预览容器 */
+.preview-pdf-container {
+  width: 90%;
+  height: 90%;
+  background: #525659; /* PDF 背景色 */
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.preview-pdf-embed {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* Office文档提示 - 优化样式，与黑色背景协调 */
+.office-preview {
+  background: rgba(30, 30, 30, 0.95) !important;  /* 深灰色背景，与黑色主题协调 */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 40px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  color: white !important;
+  max-width: 500px;
+  text-align: center;
+}
+
+.office-preview .big-file-icon {
+  font-size: 80px;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.office-preview h3 {
+  margin: 0 0 10px 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: white;
+}
+
+.office-preview p {
+  margin: 5px 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+}
+
+.office-preview .sub-hint {
+  opacity: 0.6;
+  margin-top: 8px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.office-preview .btn-primary {
+  margin-top: 20px;
+  padding: 12px 24px;
+  font-size: 16px;
+}
+
+/* 代码/文本预览优化 */
+.preview-text-content {
+  width: 90%;
+  max-height: 90%;
+  background: var(--content-bg);
+  padding: 30px;
+  border-radius: 12px;
+  overflow: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.preview-text-content pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  color: var(--text-primary);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+/* Markdown内容样式优化 */
+.markdown-body {
+  line-height: 1.8;
+  color: var(--text-primary);
+}
+
+.markdown-body h1, 
+.markdown-body h2, 
+.markdown-body h3 {
+  border-bottom: 1px solid var(--content-border);
+  padding-bottom: 10px;
+  margin-top: 30px;
+}
+
+.markdown-body pre {
+  background: rgba(128, 128, 128, 0.1);
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.markdown-body code {
+  background: rgba(128, 128, 128, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.markdown-body blockquote {
+  border-left: 4px solid #3b82f6;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-secondary);
 }
 
 .preview-unsupported {

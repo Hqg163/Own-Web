@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const mime = require('mime-types'); // 需要安装: npm install mime-types
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,7 +19,18 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // 静态文件服务 - 用于访问上传的文件
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// 在 server.js 中，修改静态文件服务配置
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, filePath) => {
+    // 自动设置正确的 Content-Type
+    const mimeType = mime.lookup(filePath);
+    if (mimeType) {
+      res.setHeader('Content-Type', mimeType);
+    }
+    // 禁用缓存，确保实时预览
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+}));
 
 // MySQL数据库连接配置
 const db = mysql.createConnection({
@@ -147,13 +159,17 @@ db.connect((err) => {
 });
 
 // 配置multer存储
+// 修改 server.js 中的 storage 配置（第68-84行附近）
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const userId = req.headers['x-user-id'] || 'temp';
-    const category = req.body.category || '其它';
-    const uploadPath = path.join(__dirname, 'uploads', userId.toString(), category);
+    // 优先从 body 获取 userId，其次从 header
+    const userId = req.body.userId || req.headers['x-user-id'] || 'temp';
+    const categoryId = req.body.categoryId || req.body.category || '其它';
     
-    // 递归创建目录
+    // 需要根据 categoryId 查询分类名称，或者直接使用 categoryId 作为目录名
+    // 这里简化处理，使用 categoryId
+    const uploadPath = path.join(__dirname, 'uploads', userId.toString(), categoryId.toString());
+    
     fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
@@ -200,6 +216,17 @@ app.post('/api/register', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, salt);
         
         const insertQuery = `INSERT INTO users (username, email, password) VALUES (?, ?, ?)`;
+
+        // 关键修复：简化路径存储逻辑
+        let relativePath = req.file.path.replace(__dirname, '').replace(/\\/g, '/');
+
+        // 确保路径格式统一为 /uploads/userId/categoryId/filename
+        if (!relativePath.startsWith('/uploads')) {
+          relativePath = '/uploads' + relativePath;
+        }
+
+        console.log('存储的 file_path:', relativePath); // 应该是 /uploads/3/5/file-xxx.jpg
+
         db.query(insertQuery, [username, email, hashedPassword], (err, results) => {
           if (err) return res.status(500).json({ error: '用户注册失败' });
           
@@ -399,13 +426,26 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
       const displayName = customName || req.file.originalname;
       const fileType = path.extname(req.file.originalname).toLowerCase() || 'unknown';
       
+      // 关键修复：确保 file_path 以 /uploads 开头，存储绝对路径格式
+      let filePath = req.file.path.replace(__dirname, '').replace(/\\/g, '/');
+      
+      // 确保路径以 /uploads 开头
+      if (!filePath.startsWith('/uploads')) {
+        if (filePath.startsWith('/')) {
+          filePath = '/uploads' + filePath;
+        } else {
+          filePath = '/uploads/' + filePath;
+        }
+      }
+      
+      console.log('存储的 file_path:', filePath); // 调试：应该是 /uploads/temp/其它/filename.png
+      
       const insertQuery = `
         INSERT INTO learning_files (user_id, category_id, filename, original_name, file_type, file_size, file_path, is_markdown) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       const isMarkdown = fileType === '.md';
-      const filePath = req.file.path.replace(__dirname, '').replace(/\\/g, '/');
       
       db.query(insertQuery, [
         userId, 
@@ -414,7 +454,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
         displayName,
         fileType, 
         req.file.size, 
-        filePath,
+        filePath,  // 现在存储的是 /uploads/temp/其它/filename.png
         isMarkdown
       ], (err, result) => {
         if (err) {
@@ -486,7 +526,67 @@ app.get('/api/download/:fileId', (req, res) => {
       return res.status(404).json({ error: '文件已丢失' });
     }
     
-    res.download(fullPath, file.original_name);
+    // 关键修复：确保下载文件名有正确的扩展名
+    let downloadName = file.original_name;
+    const ext = file.file_type || '';
+    
+    if (ext && ext !== 'unknown') {
+      const extWithDot = ext.startsWith('.') ? ext : '.' + ext;
+      const lowerName = downloadName.toLowerCase();
+      const lowerExt = extWithDot.toLowerCase();
+      
+      // 如果文件名没有以该扩展名结尾，则追加
+      if (!lowerName.endsWith(lowerExt)) {
+        downloadName = downloadName + extWithDot;
+      }
+    }
+    
+    // 编码文件名支持中文
+    let encodedName = '';
+    try {
+      encodedName = encodeURIComponent(downloadName);
+    } catch (e) {
+      encodedName = downloadName;
+    }
+    
+    // 设置Content-Type
+    const mimeTypes = {
+      '.pdf': 'application/pdf',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.xls': 'application/vnd.ms-excel',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.ppt': 'application/vnd.ms-powerpoint',
+      '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      '.txt': 'text/plain',
+      '.md': 'text/markdown',
+      '.json': 'application/json',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.mp4': 'video/mp4',
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
+      '.zip': 'application/zip',
+      '.rar': 'application/x-rar-compressed'
+    };
+    
+    const contentType = mimeTypes[ext.toLowerCase()] || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    
+    // RFC 5987编码
+    const asciiName = downloadName.replace(/[^\x00-\x7F]/g, '').replace(/["']/g, '') || 'download';
+    res.setHeader('Content-Disposition', `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+    
+    res.sendFile(fullPath, (err) => {
+      if (err) {
+        console.error('下载错误:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: '下载失败' });
+        }
+      }
+    });
   });
 });
 
@@ -516,15 +616,25 @@ app.get('/api/file-content/:fileId', (req, res) => {
       });
     }
     
-    // 读取文件内容（文本类型）
-    const textExtensions = ['.txt', '.md', '.js', '.html', '.css', '.py', '.c', '.cpp', '.h', '.java', '.json', '.xml'];
+    // 拓展：支持更多文本/代码文件格式
+    const textExtensions = [
+      '.txt', '.md', '.js', '.html', '.css', '.py', '.c', '.cpp', '.h', 
+      '.java', '.json', '.xml', '.ts', '.vue', '.php', '.go', '.rs', 
+      '.rb', '.swift', '.kt', '.sql', '.yaml', '.yml', '.sh', '.bash',
+      '.css', '.scss', '.sass', '.less', '.jsx', '.tsx', '.csv', '.log'
+    ];
+    
     if (textExtensions.includes(file.file_type.toLowerCase())) {
       fs.readFile(fullPath, 'utf8', (err, data) => {
         if (err) return res.status(500).json({ error: '读取文件失败' });
-        res.json({ file: file, content: data, type: 'text' });
+        res.json({ 
+          file: file, 
+          content: data, 
+          type: file.file_type === '.md' ? 'markdown' : 'text' 
+        });
       });
     } else {
-      // 对于二进制文件，返回文件信息，前端根据类型处理
+      // 对于二进制文件，返回文件信息和URL
       res.json({ 
         file: file, 
         content: null, 

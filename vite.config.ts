@@ -8,6 +8,10 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     proxy: {
+      '/uploads': {
+        target: 'http://localhost:3000',  // 后端地址
+        changeOrigin: true,
+      },
       '/api': {
         target: 'http://localhost:3000', // 您的后端服务器地址
         changeOrigin: true, // 为 true 时，服务器收到的请求头中的 Host 为 target 值，而不是 proxy 地址
