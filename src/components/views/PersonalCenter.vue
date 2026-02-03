@@ -344,8 +344,22 @@
                     v-model="studySearchQuery" 
                     placeholder="搜索文件..." 
                     @keyup.enter="handleStudySearch"
+                    @input="handleSearchInput"
                   />
-                  <button class="search-icon-btn" @click="handleStudySearch">🔍</button>
+                  <button 
+                    class="search-icon-btn" 
+                    @click="handleStudySearch"
+                    :class="{ 'searching': isSearching }"
+                  >
+                    {{ isSearching ? '🔍' : '🔍' }}
+                  </button>
+                  <button 
+                    v-if="studySearchQuery" 
+                    class="clear-search-btn"
+                    @click="clearSearch"
+                  >
+                    ✕
+                  </button>
                 </div>
                 
                 <div class="study-email-btns">
@@ -355,6 +369,11 @@
                   <button class="email-action-btn inbox-btn" @click="showInbox = true">
                     📥 收件箱
                     <span v-if="unreadEmailCount > 0" class="email-badge">{{ unreadEmailCount }}</span>
+                  </button>
+                  <!-- 新增通知按钮 -->
+                  <button class="email-action-btn notification-btn" @click="showNotificationPanel = true">
+                    🔔 通知
+                    <span v-if="unreadNotificationCount > 0" class="email-badge">{{ unreadNotificationCount }}</span>
                   </button>
                 </div>
               </div>
@@ -426,7 +445,7 @@
                         {{ getStudyFileIcon(file.file_type) }}
                       </div>
                       <div class="study-file-name" :title="getDisplayFileName(file)">
-                        {{ getDisplayFileName(file) }}
+                        <span v-html="getHighlightedFileName(file)"></span>
                       </div>
                       <div class="study-file-meta">{{ formatStudyDate(file.created_at) }}</div>
                     </div>
@@ -456,7 +475,7 @@
                       {{ getStudyFileIcon(file.file_type) }}
                     </div>
                     <div class="study-file-name" :title="getDisplayFileName(file)">
-                      {{ getDisplayFileName(file) }}
+                      <span v-html="getHighlightedFileName(file)"></span>
                     </div>
                     <div class="study-file-meta">{{ formatStudyDate(file.created_at) }}</div>
                   </div>
@@ -864,25 +883,98 @@
         </div>
         
         <div v-else class="email-detail-view">
+          <!-- 返回按钮 -->
           <div class="email-detail-nav">
+            <button @click="viewingEmail = null">
+              ← 返回邮件列表
+            </button>
+            <div class="nav-spacer"></div>
             <button :disabled="!hasPrevEmail" @click="prevEmail">← 上一封</button>
             <button :disabled="!hasNextEmail" @click="nextEmail">下一封 →</button>
           </div>
+          
           <div class="email-detail-content">
             <h2>{{ viewingEmail.subject }}</h2>
             <div class="email-meta-info">
-              <div><strong>发件人：</strong>{{ viewingEmail.sender_name || viewingEmail.sender_email }}</div>
+              <div><strong>发件人：</strong>{{ viewingEmail.sender_name || viewingEmail.sender_email }} &lt;{{ viewingEmail.sender_email }}&gt;</div>
+              <div><strong>收件人：</strong>{{ viewingEmail.recipient_email }}</div>
               <div><strong>时间：</strong>{{ formatEmailTime(viewingEmail.created_at) }}</div>
             </div>
-            <div class="email-body-text" v-html="viewingEmail.content.replace(/\\n/g, '<br>')"></div>
             
-            <div v-if="viewingEmail.attachments && JSON.parse(viewingEmail.attachments).length > 0" class="email-attachments-section">
-              <h4>附件：</h4>
-              <div v-for="(att, idx) in JSON.parse(viewingEmail.attachments)" :key="idx" class="email-att-item">
-                <span>{{ att.name }}</span>
-                <button class="btn-small" @click="downloadEmailAttachment(att)">下载</button>
+            <!-- 邮件正文 -->
+            <div class="email-body-text" v-html="(viewingEmail.content || '').replace(/\\n/g, '<br>')"></div>
+            
+            <!-- 附件部分 -->
+            <div v-if="viewingEmail.attachments && viewingEmail.attachments.length > 0" class="email-attachments-section">
+              <h4>附件（{{ viewingEmail.attachments.length }}个）：</h4>
+              <div 
+                v-for="(att, idx) in viewingEmail.attachments" 
+                :key="idx" 
+                class="email-att-item"
+              >
+                <div class="att-info">
+                  <span class="att-icon">📎</span>
+                  <span class="att-name">{{ att.name }}</span>
+                  <span v-if="att.type === 'internal'" class="att-type-tag">站内文件</span>
+                  <span v-else class="att-type-tag">本地文件</span>
+                </div>
+                <button class="btn-small btn-download" @click="downloadEmailAttachment(att)">
+                  下载
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 通知面板 -->
+    <div v-if="showNotificationPanel" class="fullscreen-modal">
+      <div class="fullscreen-header">
+        <button class="back-btn" @click="showNotificationPanel = false">
+          <span>←</span> 返回
+        </button>
+        <h3>发送通知记录</h3>
+        <button 
+          v-if="notifications.length > 0" 
+          class="btn-secondary" 
+          @click="clearAllNotifications"
+        >
+          清空全部
+        </button>
+      </div>
+      
+      <div class="notification-content">
+        <div v-if="notifications.length === 0" class="empty-notifications">
+          <span class="empty-icon">📭</span>
+          <p>暂无发送记录</p>
+        </div>
+        
+        <div v-else class="notification-list">
+          <div 
+            v-for="notif in notifications" 
+            :key="notif.id"
+            :class="['notification-item', notif.type, { unread: !notif.read }]"
+            @click="markNotificationRead(notif.id)"
+          >
+            <div class="notification-indicator" :class="notif.type">
+              <span v-if="notif.type === 'success'">✓</span>
+              <span v-else>✗</span>
+            </div>
+            
+            <div class="notification-body">
+              <div class="notification-title">{{ notif.title }}</div>
+              <div class="notification-detail">
+                <span class="detail-label">收件人：</span>{{ notif.recipientName || notif.recipient }}
+              </div>
+              <div class="notification-detail">
+                <span class="detail-label">主题：</span>{{ notif.subject }}
+              </div>
+              <div class="notification-message">{{ notif.message }}</div>
+              <div class="notification-time">{{ formatEmailTime(notif.time) }}</div>
+            </div>
+            
+            <button class="notification-delete" @click.stop="removeNotification(notif.id)">×</button>
           </div>
         </div>
       </div>
@@ -963,6 +1055,7 @@ export default {
       studyFiles: [],
       studyFilesByCategory: {},
       studySearchQuery: '',
+      isSearching: false,  // 添加搜索状态标识
       
       // 上传/下载
       showUploadDialog: false,
@@ -1024,6 +1117,13 @@ export default {
         type: 'success'
       },
       
+      // 通知系统
+      showNotificationPanel: false,
+      notifications: [],
+      
+      // 邮件发送状态追踪
+      emailSendingStatus: null, // 'sending', 'success', 'error'
+
       userId: null,
       userEmail: null
     }
@@ -1064,9 +1164,31 @@ export default {
     },
     
     // 学习区计算属性
+    // 修改：根据搜索关键词过滤文件列表
     currentStudyFiles() {
-      if (this.currentStudyCategory === 'all') return this.studyFiles
-      return this.studyFilesByCategory[this.currentStudyCategory] || []
+      let files = []
+      
+      // 1. 获取当前分类的文件列表
+      if (this.currentStudyCategory === 'all') {
+        files = this.studyFiles
+      } else {
+        files = this.studyFilesByCategory[this.currentStudyCategory] || []
+      }
+      
+      // 2. 如果有搜索关键词，进行过滤（只匹配文件名和后缀）
+      const query = this.studySearchQuery.trim().toLowerCase()
+      if (!query) {
+        return files
+      }
+      
+      // 3. 执行搜索匹配 - 只匹配文件名和后缀
+      return files.filter(file => {
+        // 获取文件名（带后缀）
+        const displayName = this.getDisplayFileName(file).toLowerCase()
+        
+        // 只匹配文件名（包含后缀）
+        return displayName.includes(query)
+      })
     },
     renderedMarkdown() {
       return marked(this.markdownContent || '')
@@ -1085,6 +1207,10 @@ export default {
     },
     unreadEmailCount() {
       return this.emails.filter(e => !e.is_read).length
+    },
+    // 未读通知数（可选）
+    unreadNotificationCount() {
+      return this.notifications.filter(n => !n.read).length;
     },
     hasPrevEmail() {
       if (!this.viewingEmail) return false
@@ -1147,6 +1273,7 @@ export default {
     this.loadStudyCategories()
     this.loadStudyFiles()
     this.loadEmails()
+    this.loadNotifications() // 添加这行
     this.setupThemeListener()
   },
   beforeUnmount() {
@@ -1425,14 +1552,103 @@ export default {
       this.selectedStudyFiles = []
     },
     handleStudySearch() {
-      if (this.studySearchQuery.trim()) {
-        axios.get(`/api/files/${this.userId}?search=${this.studySearchQuery}`).then(res => {
-          this.studyFiles = res.data.files
-        })
-      } else {
+      const query = this.studySearchQuery.trim()
+      
+      if (!query) {
+        // 空搜索时重新加载所有文件
         this.loadStudyFiles()
+        this.isSearching = false
+        return
+      }
+      
+      this.isSearching = true
+      
+      // 可选：调用后端API进行深度搜索（搜索文件内容）
+      // 如果后端支持全文搜索，可以取消注释以下代码
+      /*
+      axios.get(`/api/files/${this.userId}?search=${encodeURIComponent(query)}`)
+        .then(res => {
+          // 后端返回的搜索结果
+          this.studyFiles = res.data.files
+          // 更新分类映射
+          this.updateCategoryMap()
+        })
+        .catch(err => {
+          console.error('搜索失败:', err)
+          this.showStudyToast('搜索失败', 'error')
+        })
+      */
+      
+      // 前端本地搜索已经足够（由计算属性 currentStudyFiles 处理）
+      // 这里可以添加一些提示
+      const results = this.currentStudyFiles
+      if (results.length === 0) {
+        this.showStudyToast('没有找到匹配的文件', 'warning')
+      } else {
+        this.showStudyToast(`找到 ${results.length} 个匹配文件`, 'success')
       }
     },
+    
+    // 添加：实时搜索（输入时即时过滤）
+    handleSearchInput() {
+      // 防抖处理
+      if (this.searchDebounceTimer) {
+        clearTimeout(this.searchDebounceTimer)
+      }
+      this.searchDebounceTimer = setTimeout(() => {
+        if (this.studySearchQuery.trim()) {
+          this.isSearching = true
+        } else {
+          this.isSearching = false
+        }
+      }, 300)
+    },
+    
+    // 添加：清空搜索
+    clearSearch() {
+      this.studySearchQuery = ''
+      this.isSearching = false
+      // this.loadStudyFiles()
+    },
+    
+    // 辅助方法：更新分类映射
+    updateCategoryMap() {
+      this.studyFilesByCategory = {}
+      this.studyCategories.forEach(cat => {
+        if (cat.id !== 'all') {
+          this.studyFilesByCategory[cat.id] = this.studyFiles.filter(
+            f => f.category_id === cat.id
+          )
+        }
+      })
+    },
+    
+    // 高亮匹配文本
+    highlightMatch(text, query) {
+      if (!query || !text) return text
+      
+      // 转义正则特殊字符
+      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      
+      // 创建不区分大小写的正则表达式
+      const regex = new RegExp(`(${escapedQuery})`, 'gi')
+      
+      // 替换为高亮标签
+      return text.replace(regex, '<mark style="background:#fbbf24;color:#000;padding:0 2px;border-radius:2px;">$1</mark>')
+    },
+    
+    // 转义正则特殊字符
+    escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    },
+    
+    // 获取显示文件名（带高亮）
+    getHighlightedFileName(file) {
+      const name = this.getDisplayFileName(file)
+      if (!this.studySearchQuery.trim()) return name
+      return this.highlightMatch(name, this.studySearchQuery)
+    },
+
     // 添加更多代码文件图标映射（可选，优化显示）
     getStudyFileIcon(ext) {
       const iconMap = {
@@ -1813,10 +2029,18 @@ export default {
       this.emailForm.attachments.splice(idx, 1)
     },
     async sendEmail() {
-      if (!this.emailForm.recipient || !this.emailForm.subject) return
+      if (!this.emailForm.recipient || !this.emailForm.subject) {
+        this.showStudyToast('请填写收件人和主题', 'error');
+        return;
+      }
+      
+      this.emailSendingStatus = 'sending';
+      
       try {
-        const userRes = await axios.get(`/api/user/${this.userId}`)
-        const user = userRes.data.user
+        // 直接发送，让后端检查收件人
+        const userRes = await axios.get(`/api/user/${this.userId}`);
+        const user = userRes.data.user;
+        
         await axios.post('/api/emails', {
           senderId: this.userId,
           senderEmail: this.userEmail,
@@ -1825,28 +2049,128 @@ export default {
           subject: this.emailForm.subject,
           content: this.emailForm.content,
           attachments: this.emailForm.attachments
-        })
-        this.showStudyToast('邮件发送成功')
-        this.closeSendEmail()
+        });
+        
+        // 记录发送成功通知
+        this.addNotification({
+          type: 'success',
+          title: '邮件发送成功',
+          message: `已成功发送给 ${this.emailForm.recipient}`,
+          recipient: this.emailForm.recipient,
+          subject: this.emailForm.subject,
+          time: new Date().toISOString()
+        });
+        
+        this.emailSendingStatus = 'success';
+        this.showStudyToast('邮件发送成功', 'success');
+        this.closeSendEmail();
+        
       } catch (err) {
-        this.showStudyToast(err.response?.data?.error || '发送失败', 'error')
+        console.error('发送邮件失败:', err);
+        
+        const errorMsg = err.response?.data?.error || '网络错误，请重试';
+        
+        // 记录发送失败通知
+        this.addNotification({
+          type: 'error',
+          title: '邮件发送失败',
+          message: errorMsg,
+          recipient: this.emailForm.recipient,
+          subject: this.emailForm.subject,
+          time: new Date().toISOString()
+        });
+        
+        this.emailSendingStatus = 'error';
+        this.showStudyToast(errorMsg, 'error');
       }
     },
-    closeInbox() {
-      this.showInbox = false
-      this.viewingEmail = null
+    // 添加通知
+    addNotification(notification) {
+      notification.id = Date.now();
+      notification.read = false;
+      this.notifications.unshift(notification); // 最新的在前
+      // 限制通知数量，防止过多
+      if (this.notifications.length > 50) {
+        this.notifications = this.notifications.slice(0, 50);
+      }
+      // 保存到 localStorage（可选，实现持久化）
+        localStorage.setItem('emailNotifications', JSON.stringify(this.notifications));
     },
-    async viewEmail(email) {
-      this.viewingEmail = email
+
+    // 加载通知（在 created 中调用）
+    loadNotifications() {
+      const saved = localStorage.getItem('emailNotifications');
+      if (saved) {
+        try {
+          this.notifications = JSON.parse(saved);
+        } catch (e) {
+          this.notifications = [];
+        }
+      }
+    },
+
+    // 标记通知已读
+    markNotificationRead(id) {
+      const notif = this.notifications.find(n => n.id === id);
+      if (notif) {
+        notif.read = true;
+        localStorage.setItem('emailNotifications', JSON.stringify(this.notifications));
+      }
+    },
+
+    // 删除通知
+    removeNotification(id) {
+      this.notifications = this.notifications.filter(n => n.id !== id);
+      localStorage.setItem('emailNotifications', JSON.stringify(this.notifications));
+    },
+
+    // 清空所有通知
+    clearAllNotifications() {
+      this.notifications = [];
+      localStorage.removeItem('emailNotifications');
+    },
+      closeInbox() {
+        this.showInbox = false
+        this.viewingEmail = null
+      },
+      async viewEmail(email) {
+      // 先显示列表中的基本信息
+      this.viewingEmail = email;
+      
+      // 如果不是已读，标记为已读
       if (!email.is_read) {
         try {
-          await axios.put(`/api/emails/${email.id}/read`)
-          email.is_read = true
-          const idx = this.emails.findIndex(e => e.id === email.id)
-          if (idx > -1) this.emails[idx].is_read = true
+          await axios.put(`/api/emails/${email.id}/read`);
+          email.is_read = true;
+          // 更新本地邮件列表中的状态
+          const idx = this.emails.findIndex(e => e.id === email.id);
+          if (idx > -1) {
+            this.emails[idx].is_read = true;
+          }
         } catch (err) {
-          console.error('标记已读失败', err)
+          console.error('标记已读失败', err);
         }
+      }
+      
+      // 获取完整的邮件详情（包含附件下载链接）
+      try {
+        const res = await axios.get(`/api/email/${email.id}/detail`, {
+          params: { userEmail: this.userEmail }
+        });
+        
+        // 合并详细数据
+        this.viewingEmail = {
+          ...email,
+          ...res.data.email,
+          // 确保附件有正确的下载链接
+          attachments: res.data.email.attachments || []
+        };
+        
+        console.log('邮件详情:', this.viewingEmail);
+      } catch (err) {
+        console.error('获取邮件详情失败:', err);
+        // 即使获取详情失败，也保留列表中的基本数据
+        this.showStudyToast('获取邮件详情失败，显示基本信息', 'error');
       }
     },
     prevEmail() {
@@ -1860,8 +2184,23 @@ export default {
       this.viewingEmail = this.filteredEmails[idx + 1]
     },
     downloadEmailAttachment(att) {
-      if (att.type === 'internal' && att.fileId) {
-        window.open(`/api/download/${att.fileId}?userId=${this.userId}`, '_blank')
+      if (att.downloadUrl) {
+        // 使用后端生成的下载链接
+        window.open(att.downloadUrl, '_blank');
+      } else if (att.type === 'internal' && att.fileId) {
+        // 备用方案：直接构造下载链接（需要知道发件人ID，这里简化处理）
+        // 实际上应该通过后端获取，因为需要验证权限
+        window.open(`/api/download/${att.fileId}?userId=${this.userId}`, '_blank');
+      } else if (att.type === 'local' && att.file) {
+        // 本地文件（直接下载）
+        const url = URL.createObjectURL(att.file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = att.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       }
     },
     showStudyToast(message, type = 'success') {
@@ -2806,6 +3145,7 @@ export default {
   border-radius: 25px;
   padding: 5px 15px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  position: relative;
 }
 
 .study-search-box input {
@@ -2816,6 +3156,46 @@ export default {
   width: 150px;
   padding: 5px;
   font-size: 14px;
+}
+
+.search-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.7;
+  transition: all 0.3s;
+}
+
+.search-icon-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.search-icon-btn.searching {
+  animation: pulse 1s infinite;
+}
+
+.clear-search-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: 5px;
+  padding: 2px 6px;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.clear-search-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
 }
 
 .search-icon-btn {
@@ -2873,6 +3253,12 @@ export default {
   border-radius: 10px;
   min-width: 18px;
   text-align: center;
+}
+
+.notification-btn:hover {
+  background: #f59e0b;
+  color: white;
+  border-color: #f59e0b;
 }
 
 /* 学习区工具栏 */
@@ -3072,6 +3458,19 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.study-file-name :deep(mark) {
+  background: #fbbf24;
+  color: #000;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: bold;
+}
+
+.dark-mode .study-file-name :deep(mark) {
+  background: #f59e0b;
+  color: #000;
 }
 
 .study-file-meta {
@@ -3773,6 +4172,140 @@ button:disabled {
   color: var(--text-secondary);
 }
 
+/* 通知面板样式 */
+.notification-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.empty-notifications {
+  text-align: center;
+  padding: 60px;
+  color: var(--text-secondary);
+}
+
+.empty-notifications .empty-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 15px;
+}
+
+.notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  padding: 15px 20px;
+  background: var(--content-bg);
+  border: 1px solid var(--content-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.notification-item:hover {
+  transform: translateX(5px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.notification-item.unread {
+  background: rgba(59, 130, 246, 0.05);
+  border-left: 4px solid #3b82f6;
+}
+
+.notification-indicator {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.notification-indicator.success {
+  background: #10b981;
+  color: white;
+}
+
+.notification-indicator.error {
+  background: #ef4444;
+  color: white;
+}
+
+.notification-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.notification-detail {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-label {
+  color: var(--text-muted);
+  margin-right: 5px;
+}
+
+.notification-message {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(128, 128, 128, 0.05);
+  border-radius: 6px;
+}
+
+.notification-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+.notification-delete {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.notification-delete:hover {
+  background: #ef4444;
+  color: white;
+}
+
 /* 邮件详情 */
 .email-detail-view {
   max-width: 800px;
@@ -3846,6 +4379,54 @@ button:disabled {
   background: rgba(128, 128, 128, 0.05);
   border-radius: 8px;
   margin-bottom: 10px;
+}
+
+.nav-spacer {
+  flex: 1;
+}
+
+.btn-download {
+  padding: 6px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.3s;
+}
+
+.btn-download:hover {
+  background: #2563eb;
+}
+
+.att-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.att-icon {
+  font-size: 18px;
+}
+
+.att-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.att-type-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border-radius: 10px;
+  flex-shrink: 0;
 }
 
 /* 文件预览器 */

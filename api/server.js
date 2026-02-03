@@ -677,7 +677,44 @@ app.delete('/api/files', (req, res) => {
 
 // ========== 学习区 - 邮件系统API ==========
 
-// 发送邮件
+// 检查用户是否存在（用于发送邮件前验证）
+app.get('/api/check-user', (req, res) => {
+  const { email } = req.query;
+  
+  if (!email) {
+    return res.status(400).json({ error: '请提供邮箱地址' });
+  }
+  
+  // // 检查是否是有效的邮箱格式
+  // const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // if (!emailRegex.test(email)) {
+  //   return res.status(400).json({ error: '邮箱格式不正确' });
+  // }
+  
+  // 查询用户是否存在
+  const query = 'SELECT id, username, email FROM users WHERE email = ?';
+  db.query(query, [email], (err, results) => {
+    if (err) {
+      console.error('检查用户失败:', err);
+      return res.status(500).json({ error: '检查用户失败' });
+    }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: '该邮箱用户不存在', exists: false });
+    }
+    
+    res.status(200).json({ 
+      exists: true, 
+      user: {
+        id: results[0].id,
+        username: results[0].username,
+        email: results[0].email
+      }
+    });
+  });
+});
+
+// 发送邮件（带收件人检查）
 app.post('/api/emails', (req, res) => {
   const { senderId, senderEmail, senderName, recipientEmail, subject, content, attachments } = req.body;
   
@@ -685,22 +722,36 @@ app.post('/api/emails', (req, res) => {
     return res.status(400).json({ error: '收件人和主题不能为空' });
   }
   
-  const hasAttachments = attachments && attachments.length > 0;
-  
-  const query = `
-    INSERT INTO learning_emails (sender_id, sender_email, sender_name, recipient_email, subject, content, attachments, has_attachments) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-  
-  db.query(query, [
-    senderId, senderEmail, senderName, recipientEmail, subject, content, 
-    JSON.stringify(attachments || []), hasAttachments
-  ], (err, result) => {
+  // 先检查收件人是否存在
+  const checkUserQuery = 'SELECT id FROM users WHERE email = ? OR username = ?';
+  db.query(checkUserQuery, [recipientEmail, recipientEmail], (err, users) => {
     if (err) {
-      console.error('发送邮件失败:', err);
-      return res.status(500).json({ error: '发送邮件失败' });
+      console.error('检查收件人失败:', err);
+      return res.status(500).json({ error: '检查收件人失败' });
     }
-    res.status(201).json({ message: '邮件发送成功', emailId: result.insertId });
+    
+    if (users.length === 0) {
+      return res.status(404).json({ error: '收件人不存在' });
+    }
+    
+    // 收件人存在，执行发送
+    const hasAttachments = attachments && attachments.length > 0;
+    
+    const insertQuery = `
+      INSERT INTO learning_emails (sender_id, sender_email, sender_name, recipient_email, subject, content, attachments, has_attachments) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    db.query(insertQuery, [
+      senderId, senderEmail, senderName, recipientEmail, subject, content, 
+      JSON.stringify(attachments || []), hasAttachments
+    ], (err, result) => {
+      if (err) {
+        console.error('发送邮件失败:', err);
+        return res.status(500).json({ error: '发送邮件失败' });
+      }
+      res.status(201).json({ message: '邮件发送成功', emailId: result.insertId });
+    });
   });
 });
 
@@ -737,16 +788,50 @@ app.put('/api/emails/:emailId/read', (req, res) => {
   });
 });
 
-// 获取单封邮件详情
-app.get('/api/email/:emailId', (req, res) => {
+// 获取单封邮件详情（包含附件下载链接）
+app.get('/api/email/:emailId/detail', (req, res) => {
   const { emailId } = req.params;
   const { userEmail } = req.query;
   
+  if (!userEmail) {
+    return res.status(400).json({ error: '缺少用户邮箱参数' });
+  }
+  
   const query = 'SELECT * FROM learning_emails WHERE id = ? AND recipient_email = ?';
   db.query(query, [emailId, userEmail], (err, results) => {
-    if (err) return res.status(500).json({ error: '查询失败' });
-    if (results.length === 0) return res.status(404).json({ error: '邮件不存在' });
-    res.status(200).json({ email: results[0] });
+    if (err) {
+      console.error('获取邮件详情失败:', err);
+      return res.status(500).json({ error: '获取邮件详情失败' });
+    }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: '邮件不存在或无权访问' });
+    }
+    
+    const email = results[0];
+    
+    // 处理附件，添加下载URL
+    let attachments = [];
+    try {
+      attachments = JSON.parse(email.attachments || '[]');
+    } catch (e) {
+      attachments = [];
+    }
+    
+    // 为每个附件添加下载URL
+    const attachmentsWithUrls = attachments.map(att => ({
+      ...att,
+      downloadUrl: att.type === 'internal' && att.fileId 
+        ? `/api/download/${att.fileId}?userId=${email.sender_id}`  // 注意：附件下载需要发件人的userId，这里简化处理
+        : null
+    }));
+    
+    res.status(200).json({
+      email: {
+        ...email,
+        attachments: attachmentsWithUrls
+      }
+    });
   });
 });
 
