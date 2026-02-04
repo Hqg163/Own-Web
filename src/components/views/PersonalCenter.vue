@@ -902,11 +902,11 @@
             </div>
             
             <!-- 邮件正文 -->
-            <div class="email-body-text" v-html="(viewingEmail.content || '').replace(/\\n/g, '<br>')"></div>
+            <div class="email-body-text" v-html="formatEmailContent(viewingEmail.content)"></div>
             
-            <!-- 附件部分 -->
-            <div v-if="viewingEmail.attachments && viewingEmail.attachments.length > 0" class="email-attachments-section">
-              <h4>附件（{{ viewingEmail.attachments.length }}个）：</h4>
+            <!-- 附件部分 - 使用更稳定的条件判断 -->
+            <div v-if="emailHasAttachments" class="email-attachments-section">
+              <h4>附件（{{ attachmentCount }}个）：</h4>
               <div 
                 v-for="(att, idx) in viewingEmail.attachments" 
                 :key="idx" 
@@ -914,11 +914,11 @@
               >
                 <div class="att-info">
                   <span class="att-icon">📎</span>
-                  <span class="att-name">{{ att.name }}</span>
+                  <span class="att-name">{{ att.name || '未命名文件' }}</span>
                   <span v-if="att.type === 'internal'" class="att-type-tag">站内文件</span>
                   <span v-else class="att-type-tag">本地文件</span>
                 </div>
-                <button class="btn-small btn-download" @click="downloadEmailAttachment(att)">
+                <button class="btn-small btn-download" @click="downloadEmailAttachment(att, idx)">
                   下载
                 </button>
               </div>
@@ -1228,6 +1228,26 @@ export default {
     hasNextStudyFile() {
       const files = this.currentStudyCategory === 'all' ? this.studyFiles : this.currentStudyFiles
       return this.currentStudyFileIndex < files.length - 1
+    },
+    // 判断是否有附件
+    hasAttachments() {
+      if (!this.viewingEmail) return false;
+      const atts = this.viewingEmail.attachments;
+      return Array.isArray(atts) && atts.length > 0;
+    },
+    // 修复：确保附件检测正常工作
+    emailHasAttachments() {
+      if (!this.viewingEmail) return false;
+      const atts = this.viewingEmail.attachments;
+      return Array.isArray(atts) && atts.length > 0;
+    },
+
+    // 修复：附件数量
+    attachmentCount() {
+      if (!this.viewingEmail || !Array.isArray(this.viewingEmail.attachments)) {
+        return 0;
+      }
+      return this.viewingEmail.attachments.length;
     }
   },
   watch: {
@@ -2028,6 +2048,7 @@ export default {
     removeEmailAttachment(idx) {
       this.emailForm.attachments.splice(idx, 1)
     },
+    // 修改 sendEmail 方法 - 先上传本地附件
     async sendEmail() {
       if (!this.emailForm.recipient || !this.emailForm.subject) {
         this.showStudyToast('请填写收件人和主题', 'error');
@@ -2037,7 +2058,36 @@ export default {
       this.emailSendingStatus = 'sending';
       
       try {
-        // 直接发送，让后端检查收件人
+        // 第一步：处理附件 - 上传本地文件到服务器
+        const processedAttachments = [];
+        
+        for (const att of this.emailForm.attachments) {
+          if (att.type === 'local' && att.file instanceof File) {
+            // 本地文件需要先上传
+            try {
+              const uploadResult = await this.uploadAttachmentFile(att.file);
+              processedAttachments.push({
+                name: att.name,
+                type: 'internal',
+                fileId: uploadResult.fileId
+              });
+            } catch (uploadErr) {
+              console.error('上传附件失败:', uploadErr);
+              this.showStudyToast(`上传附件 "${att.name}" 失败`, 'error');
+              this.emailSendingStatus = 'error';
+              return;
+            }
+          } else if (att.type === 'internal' && att.fileId) {
+            // 已经是站内文件，直接使用
+            processedAttachments.push({
+              name: att.name,
+              type: 'internal',
+              fileId: att.fileId
+            });
+          }
+        }
+        
+        // 第二步：发送邮件（使用处理后的附件）
         const userRes = await axios.get(`/api/user/${this.userId}`);
         const user = userRes.data.user;
         
@@ -2048,17 +2098,7 @@ export default {
           recipientEmail: this.emailForm.recipient,
           subject: this.emailForm.subject,
           content: this.emailForm.content,
-          attachments: this.emailForm.attachments
-        });
-        
-        // 记录发送成功通知
-        this.addNotification({
-          type: 'success',
-          title: '邮件发送成功',
-          message: `已成功发送给 ${this.emailForm.recipient}`,
-          recipient: this.emailForm.recipient,
-          subject: this.emailForm.subject,
-          time: new Date().toISOString()
+          attachments: processedAttachments  // 使用处理后的附件列表
         });
         
         this.emailSendingStatus = 'success';
@@ -2067,22 +2107,41 @@ export default {
         
       } catch (err) {
         console.error('发送邮件失败:', err);
-        
         const errorMsg = err.response?.data?.error || '网络错误，请重试';
-        
-        // 记录发送失败通知
-        this.addNotification({
-          type: 'error',
-          title: '邮件发送失败',
-          message: errorMsg,
-          recipient: this.emailForm.recipient,
-          subject: this.emailForm.subject,
-          time: new Date().toISOString()
-        });
-        
         this.emailSendingStatus = 'error';
         this.showStudyToast(errorMsg, 'error');
       }
+    },
+    // 新增：上传附件文件到服务器
+    async uploadAttachmentFile(file) {
+      return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('userId', this.userId);
+        // 上传到默认分类，比如 "其它"
+        formData.append('categoryId', this.getDefaultCategoryId());
+        formData.append('customName', file.name);
+        
+        axios.post('/api/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        .then(response => {
+          resolve({ fileId: response.data.fileId });
+        })
+        .catch(error => {
+          reject(error);
+        });
+      });
+    },
+
+    // 新增：获取默认分类ID（用于上传附件）
+    getDefaultCategoryId() {
+      // 找 "其它" 分类，如果没有就用第一个非'all'的分类
+      const defaultCat = this.studyCategories.find(c => c.name === '其它');
+      if (defaultCat) return defaultCat.id;
+      
+      const firstCat = this.studyCategories.find(c => c.id !== 'all');
+      return firstCat ? firstCat.id : null;
     },
     // 添加通知
     addNotification(notification) {
@@ -2129,20 +2188,27 @@ export default {
       this.notifications = [];
       localStorage.removeItem('emailNotifications');
     },
-      closeInbox() {
-        this.showInbox = false
-        this.viewingEmail = null
-      },
-      async viewEmail(email) {
-      // 先显示列表中的基本信息
-      this.viewingEmail = email;
+    closeInbox() {
+      this.showInbox = false
+      this.viewingEmail = null
+    },
+    // 修复：查看邮件详情 - 完全重写
+    async viewEmail(email) {
+      console.log('查看邮件:', email.id);
+      
+      // 先显示基本信息（从列表中获取的）
+      this.viewingEmail = {
+        ...email,
+        // 确保 attachments 是数组
+        attachments: Array.isArray(email.attachments) ? email.attachments : [],
+        has_attachments: email.has_attachments || false
+      };
       
       // 如果不是已读，标记为已读
       if (!email.is_read) {
         try {
           await axios.put(`/api/emails/${email.id}/read`);
           email.is_read = true;
-          // 更新本地邮件列表中的状态
           const idx = this.emails.findIndex(e => e.id === email.id);
           if (idx > -1) {
             this.emails[idx].is_read = true;
@@ -2158,20 +2224,50 @@ export default {
           params: { userEmail: this.userEmail }
         });
         
-        // 合并详细数据
+        console.log('邮件详情API返回:', res.data);
+        
+        const emailData = res.data.email;
+        
+        // 关键：确保 attachments 是数组
+        let attachments = emailData.attachments;
+        if (typeof attachments === 'string') {
+          try {
+            attachments = JSON.parse(attachments);
+          } catch (e) {
+            attachments = [];
+          }
+        }
+        if (!Array.isArray(attachments)) {
+          attachments = [];
+        }
+        
+        // 关键：使用重新赋值确保响应式更新
         this.viewingEmail = {
-          ...email,
-          ...res.data.email,
-          // 确保附件有正确的下载链接
-          attachments: res.data.email.attachments || []
+          ...this.viewingEmail,
+          ...emailData,
+          attachments: attachments,
+          has_attachments: attachments.length > 0
         };
         
-        console.log('邮件详情:', this.viewingEmail);
+        console.log('最终邮件数据:', this.viewingEmail);
+        console.log('附件列表:', this.viewingEmail.attachments);
+        console.log('是否有附件:', this.emailHasAttachments);
+        
       } catch (err) {
         console.error('获取邮件详情失败:', err);
-        // 即使获取详情失败，也保留列表中的基本数据
-        this.showStudyToast('获取邮件详情失败，显示基本信息', 'error');
+        // 即使API失败，也保留列表中的数据
+        if (!Array.isArray(this.viewingEmail.attachments)) {
+          this.viewingEmail.attachments = [];
+        }
       }
+    },
+    // 格式化邮件内容，处理换行符
+    formatEmailContent(content) {
+      if (!content) return '';
+      // 将 \n 转换为 <br>，并处理转义的换行符
+      return content
+        .replace(/\\n/g, '\n')  // 先处理转义的换行符
+        .replace(/\n/g, '<br>'); // 再将换行符转为 <br>
     },
     prevEmail() {
       if (!this.hasPrevEmail) return
@@ -2183,24 +2279,75 @@ export default {
       const idx = this.filteredEmails.findIndex(e => e.id === this.viewingEmail.id)
       this.viewingEmail = this.filteredEmails[idx + 1]
     },
-    downloadEmailAttachment(att) {
-      if (att.downloadUrl) {
-        // 使用后端生成的下载链接
-        window.open(att.downloadUrl, '_blank');
-      } else if (att.type === 'internal' && att.fileId) {
-        // 备用方案：直接构造下载链接（需要知道发件人ID，这里简化处理）
-        // 实际上应该通过后端获取，因为需要验证权限
-        window.open(`/api/download/${att.fileId}?userId=${this.userId}`, '_blank');
-      } else if (att.type === 'local' && att.file) {
-        // 本地文件（直接下载）
-        const url = URL.createObjectURL(att.file);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = att.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    // 修复：下载邮件附件 - 完全重写
+    async downloadEmailAttachment(att, index = 0) {
+      console.log('下载附件:', att);
+      
+      if (!this.viewingEmail) {
+        console.error('viewingEmail 为空');
+        this.showStudyToast('邮件信息缺失', 'error');
+        return;
+      }
+      
+      // 获取附件在数组中的索引
+      const attachmentIndex = this.viewingEmail.attachments.findIndex(
+        a => a.name === att.name && a.type === att.type
+      );
+      
+      if (attachmentIndex === -1) {
+        console.error('找不到附件索引');
+        this.showStudyToast('附件信息错误', 'error');
+        return;
+      }
+      
+      try {
+        // 判断附件类型：只要有 fileId 就认为是站内文件
+        if (att.fileId) {
+          // 站内文件：使用专用下载API
+          const downloadUrl = `/api/email-attachment/${this.viewingEmail.id}/${attachmentIndex}?userEmail=${encodeURIComponent(this.userEmail)}`;
+          console.log('下载站内文件, URL:', downloadUrl);
+          
+          // 创建临时链接并点击下载
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.target = '_blank';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          this.showStudyToast('开始下载附件', 'success');
+          
+        } else if (att.type === 'local' && att.file instanceof File) {
+          // 真正的本地文件（File对象）：直接下载
+          // 这种情况只在发送邮件时存在，收到的邮件中不应该有
+          const url = URL.createObjectURL(att.file);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = att.name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+        } else if (att.downloadUrl) {
+          // 如果有直接的下载链接，直接使用
+          console.log('使用直接下载链接:', att.downloadUrl);
+          const link = document.createElement('a');
+          link.href = att.downloadUrl;
+          link.target = '_blank';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          this.showStudyToast('开始下载附件', 'success');
+          
+        } else {
+          console.error('无法识别的附件类型或缺少下载信息:', att);
+          this.showStudyToast('无法下载此附件：不支持的类型', 'error');
+        }
+      } catch (err) {
+        console.error('下载附件失败:', err);
+        this.showStudyToast('下载失败: ' + (err.message || '未知错误'), 'error');
       }
     },
     showStudyToast(message, type = 'success') {

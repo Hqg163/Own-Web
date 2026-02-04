@@ -685,12 +685,6 @@ app.get('/api/check-user', (req, res) => {
     return res.status(400).json({ error: '请提供邮箱地址' });
   }
   
-  // // 检查是否是有效的邮箱格式
-  // const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  // if (!emailRegex.test(email)) {
-  //   return res.status(400).json({ error: '邮箱格式不正确' });
-  // }
-  
   // 查询用户是否存在
   const query = 'SELECT id, username, email FROM users WHERE email = ?';
   db.query(query, [email], (err, results) => {
@@ -773,7 +767,23 @@ app.get('/api/emails/:userEmail', (req, res) => {
   
   db.query(query, params, (err, results) => {
     if (err) return res.status(500).json({ error: '获取邮件失败' });
-    res.status(200).json({ emails: results });
+    
+    // 确保attachments字段是数组
+    const emails = results.map(email => {
+      try {
+        if (typeof email.attachments === 'string') {
+          email.attachments = JSON.parse(email.attachments);
+        }
+      } catch (e) {
+        email.attachments = [];
+      }
+      if (!Array.isArray(email.attachments)) {
+        email.attachments = [];
+      }
+      return email;
+    });
+    
+    res.status(200).json({ emails: emails });
   });
 });
 
@@ -788,7 +798,7 @@ app.put('/api/emails/:emailId/read', (req, res) => {
   });
 });
 
-// 获取单封邮件详情（包含附件下载链接）
+// 获取单封邮件详情（修复版 - 包含附件下载链接）
 app.get('/api/email/:emailId/detail', (req, res) => {
   const { emailId } = req.params;
   const { userEmail } = req.query;
@@ -797,8 +807,9 @@ app.get('/api/email/:emailId/detail', (req, res) => {
     return res.status(400).json({ error: '缺少用户邮箱参数' });
   }
   
-  const query = 'SELECT * FROM learning_emails WHERE id = ? AND recipient_email = ?';
-  db.query(query, [emailId, userEmail], (err, results) => {
+  // 查询邮件 - 收件人或发件人都可以查看
+  const query = 'SELECT * FROM learning_emails WHERE id = ? AND (recipient_email = ? OR sender_email = ?)';
+  db.query(query, [emailId, userEmail, userEmail], (err, results) => {
     if (err) {
       console.error('获取邮件详情失败:', err);
       return res.status(500).json({ error: '获取邮件详情失败' });
@@ -813,25 +824,118 @@ app.get('/api/email/:emailId/detail', (req, res) => {
     // 处理附件，添加下载URL
     let attachments = [];
     try {
-      attachments = JSON.parse(email.attachments || '[]');
+      if (typeof email.attachments === 'string') {
+        attachments = JSON.parse(email.attachments);
+      } else if (Array.isArray(email.attachments)) {
+        attachments = email.attachments;
+      }
     } catch (e) {
+      console.error('解析附件失败:', e);
       attachments = [];
     }
     
     // 为每个附件添加下载URL
-    const attachmentsWithUrls = attachments.map(att => ({
-      ...att,
-      downloadUrl: att.type === 'internal' && att.fileId 
-        ? `/api/download/${att.fileId}?userId=${email.sender_id}`  // 注意：附件下载需要发件人的userId，这里简化处理
-        : null
-    }));
+    const attachmentsWithUrls = attachments.map(att => {
+      if (att.type === 'internal' && att.fileId) {
+        // 站内文件：使用发件人ID作为文件拥有者
+        return {
+          ...att,
+          downloadUrl: `/api/download/${att.fileId}?userId=${email.sender_id}`
+        };
+      }
+      return att;
+    });
     
     res.status(200).json({
       email: {
         ...email,
-        attachments: attachmentsWithUrls
+        attachments: attachmentsWithUrls,
+        has_attachments: attachmentsWithUrls.length > 0
       }
     });
+  });
+});
+
+// 下载邮件附件（专用API）
+app.get('/api/email-attachment/:emailId/:attachmentIndex', (req, res) => {
+  const { emailId, attachmentIndex } = req.params;
+  const { userEmail } = req.query;
+  
+  if (!userEmail) {
+    return res.status(400).json({ error: '缺少用户邮箱参数' });
+  }
+  
+  // 查询邮件
+  const query = 'SELECT * FROM learning_emails WHERE id = ? AND (recipient_email = ? OR sender_email = ?)';
+  db.query(query, [emailId, userEmail, userEmail], (err, results) => {
+    if (err) {
+      console.error('查询邮件失败:', err);
+      return res.status(500).json({ error: '查询邮件失败' });
+    }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: '邮件不存在或无权访问' });
+    }
+    
+    const email = results[0];
+    
+    // 解析附件
+    let attachments = [];
+    try {
+      if (typeof email.attachments === 'string') {
+        attachments = JSON.parse(email.attachments);
+      } else if (Array.isArray(email.attachments)) {
+        attachments = email.attachments;
+      }
+    } catch (e) {
+      return res.status(500).json({ error: '附件数据损坏' });
+    }
+    
+    const idx = parseInt(attachmentIndex);
+    if (isNaN(idx) || idx < 0 || idx >= attachments.length) {
+      return res.status(400).json({ error: '附件索引无效' });
+    }
+    
+    const att = attachments[idx];
+    
+    // 处理不同类型的附件
+    if (att.type === 'internal' && att.fileId) {
+      // 站内文件：查询文件信息并下载
+      const fileQuery = 'SELECT * FROM learning_files WHERE id = ?';
+      db.query(fileQuery, [att.fileId], (err, files) => {
+        if (err || files.length === 0) {
+          return res.status(404).json({ error: '文件不存在' });
+        }
+        
+        const file = files[0];
+        const fullPath = path.join(__dirname, file.file_path);
+        
+        if (!fs.existsSync(fullPath)) {
+          return res.status(404).json({ error: '文件已丢失' });
+        }
+        
+        // 设置下载头
+        let downloadName = att.name || file.original_name;
+        const ext = file.file_type || '';
+        
+        if (ext && ext !== 'unknown') {
+          const extWithDot = ext.startsWith('.') ? ext : '.' + ext;
+          const lowerName = downloadName.toLowerCase();
+          const lowerExt = extWithDot.toLowerCase();
+          if (!downloadName.toLowerCase().endsWith(extWithDot.toLowerCase())) {
+            downloadName = downloadName + extWithDot;
+          }
+        }
+        
+        const encodedName = encodeURIComponent(downloadName);
+        const asciiName = downloadName.replace(/[^\x00-\x7F]/g, '').replace(/["']/g, '') || 'download';
+        
+        res.setHeader('Content-Disposition', `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+        res.sendFile(fullPath);
+      });
+    } else {
+      return res.status(400).json({ error: '不支持的附件类型或附件不存在' });
+    }
   });
 });
 
