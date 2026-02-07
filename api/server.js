@@ -939,6 +939,648 @@ app.get('/api/email-attachment/:emailId/:attachmentIndex', (req, res) => {
   });
 });
 
+// ========== 娱乐区 - 图片管理API ==========
+
+// 创建图片表
+const createImagesTable = `
+  CREATE TABLE IF NOT EXISTS entertainment_images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    style VARCHAR(50) DEFAULT '普通',
+    file_type VARCHAR(20) NOT NULL,
+    file_size BIGINT,
+    file_path VARCHAR(500) NOT NULL,
+    thumbnail_path VARCHAR(500),
+    description TEXT,
+    width INT,
+    height INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )
+`;
+
+db.query(createImagesTable, (err) => {
+  if (err) console.error('创建图片表失败:', err);
+  else console.log('图片表创建成功或已存在');
+});
+
+// 创建视频表
+const createVideosTable = `
+  CREATE TABLE IF NOT EXISTS entertainment_videos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    file_type VARCHAR(20) NOT NULL,
+    file_size BIGINT,
+    file_path VARCHAR(500) NOT NULL,
+    cover_path VARCHAR(500),
+    duration VARCHAR(20),
+    frame_rate VARCHAR(10),
+    frame_count INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )
+`;
+
+db.query(createVideosTable, (err) => {
+  if (err) console.error('创建视频表失败:', err);
+  else console.log('视频表创建成功或已存在');
+});
+
+// 创建音乐表
+const createMusicTable = `
+  CREATE TABLE IF NOT EXISTS entertainment_music (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    artist VARCHAR(100),
+    album VARCHAR(100),
+    release_date DATE,
+    file_type VARCHAR(20) NOT NULL,
+    file_size BIGINT,
+    file_path VARCHAR(500) NOT NULL,
+    cover_path VARCHAR(500),
+    duration VARCHAR(20),
+    lyrics TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )
+`;
+
+db.query(createMusicTable, (err) => {
+  if (err) console.error('创建音乐表失败:', err);
+  else console.log('音乐表创建成功或已存在');
+});
+
+// 图片上传配置
+const imageStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const userId = req.body.userId || 'temp';
+    const uploadPath = path.join(__dirname, 'uploads', 'entertainment', 'images', userId.toString());
+    fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, 'img-' + uniqueSuffix + ext);
+  }
+});
+
+const imageUpload = multer({ 
+  storage: imageStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedTypes.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('只允许上传图片格式文件'));
+    }
+  }
+});
+
+// 获取最新5张图片（用于娱乐区首页预览）
+app.get('/api/entertainment/images/recent/:userId', (req, res) => {
+  const { userId } = req.params;
+  const query = `
+    SELECT id, title, file_type, style, created_at, 
+           CONCAT('/uploads/entertainment/images/', user_id, '/', filename) as thumbnail_path
+    FROM entertainment_images 
+    WHERE user_id = ? 
+    ORDER BY created_at DESC 
+    LIMIT 5
+  `;
+  
+  // 简化查询，返回基础信息
+  const simpleQuery = `
+    SELECT id, title, file_type, style, created_at, file_path, width, height
+    FROM entertainment_images 
+    WHERE user_id = ? 
+    ORDER BY created_at DESC 
+    LIMIT 5
+  `;
+  
+  db.query(simpleQuery, [userId], (err, results) => {
+    if (err) return res.status(500).json({ error: '获取图片失败' });
+    res.status(200).json({ images: results });
+  });
+});
+
+// 获取所有图片
+app.get('/api/entertainment/images/:userId', (req, res) => {
+  const { userId } = req.params;
+  const { style } = req.query;
+  
+  let query = `
+    SELECT id, title, file_type, style, file_path, thumbnail_path, 
+           description, width, height, created_at
+    FROM entertainment_images 
+    WHERE user_id = ?
+  `;
+  const params = [userId];
+  
+  if (style && style !== 'all') {
+    query += ' AND style = ?';
+    params.push(style);
+  }
+  
+  query += ' ORDER BY created_at DESC';
+  
+  db.query(query, params, (err, results) => {
+    if (err) return res.status(500).json({ error: '获取图片列表失败' });
+    res.status(200).json({ images: results });
+  });
+});
+
+// 上传图片
+app.post('/api/entertainment/images', imageUpload.single('image'), (req, res) => {
+  try {
+    const { userId, title, style, description } = req.body;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: '请选择图片文件' });
+    }
+    
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const finalTitle = title || req.file.originalname.replace(ext, '');
+    const finalStyle = style || '普通';
+    
+    // 获取图片尺寸（使用sharp库或手动计算，这里简化处理）
+    let width = 0, height = 0;
+    
+    // 这里应该使用图像处理库获取尺寸，暂时设为0
+    // 在实际项目中可以使用 sharp 库：const sharp = require('sharp');
+    
+    let relativePath = req.file.path.replace(__dirname, '').replace(/\\/g, '/');
+    if (!relativePath.startsWith('/uploads')) {
+      relativePath = '/uploads' + relativePath;
+    }
+    
+    const insertQuery = `
+      INSERT INTO entertainment_images 
+      (user_id, title, style, file_type, file_size, file_path, description, width, height) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    db.query(insertQuery, [
+      userId, finalTitle, finalStyle, ext, req.file.size, 
+      relativePath, description || finalTitle, width, height
+    ], (err, result) => {
+      if (err) {
+        fs.unlinkSync(req.file.path);
+        return res.status(500).json({ error: '保存图片信息失败' });
+      }
+      res.status(201).json({ message: '上传成功', imageId: result.insertId });
+    });
+  } catch (error) {
+    console.error('上传图片错误:', error);
+    res.status(500).json({ error: '上传失败' });
+  }
+});
+
+// 更新图片信息
+app.put('/api/entertainment/images/:imageId', (req, res) => {
+  const { imageId } = req.params;
+  const { title, style, description, userId } = req.body;
+  
+  const updateQuery = `
+    UPDATE entertainment_images 
+    SET title = ?, style = ?, description = ?
+    WHERE id = ? AND user_id = ?
+  `;
+  
+  db.query(updateQuery, [title, style, description, imageId, userId], (err) => {
+    if (err) return res.status(500).json({ error: '更新失败' });
+    res.status(200).json({ message: '更新成功' });
+  });
+});
+
+// 批量更新图片风格
+app.put('/api/entertainment/images/batch-style', (req, res) => {
+  const { imageIds, style, userId } = req.body;
+  
+  if (!imageIds || imageIds.length === 0) {
+    return res.status(400).json({ error: '未选择图片' });
+  }
+  
+  const updateQuery = `
+    UPDATE entertainment_images 
+    SET style = ?
+    WHERE id IN (?) AND user_id = ?
+  `;
+  
+  db.query(updateQuery, [style, imageIds, userId], (err) => {
+    if (err) return res.status(500).json({ error: '批量归类失败' });
+    res.status(200).json({ message: '归类成功' });
+  });
+});
+
+// 批量删除图片
+app.delete('/api/entertainment/images', (req, res) => {
+  const { imageIds, userId } = req.body;
+  
+  if (!imageIds || imageIds.length === 0) {
+    return res.status(400).json({ error: '未选择要删除的图片' });
+  }
+  
+  // 获取文件路径
+  const query = 'SELECT * FROM entertainment_images WHERE id IN (?) AND user_id = ?';
+  db.query(query, [imageIds, userId], (err, images) => {
+    if (err) return res.status(500).json({ error: '查询失败' });
+    
+    // 删除物理文件
+    images.forEach(img => {
+      const fullPath = path.join(__dirname, img.file_path);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    });
+    
+    // 删除数据库记录
+    const deleteQuery = 'DELETE FROM entertainment_images WHERE id IN (?) AND user_id = ?';
+    db.query(deleteQuery, [imageIds, userId], (err) => {
+      if (err) return res.status(500).json({ error: '删除失败' });
+      res.status(200).json({ message: '删除成功', count: imageIds.length });
+    });
+  });
+});
+
+// 获取图片文件
+app.get('/api/entertainment/image-file/:imageId', (req, res) => {
+  const { imageId } = req.params;
+  const { userId } = req.query;
+  
+  const query = 'SELECT * FROM entertainment_images WHERE id = ? AND user_id = ?';
+  db.query(query, [imageId, userId], (err, results) => {
+    if (err) return res.status(500).json({ error: '查询失败' });
+    if (results.length === 0) return res.status(404).json({ error: '图片不存在' });
+    
+    const image = results[0];
+    const fullPath = path.join(__dirname, image.file_path);
+    
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: '文件已丢失' });
+    }
+    
+    res.sendFile(fullPath);
+  });
+});
+
+// ========== 娱乐区 - 视频管理API ==========
+
+const videoStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const userId = req.body.userId || 'temp';
+    const uploadPath = path.join(__dirname, 'uploads', 'entertainment', 'videos', userId.toString());
+    fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, 'video-' + uniqueSuffix + ext);
+  }
+});
+
+const videoUpload = multer({ 
+  storage: videoStorage,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedTypes.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('只允许上传视频格式文件'));
+    }
+  }
+});
+
+// 获取最新5个视频（用于娱乐区首页预览）
+app.get('/api/entertainment/videos/recent/:userId', (req, res) => {
+  const { userId } = req.params;
+  const query = `
+    SELECT id, title, file_type, duration, created_at
+    FROM entertainment_videos 
+    WHERE user_id = ? 
+    ORDER BY created_at DESC 
+    LIMIT 5
+  `;
+  
+  db.query(query, [userId], (err, results) => {
+    if (err) return res.status(500).json({ error: '获取视频失败' });
+    res.status(200).json({ videos: results });
+  });
+});
+
+// 获取所有视频
+app.get('/api/entertainment/videos/:userId', (req, res) => {
+  const { userId } = req.params;
+  const query = `
+    SELECT id, title, file_type, file_path, cover_path, duration, 
+           frame_rate, frame_count, created_at
+    FROM entertainment_videos 
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+  `;
+  
+  db.query(query, [userId], (err, results) => {
+    if (err) return res.status(500).json({ error: '获取视频列表失败' });
+    res.status(200).json({ videos: results });
+  });
+});
+
+// 上传视频
+app.post('/api/entertainment/videos', videoUpload.single('video'), (req, res) => {
+  try {
+    const { userId, title, frameRate, frameCount } = req.body;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: '请选择视频文件' });
+    }
+    
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const finalTitle = title || req.file.originalname.replace(ext, '');
+    
+    let relativePath = req.file.path.replace(__dirname, '').replace(/\\/g, '/');
+    if (!relativePath.startsWith('/uploads')) {
+      relativePath = '/uploads' + relativePath;
+    }
+    
+    const insertQuery = `
+      INSERT INTO entertainment_videos 
+      (user_id, title, file_type, file_size, file_path, frame_rate, frame_count) 
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    db.query(insertQuery, [
+      userId, finalTitle, ext, req.file.size, 
+      relativePath, frameRate || '', parseInt(frameCount) || 0
+    ], (err, result) => {
+      if (err) {
+        fs.unlinkSync(req.file.path);
+        return res.status(500).json({ error: '保存视频信息失败' });
+      }
+      res.status(201).json({ message: '上传成功', videoId: result.insertId });
+    });
+  } catch (error) {
+    console.error('上传视频错误:', error);
+    res.status(500).json({ error: '上传失败' });
+  }
+});
+
+// 批量删除视频
+app.delete('/api/entertainment/videos', (req, res) => {
+  const { videoIds, userId } = req.body;
+  
+  if (!videoIds || videoIds.length === 0) {
+    return res.status(400).json({ error: '未选择要删除的视频' });
+  }
+  
+  const query = 'SELECT * FROM entertainment_videos WHERE id IN (?) AND user_id = ?';
+  db.query(query, [videoIds, userId], (err, videos) => {
+    if (err) return res.status(500).json({ error: '查询失败' });
+    
+    videos.forEach(video => {
+      const fullPath = path.join(__dirname, video.file_path);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    });
+    
+    const deleteQuery = 'DELETE FROM entertainment_videos WHERE id IN (?) AND user_id = ?';
+    db.query(deleteQuery, [videoIds, userId], (err) => {
+      if (err) return res.status(500).json({ error: '删除失败' });
+      res.status(200).json({ message: '删除成功', count: videoIds.length });
+    });
+  });
+});
+
+// 获取视频文件
+app.get('/api/entertainment/video-file/:videoId', (req, res) => {
+  const { videoId } = req.params;
+  const { userId } = req.query;
+  
+  const query = 'SELECT * FROM entertainment_videos WHERE id = ? AND user_id = ?';
+  db.query(query, [videoId, userId], (err, results) => {
+    if (err) return res.status(500).json({ error: '查询失败' });
+    if (results.length === 0) return res.status(404).json({ error: '视频不存在' });
+    
+    const video = results[0];
+    const fullPath = path.join(__dirname, video.file_path);
+    
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: '文件已丢失' });
+    }
+    
+    // 支持视频流式传输
+    const stat = fs.statSync(fullPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+    
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+      const file = fs.createReadStream(fullPath, { start, end });
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': 'video/mp4',
+      };
+      res.writeHead(206, head);
+      file.pipe(res);
+    } else {
+      const head = {
+        'Content-Length': fileSize,
+        'Content-Type': 'video/mp4',
+      };
+      res.writeHead(200, head);
+      fs.createReadStream(fullPath).pipe(res);
+    }
+  });
+});
+
+// ========== 娱乐区 - 音乐管理API ==========
+
+const musicStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const userId = req.body.userId || 'temp';
+    const uploadPath = path.join(__dirname, 'uploads', 'entertainment', 'music', userId.toString());
+    fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, 'music-' + uniqueSuffix + ext);
+  }
+});
+
+const musicUpload = multer({ 
+  storage: musicStorage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedTypes.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('只允许上传音频格式文件'));
+    }
+  }
+});
+
+// 获取最新5首音乐（用于娱乐区首页预览）
+app.get('/api/entertainment/music/recent/:userId', (req, res) => {
+  const { userId } = req.params;
+  const query = `
+    SELECT id, title, artist, duration, created_at
+    FROM entertainment_music 
+    WHERE user_id = ? 
+    ORDER BY created_at DESC 
+    LIMIT 5
+  `;
+  
+  db.query(query, [userId], (err, results) => {
+    if (err) return res.status(500).json({ error: '获取音乐失败' });
+    res.status(200).json({ music: results });
+  });
+});
+
+// 获取所有音乐
+app.get('/api/entertainment/music/:userId', (req, res) => {
+  const { userId } = req.params;
+  const query = `
+    SELECT id, title, artist, album, release_date, file_type, 
+           file_path, cover_path, duration, lyrics, created_at
+    FROM entertainment_music 
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+  `;
+  
+  db.query(query, [userId], (err, results) => {
+    if (err) return res.status(500).json({ error: '获取音乐列表失败' });
+    res.status(200).json({ music: results });
+  });
+});
+
+// 上传音乐
+app.post('/api/entertainment/music', musicUpload.single('music'), (req, res) => {
+  try {
+    const { userId, title, artist, releaseDate, duration } = req.body;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: '请选择音乐文件' });
+    }
+    
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const finalTitle = title || req.file.originalname.replace(ext, '');
+    
+    let relativePath = req.file.path.replace(__dirname, '').replace(/\\/g, '/');
+    if (!relativePath.startsWith('/uploads')) {
+      relativePath = '/uploads' + relativePath;
+    }
+    
+    const insertQuery = `
+      INSERT INTO entertainment_music 
+      (user_id, title, artist, release_date, file_type, file_size, file_path, duration) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    db.query(insertQuery, [
+      userId, finalTitle, artist || '未知歌手', releaseDate || null,
+      ext, req.file.size, relativePath, duration || '0:00'
+    ], (err, result) => {
+      if (err) {
+        fs.unlinkSync(req.file.path);
+        return res.status(500).json({ error: '保存音乐信息失败' });
+      }
+      res.status(201).json({ message: '上传成功', musicId: result.insertId });
+    });
+  } catch (error) {
+    console.error('上传音乐错误:', error);
+    res.status(500).json({ error: '上传失败' });
+  }
+});
+
+// 批量删除音乐
+app.delete('/api/entertainment/music', (req, res) => {
+  const { musicIds, userId } = req.body;
+  
+  if (!musicIds || musicIds.length === 0) {
+    return res.status(400).json({ error: '未选择要删除的歌曲' });
+  }
+  
+  const query = 'SELECT * FROM entertainment_music WHERE id IN (?) AND user_id = ?';
+  db.query(query, [musicIds, userId], (err, musics) => {
+    if (err) return res.status(500).json({ error: '查询失败' });
+    
+    musics.forEach(music => {
+      const fullPath = path.join(__dirname, music.file_path);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    });
+    
+    const deleteQuery = 'DELETE FROM entertainment_music WHERE id IN (?) AND user_id = ?';
+    db.query(deleteQuery, [musicIds, userId], (err) => {
+      if (err) return res.status(500).json({ error: '删除失败' });
+      res.status(200).json({ message: '删除成功', count: musicIds.length });
+    });
+  });
+});
+
+// 获取音乐文件
+app.get('/api/entertainment/music-file/:musicId', (req, res) => {
+  const { musicId } = req.params;
+  const { userId } = req.query;
+  
+  const query = 'SELECT * FROM entertainment_music WHERE id = ? AND user_id = ?';
+  db.query(query, [musicId, userId], (err, results) => {
+    if (err) return res.status(500).json({ error: '查询失败' });
+    if (results.length === 0) return res.status(404).json({ error: '音乐不存在' });
+    
+    const music = results[0];
+    const fullPath = path.join(__dirname, music.file_path);
+    
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: '文件已丢失' });
+    }
+    
+    res.sendFile(fullPath);
+  });
+});
+
+// 更新音乐歌词
+app.put('/api/entertainment/music/:musicId/lyrics', (req, res) => {
+  const { musicId } = req.params;
+  const { lyrics, userId } = req.body;
+  
+  const updateQuery = 'UPDATE entertainment_music SET lyrics = ? WHERE id = ? AND user_id = ?';
+  db.query(updateQuery, [lyrics, musicId, userId], (err) => {
+    if (err) return res.status(500).json({ error: '更新歌词失败' });
+    res.status(200).json({ message: '更新成功' });
+  });
+});
+
+// 静态文件服务 - 娱乐区文件
+app.use('/uploads/entertainment', express.static(path.join(__dirname, 'uploads', 'entertainment'), {
+  setHeaders: (res, filePath) => {
+    const mimeType = mime.lookup(filePath);
+    if (mimeType) {
+      res.setHeader('Content-Type', mimeType);
+    }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+}));
+
 // 启动服务器
 app.listen(PORT, () => {
   console.log(`服务器运行在端口 ${PORT}`);

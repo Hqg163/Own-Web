@@ -1314,7 +1314,15 @@ export default {
       window.addEventListener('storage', this.handleStorageChange)
     },
     selectOption(optionId) {
-      this.activeOption = optionId
+      if (optionId === 'entertainment') {
+        this.$router.push('/personal/entertainment')
+        return
+      }
+      if (optionId === 'personal-info') {
+        // 跳转到个人信息路由
+        this.$router.push('/personal/info')
+        return
+      }
       if (optionId !== 'personal-info') {
         this.isEditing = false
         this.isEditingPassword = false
@@ -1325,6 +1333,7 @@ export default {
         this.isBatchDeleteMode = false
         this.selectedStudyFiles = []
       }
+      this.activeOption = optionId
     },
     
     // ==================== 个人信息方法（原有） ====================
