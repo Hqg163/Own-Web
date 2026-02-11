@@ -128,7 +128,7 @@
               </select>
             </div>
             <div class="info-item">
-              <label>像素大小</label>
+              <label>分辨率</label>
               <input :value="(viewingImage.width || '?') + ' x ' + (viewingImage.height || '?')" disabled />
             </div>
             <div class="info-item">

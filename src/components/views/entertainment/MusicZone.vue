@@ -53,7 +53,6 @@
             <span v-if="selectedMusic.includes(music.id)">✓</span>
           </div>
           
-          <!-- 序号 -->
           <span class="row-number" v-if="!isFiltering">{{ index + 1 }}</span>
           
           <div class="music-cover" @click.stop="playMusic(music)">
@@ -65,7 +64,6 @@
               <span v-else-if="currentMusic && currentMusic.id === music.id && !isPlaying">⏸</span>
               <span v-else>▶</span>
             </div>
-            <!-- 播放中的波纹效果 -->
             <div class="playing-waves" v-if="currentMusic && currentMusic.id === music.id && isPlaying">
               <span></span><span></span><span></span>
             </div>
@@ -105,7 +103,6 @@
           </div>
         </div>
         
-        <!-- 空状态 -->
         <div v-if="musicList.length === 0" class="empty-music-list">
           <div class="empty-icon">🎵</div>
           <p>暂无歌曲，点击上传按钮添加音乐</p>
@@ -126,38 +123,36 @@
           <button class="close-lyrics-btn" @click="showLyricsSidebar = false">✕</button>
         </div>
         
-        <div class="lyrics-content" ref="lyricsContainer" @scroll="onLyricsScroll">
-          <div 
-            v-for="(line, index) in parsedLyrics" 
-            :key="index"
-            :class="['lyrics-line', { active: currentLyricIndex === index }]"
-            @click="seekToLyric(line.time)"
-            :data-time="line.time"
-          >
-            {{ line.text }}
-            <span v-if="currentLyricIndex === index" class="play-hint" title="点击从此处播放">▶</span>
-          </div>
-          
-          <!-- 逐字歌词模式 -->
-          <div v-if="parsedLyrics.length === 0 && currentMusic" class="lyrics-fallback">
-            <div class="lyric-word" 
-                 v-for="(word, idx) in fallbackLyrics" 
-                 :key="idx"
-                 :class="{ active: fallbackIndex === idx }">
-              {{ word }}
+        <div class="lyrics-scroll-wrapper" ref="lyricsWrapper" @scroll="onLyricsScroll">
+          <div class="lyrics-content">
+            <div 
+              v-for="(line, index) in parsedLyrics" 
+              :key="index"
+              :class="['lyrics-line', { active: currentLyricIndex === index }]"
+              @click="seekToLyric(line.time)"
+            >
+              {{ line.text }}
             </div>
-          </div>
-          
-          <div v-if="!currentMusic" class="no-lyrics-playing">
-            <p>请选择一首歌曲播放</p>
-          </div>
-          <div v-else-if="parsedLyrics.length === 0 && !fallbackLyrics.length" class="no-lyrics">
-            <p>该歌曲暂无可显示歌词</p>
-            <button class="add-lyrics-btn" @click="showAddLyrics = true">添加歌词</button>
+            
+            <div v-if="parsedLyrics.length === 0 && currentMusic" class="lyrics-fallback">
+              <div class="lyric-word" 
+                   v-for="(word, idx) in fallbackLyrics" 
+                   :key="idx"
+                   :class="{ active: fallbackIndex === idx }">
+                {{ word }}
+              </div>
+            </div>
+            
+            <div v-if="!currentMusic" class="no-lyrics-playing">
+              <p>请选择一首歌曲播放</p>
+            </div>
+            <div v-else-if="parsedLyrics.length === 0 && !fallbackLyrics.length" class="no-lyrics">
+              <p>该歌曲暂无可显示歌词</p>
+              <button class="add-lyrics-btn" @click="showAddLyrics = true">添加歌词</button>
+            </div>
           </div>
         </div>
         
-        <!-- 歌词控制 -->
         <div class="lyrics-controls">
           <button @click="adjustLyricsOffset(-0.5)" title="歌词提前0.5秒">−0.5s</button>
           <span>歌词偏移: {{ lyricsOffset.toFixed(1) }}s</span>
@@ -167,10 +162,9 @@
       </div>
     </div>
 
-    <!-- 底部播放控制栏（迷你播放器） -->
+    <!-- 底部播放控制栏 -->
     <transition name="slide-up">
       <div v-if="currentMusic && !fullscreenPlayer" class="mini-player" :class="{ 'is-playing': isPlaying }">
-        <!-- 进度条 -->
         <div class="mini-progress" @click="seekFromClick">
           <div class="progress-track">
             <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
@@ -213,7 +207,6 @@
           </div>
         </div>
         
-        <!-- 迷你播放列表 -->
         <div v-if="showMiniPlaylist" class="mini-playlist">
           <div 
             v-for="m in musicList" 
@@ -235,11 +228,9 @@
     <!-- 全屏播放器 -->
     <transition name="fade">
       <div v-if="fullscreenPlayer" class="fullscreen-music-player">
-        <!-- 动态背景 -->
         <div class="fs-background" :style="fsBackgroundStyle"></div>
         <div class="fs-background-overlay"></div>
         
-        <!-- 粒子效果 -->
         <div class="particles" v-if="isPlaying">
           <span v-for="n in 20" :key="n" :style="getParticleStyle(n)"></span>
         </div>
@@ -259,7 +250,6 @@
         </div>
         
         <div class="fs-body">
-          <!-- 左侧专辑封面 -->
           <div class="fs-album-section">
             <div class="album-disc" :class="{ playing: isPlaying }">
               <img :src="getMusicCover(currentMusic)" />
@@ -268,10 +258,16 @@
             <div class="album-glow"></div>
           </div>
           
-          <!-- 中间歌词 -->
+          <!-- 全屏歌词区域 - 已修复 -->
           <div class="fs-lyrics-section">
-            <div class="lyrics-container" ref="fsLyricsContainer" @scroll="onFsLyricsScroll">
-              <div class="lyrics-scroll-content">
+            <div 
+              class="lyrics-scroll-wrapper" 
+              ref="fsLyricsWrapper"
+              @mouseenter="isMouseOverLyrics = true"
+              @mouseleave="onLyricsMouseLeave"
+              @scroll="onFsLyricsScroll"
+            >
+              <div class="lyrics-content">
                 <div 
                   v-for="(line, index) in parsedLyrics" 
                   :key="index"
@@ -282,8 +278,8 @@
                   @click="seekToLyric(line.time)"
                 >
                   <span class="lyric-text">{{ line.text }}</span>
-                  <span v-if="currentLyricIndex === index" class="now-playing-indicator">♪</span>
                 </div>
+                
                 <div v-if="parsedLyrics.length === 0" class="fs-no-lyrics">
                   <div class="no-lyrics-icon">🎵</div>
                   <p>暂无歌词</p>
@@ -292,14 +288,12 @@
               </div>
             </div>
             
-            <!-- 歌词预览（下一句） -->
             <div class="next-lyric" v-if="parsedLyrics.length > 0 && currentLyricIndex < parsedLyrics.length - 1">
               <span>下一句：</span>
-              {{ parsedLyrics[currentLyricIndex + 1] ? parsedLyrics[currentLyricIndex + 1].text : '' }}
+              {{ parsedLyrics[currentLyricIndex + 1]?.text || '' }}
             </div>
           </div>
           
-          <!-- 右侧播放列表 -->
           <div class="fs-playlist-section" :class="{ collapsed: !showFsPlaylist }">
             <button class="playlist-toggle-btn" @click="showFsPlaylist = !showFsPlaylist">
               {{ showFsPlaylist ? '→' : '←' }}
@@ -315,7 +309,6 @@
                     played: playedHistory.includes(m.id)
                   }]"
                   @click="playMusic(m)"
-                  :title="m.title + ' - ' + m.artist"
                 >
                   <span class="playlist-number">{{ idx + 1 }}</span>
                   <img :src="getMusicCover(m)" />
@@ -334,13 +327,11 @@
         </div>
         
         <div class="fs-controls">
-          <!-- 歌曲信息 -->
           <div class="fs-song-info">
             <h3>{{ currentMusic.title }}</h3>
             <p>{{ currentMusic.artist }} <span v-if="currentMusic.album">· {{ currentMusic.album }}</span></p>
           </div>
           
-          <!-- 进度条 -->
           <div class="fs-progress-section">
             <span class="time-current">{{ formatTime(currentTime) }}</span>
             <div class="fs-progress-bar" @click="seekFromFsClick" ref="fsProgressBar">
@@ -353,7 +344,6 @@
             <span class="time-total">{{ formatTime(totalDuration) }}</span>
           </div>
           
-          <!-- 控制按钮 -->
           <div class="fs-buttons">
             <button class="mode-btn" @click="togglePlayMode" :title="playModeTitle">
               <span class="mode-icon">{{ playModeIcon }}</span>
@@ -361,14 +351,14 @@
             </button>
             
             <div class="main-controls">
-              <button @click="prevMusic" :disabled="!canGoPrev" class="nav-btn large" title="上一首">
+              <button @click="prevMusic" :disabled="!canGoPrev" class="nav-btn large">
                 <span>⏮</span>
               </button>
               <button class="fs-play-btn" @click="togglePlay" :class="{ playing: isPlaying }">
                 <span v-if="!isPlaying">▶</span>
                 <span v-else>⏸</span>
               </button>
-              <button @click="nextMusic" :disabled="!canGoNext" class="nav-btn large" title="下一首">
+              <button @click="nextMusic" :disabled="!canGoNext" class="nav-btn large">
                 <span>⏭</span>
               </button>
             </div>
@@ -377,11 +367,10 @@
               <button 
                 :class="['lyrics-toggle-btn', { active: showLyricsSidebar }]" 
                 @click="toggleLyricsSidebar(currentMusic)"
-                title="歌词"
               >
                 词
               </button>
-              <button class="playlist-toggle-fs" @click="showFsPlaylist = !showFsPlaylist" title="播放列表">
+              <button class="playlist-toggle-fs" @click="showFsPlaylist = !showFsPlaylist">
                 ☰
               </button>
             </div>
@@ -429,10 +418,6 @@
             <label>文件大小</label>
             <span>{{ formatFileSize(infoModalData.file_size) }}</span>
           </div>
-          <div class="info-row" v-if="infoModalData.play_count !== undefined">
-            <label>播放次数</label>
-            <span>{{ infoModalData.play_count }} 次</span>
-          </div>
         </div>
         <div class="info-actions">
           <button class="primary-btn" @click="playMusic(infoModalData)">播放歌曲</button>
@@ -446,15 +431,7 @@
       <div class="lyrics-input-modal">
         <h3>添加歌词</h3>
         <p class="hint">支持LRC格式：[mm:ss.xx]歌词内容</p>
-        <textarea 
-          v-model="newLyricsText" 
-          placeholder="在此粘贴歌词..."
-          rows="10"
-        ></textarea>
-        <div class="lyrics-preview" v-if="newLyricsText">
-          <h4>预览</h4>
-          <div class="preview-content">{{ newLyricsText.substring(0, 100) }}...</div>
-        </div>
+        <textarea v-model="newLyricsText" placeholder="在此粘贴歌词..." rows="10"></textarea>
         <div class="actions">
           <button class="primary-btn" @click="saveLyrics">保存歌词</button>
           <button @click="showAddLyrics = false">取消</button>
@@ -517,13 +494,7 @@
                @dragover.prevent="isDragging = true"
                @dragleave="isDragging = false"
                @drop.prevent="handleFileDrop">
-            <input 
-              type="file" 
-              ref="fileInput"
-              accept="audio/*" 
-              @change="handleFileSelect"
-              hidden
-            />
+            <input type="file" ref="fileInput" accept="audio/*" @change="handleFileSelect" hidden />
             <div class="drop-content" @click="$refs.fileInput.click()">
               <div class="upload-icon">📁</div>
               <p v-if="!uploadForm.file">点击或拖拽文件到此处</p>
@@ -561,7 +532,6 @@
           </div>
         </div>
         
-        <!-- 上传进度 -->
         <div v-if="isUploading" class="upload-progress">
           <div class="progress-bar">
             <div class="progress-fill" :style="{ width: uploadProgress + '%' }"></div>
@@ -585,7 +555,7 @@
     <!-- Toast -->
     <div v-if="toast.show" class="toast modern" :class="toast.type">{{ toast.message }}</div>
     
-    <!-- 键盘快捷键提示 -->
+    <!-- 快捷键提示 -->
     <div v-if="showShortcuts" class="shortcuts-overlay" @click="showShortcuts = false">
       <div class="shortcuts-modal">
         <h3>键盘快捷键</h3>
@@ -604,7 +574,6 @@
       </div>
     </div>
     
-    <!-- 快捷键提示按钮 -->
     <button class="shortcuts-hint-btn" @click="showShortcuts = true" title="快捷键">?</button>
   </div>
 </template>
@@ -627,7 +596,7 @@ export default {
       totalDuration: 0,
       bufferedTime: 0,
       isBuffering: false,
-      playMode: 'sequence', // 'sequence', 'random', 'single'
+      playMode: 'sequence',
       volume: 80,
       isMuted: false,
       previousVolume: 80,
@@ -642,6 +611,7 @@ export default {
       lyricsScrollTimer: null,
       fallbackLyrics: [],
       fallbackIndex: 0,
+      isMouseOverLyrics: false,  // 新增：鼠标是否在歌词上
       
       // 筛选
       isFiltering: false,
@@ -678,19 +648,11 @@ export default {
       return `（已选择 ${this.selectedMusic.length} 首歌曲）`
     },
     playModeIcon() {
-      const icons = {
-        'sequence': '🔁',
-        'random': '🔀',
-        'single': '🔂'
-      }
+      const icons = { 'sequence': '🔁', 'random': '🔀', 'single': '🔂' }
       return icons[this.playMode]
     },
     playModeTitle() {
-      const titles = {
-        'sequence': '顺序播放',
-        'random': '随机播放',
-        'single': '单曲循环'
-      }
+      const titles = { 'sequence': '顺序播放', 'random': '随机播放', 'single': '单曲循环' }
       return titles[this.playMode]
     },
     progressPercent() {
@@ -718,9 +680,7 @@ export default {
     },
     fsBackgroundStyle() {
       if (!this.currentMusic) return {}
-      return {
-        backgroundImage: `url(${this.getMusicCover(this.currentMusic)})`
-      }
+      return { backgroundImage: `url(${this.getMusicCover(this.currentMusic)})` }
     }
   },
   watch: {
@@ -731,9 +691,7 @@ export default {
     volume(newVal) {
       if (this.$refs.audioPlayer) {
         this.$refs.audioPlayer.volume = newVal / 100
-        if (newVal > 0 && this.isMuted) {
-          this.isMuted = false
-        }
+        if (newVal > 0 && this.isMuted) this.isMuted = false
       }
     }
   },
@@ -750,9 +708,7 @@ export default {
   },
   beforeUnmount() {
     this.removeKeyboardShortcuts()
-    if (this.$refs.audioPlayer) {
-      this.$refs.audioPlayer.pause()
-    }
+    if (this.$refs.audioPlayer) this.$refs.audioPlayer.pause()
   },
   methods: {
     setupThemeListener() {
@@ -763,16 +719,13 @@ export default {
     
     loadVolumeSetting() {
       const saved = localStorage.getItem('musicVolume')
-      if (saved !== null) {
-        this.volume = parseInt(saved)
-      }
+      if (saved !== null) this.volume = parseInt(saved)
     },
     
     saveVolumeSetting() {
       localStorage.setItem('musicVolume', this.volume)
     },
     
-    // 键盘快捷键
     setupKeyboardShortcuts() {
       document.addEventListener('keydown', this.handleKeyDown)
     },
@@ -782,7 +735,6 @@ export default {
     },
     
     handleKeyDown(e) {
-      // 如果在输入框中，不处理
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
       
       switch(e.code) {
@@ -825,12 +777,10 @@ export default {
       }
     },
     
-    // 数据加载
     async loadMusic() {
       try {
         const res = await axios.get(`/api/entertainment/music/${this.userId}`)
         this.musicList = res.data.music || []
-        // 按添加时间倒序，但播放时按用户选择
       } catch (err) {
         this.showToast('加载音乐失败', 'error')
       }
@@ -838,10 +788,7 @@ export default {
     
     getMusicCover(music) {
       if (!music) return ''
-      if (music.cover_path) {
-        return music.cover_path
-      }
-      // 使用歌曲标题生成渐变背景
+      if (music.cover_path) return music.cover_path
       const colors = this.generateColorsFromString(music.title + music.artist)
       return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23${colors[0]}'/%3E%3Cstop offset='100%25' stop-color='%23${colors[1]}'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='300' height='300' fill='url(%23g)'/%3E%3Ccircle cx='150' cy='150' r='80' fill='rgba(255,255,255,0.1)'/%3E%3Ccircle cx='150' cy='150' r='40' fill='rgba(255,255,255,0.2)'/%3E%3Ccircle cx='150' cy='150' r='15' fill='rgba(255,255,255,0.3)'/%3E%3C/svg%3E`
     },
@@ -853,10 +800,7 @@ export default {
       }
       const c1 = Math.abs(hash % 360)
       const c2 = (c1 + 40) % 360
-      return [
-        this.hslToHex(c1, 70, 50),
-        this.hslToHex(c2, 70, 40)
-      ]
+      return [this.hslToHex(c1, 70, 50), this.hslToHex(c2, 70, 40)]
     },
     
     hslToHex(h, s, l) {
@@ -871,27 +815,20 @@ export default {
     },
     
     getMusicUrl(music) {
-      if (music.file_path && music.file_path.startsWith('/uploads')) {
-        return music.file_path
-      }
+      if (music.file_path && music.file_path.startsWith('/uploads')) return music.file_path
       return `/api/entertainment/music-file/${music.id}?userId=${this.userId}`
     },
     
     formatDuration(duration) {
       if (!duration) return '0:00'
       if (typeof duration === 'string' && duration.includes(':')) {
-        // 已经是 mm:ss 格式
         const parts = duration.split(':')
         if (parts.length === 2) return duration
-        // hh:mm:ss 格式，转换为 mm:ss
         if (parts.length === 3) {
-          const h = parseInt(parts[0])
-          const m = parseInt(parts[1])
-          const s = parts[2]
+          const h = parseInt(parts[0]), m = parseInt(parts[1]), s = parts[2]
           return `${h * 60 + m}:${s}`
         }
       }
-      // 秒数格式
       const seconds = parseInt(duration) || 0
       const m = Math.floor(seconds / 60)
       const s = seconds % 60
@@ -901,8 +838,7 @@ export default {
     formatFileSize(bytes) {
       if (!bytes) return '0 B'
       const units = ['B', 'KB', 'MB', 'GB']
-      let size = bytes
-      let unitIndex = 0
+      let size = bytes, unitIndex = 0
       while (size >= 1024 && unitIndex < units.length - 1) {
         size /= 1024
         unitIndex++
@@ -917,7 +853,6 @@ export default {
       return `${m}:${s.toString().padStart(2, '0')}`
     },
     
-    // 播放控制
     playMusic(music, addToHistory = true) {
       if (!music) return
       
@@ -929,12 +864,10 @@ export default {
       this.currentMusic = music
       const audio = this.$refs.audioPlayer
       
-      // 添加播放历史
       if (addToHistory && !this.playedHistory.includes(music.id)) {
         this.playedHistory.push(music.id)
       }
       
-      // 增加播放次数
       this.incrementPlayCount(music.id)
       
       audio.src = this.getMusicUrl(music)
@@ -951,16 +884,12 @@ export default {
     async incrementPlayCount(musicId) {
       try {
         await axios.post(`/api/entertainment/music/${musicId}/play`, { userId: this.userId })
-      } catch (e) {
-        // 静默处理
-      }
+      } catch (e) {}
     },
     
     togglePlay() {
       if (!this.currentMusic) {
-        if (this.musicList.length > 0) {
-          this.playMusic(this.musicList[0])
-        }
+        if (this.musicList.length > 0) this.playMusic(this.musicList[0])
         return
       }
       
@@ -989,9 +918,8 @@ export default {
       const currentIdx = this.musicList.findIndex(m => m.id === this.currentMusic.id)
       
       if (this.playMode === 'random') {
-        // 从播放历史中选择上一首，或随机选择
         if (this.playedHistory.length > 1) {
-          this.playedHistory.pop() // 移除当前
+          this.playedHistory.pop()
           const prevId = this.playedHistory[this.playedHistory.length - 1]
           prevIdx = this.musicList.findIndex(m => m.id === prevId)
         } else {
@@ -1019,7 +947,6 @@ export default {
       
       if (this.playMode === 'random') {
         nextIdx = Math.floor(Math.random() * this.musicList.length)
-        // 避免连续随机到同一首
         let attempts = 0
         while (this.musicList[nextIdx].id === this.currentMusic.id && attempts < 5) {
           nextIdx = Math.floor(Math.random() * this.musicList.length)
@@ -1055,21 +982,32 @@ export default {
       }
     },
     
-    // 歌词处理
+    // ========== 歌词处理（已修复） ==========
+    
     loadLyrics(music) {
       if (!music) return
+      
+      this.currentLyricIndex = -1
+      this.lyricsOffset = 0
+      
       if (music.lyrics) {
         this.currentLyrics = music.lyrics
         this.parseLyrics(music.lyrics)
       } else {
         this.currentLyrics = ''
         this.parsedLyrics = []
-        // 尝试从本地存储加载
         const savedLyrics = localStorage.getItem(`lyrics_${music.id}`)
         if (savedLyrics) {
           this.currentLyrics = savedLyrics
           this.parseLyrics(savedLyrics)
         }
+      }
+      
+      if (this.parsedLyrics.length > 0) {
+        this.$nextTick(() => {
+          this.currentLyricIndex = 0
+          this.scrollLyrics()
+        })
       }
     },
     
@@ -1082,25 +1020,17 @@ export default {
       const lines = lyricsText.split('\n')
       const parsed = []
       const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/
-      const enhancedRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](?:<(\d{2}):(\d{2})\.(\d{2,3})>)?(.+)/
       
       lines.forEach(line => {
-        // 尝试解析增强格式
-        let match = line.match(enhancedRegex)
-        if (!match) {
-          match = line.match(timeRegex)
-        }
-        
+        const match = line.match(timeRegex)
         if (match) {
           const minutes = parseInt(match[1])
           const seconds = parseInt(match[2])
           const ms = parseInt((match[3] || '0').toString().padEnd(3, '0').substring(0, 3))
           const time = minutes * 60 + seconds + ms / 1000
-          const text = (match[7] || match[4] || '').trim()
+          const text = match[4].trim()
           
-          if (text) {
-            parsed.push({ time, text })
-          }
+          if (text) parsed.push({ time, text })
         }
       })
       
@@ -1108,22 +1038,24 @@ export default {
     },
     
     generateFallbackLyrics(music) {
-      // 当没有LRC歌词时，生成逐字歌词
       const title = music.title || ''
       const artist = music.artist || ''
       const text = `${title} - ${artist}`
       this.fallbackLyrics = text.split('').filter(c => c.trim())
     },
     
+    // 关键修复：歌词索引更新
     updateCurrentLyric(currentTime) {
       if (this.parsedLyrics.length === 0) {
         this.currentLyricIndex = -1
+        this.updateFallbackIndex(currentTime)
         return
       }
       
       const adjustedTime = currentTime - this.lyricsOffset
-      let idx = 0
       
+      // 找到当前时间对应的歌词索引
+      let idx = -1
       for (let i = 0; i < this.parsedLyrics.length; i++) {
         if (adjustedTime >= this.parsedLyrics[i].time) {
           idx = i
@@ -1132,9 +1064,10 @@ export default {
         }
       }
       
-      if (this.currentLyricIndex !== idx) {
+      // 只有索引变化时才更新
+      if (idx !== -1 && this.currentLyricIndex !== idx) {
         this.currentLyricIndex = idx
-        if (this.lyricsAutoScroll) {
+        if (this.lyricsAutoScroll && !this.isMouseOverLyrics) {
           this.scrollLyrics()
         }
       }
@@ -1146,38 +1079,66 @@ export default {
       this.fallbackIndex = Math.floor(progress * this.fallbackLyrics.length)
     },
     
+    // 关键修复：歌词滚动 - 使用居中算法
     scrollLyrics() {
       this.$nextTick(() => {
-        const container = this.fullscreenPlayer ? this.$refs.fsLyricsContainer : this.$refs.lyricsContainer
-        if (!container) return
-        
-        const activeLine = container.querySelector('.active') || container.querySelector('.lyric-word.active')
-        if (activeLine) {
-          const containerHeight = container.clientHeight
-          const lineTop = activeLine.offsetTop
-          const lineHeight = activeLine.clientHeight
-          
-          container.scrollTo({
-            top: lineTop - containerHeight / 2 + lineHeight / 2,
-            behavior: 'smooth'
-          })
+        // 确定使用哪个容器
+        let wrapper
+        if (this.fullscreenPlayer) {
+          wrapper = this.$refs.fsLyricsWrapper
+        } else {
+          wrapper = this.$refs.lyricsWrapper
         }
+        
+        if (!wrapper) return
+        
+        // 找到当前激活的歌词行
+        const activeLine = wrapper.querySelector('.active')
+        if (!activeLine) return
+        
+        // 计算居中位置
+        const wrapperHeight = wrapper.clientHeight
+        const lineTop = activeLine.offsetTop
+        const lineHeight = activeLine.clientHeight
+        
+        // 目标位置：让当前行居中
+        const targetScrollTop = lineTop - (wrapperHeight / 2) + (lineHeight / 2)
+        
+        wrapper.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: 'smooth'
+        })
       })
     },
     
+    // 歌词滚动事件 - 用户手动滚动时暂停自动滚动
     onLyricsScroll() {
+      if (!this.lyricsAutoScroll) return
+      
       this.lyricsAutoScroll = false
       if (this.lyricsScrollTimer) clearTimeout(this.lyricsScrollTimer)
+      
       this.lyricsScrollTimer = setTimeout(() => {
-        this.lyricsAutoScroll = true
-      }, 5000)
+        if (!this.isMouseOverLyrics) {
+          this.lyricsAutoScroll = true
+          this.scrollLyrics()
+        }
+      }, 3000)
     },
     
-    onFsLyricsScroll() {
-      this.lyricsAutoScroll = false
+    onFsLyricsScroll(e) {
+      // 阻止事件冒泡
+      e.stopPropagation()
+      this.onLyricsScroll()
+    },
+    
+    onLyricsMouseLeave() {
+      this.isMouseOverLyrics = false
+      // 鼠标离开后3秒恢复自动滚动
       if (this.lyricsScrollTimer) clearTimeout(this.lyricsScrollTimer)
       this.lyricsScrollTimer = setTimeout(() => {
         this.lyricsAutoScroll = true
+        this.scrollLyrics()
       }, 3000)
     },
     
@@ -1196,7 +1157,8 @@ export default {
       this.lyricsOffset = 0
     },
     
-    // 音频事件
+    // ========== 音频事件 ==========
+    
     updateTime() {
       const audio = this.$refs.audioPlayer
       this.currentTime = audio.currentTime
@@ -1237,7 +1199,6 @@ export default {
       this.currentTime = newTime
     },
     
-    // 音量控制
     toggleMute() {
       const audio = this.$refs.audioPlayer
       if (this.isMuted) {
@@ -1253,27 +1214,43 @@ export default {
     
     changeVolume() {
       this.saveVolumeSetting()
-      if (this.volume > 0 && this.isMuted) {
-        this.isMuted = false
-      }
+      if (this.volume > 0 && this.isMuted) this.isMuted = false
     },
     
-    // 导航和UI
+    // ========== 导航和UI ==========
+    
     goBack() {
       this.$router.push('/personal/entertainment')
     },
     
+    // 关键修复：打开全屏播放器
     openFullscreenPlayer() {
       if (!this.currentMusic) return
+      
       this.fullscreenPlayer = true
       this.loadLyrics(this.currentMusic)
       document.body.style.overflow = 'hidden'
+      
+      // 重置歌词状态
+      this.lyricsAutoScroll = true
+      this.isMouseOverLyrics = false
+      
+      // 延迟初始化滚动
+      this.$nextTick(() => {
+        const wrapper = this.$refs.fsLyricsWrapper
+        if (wrapper) wrapper.scrollTop = 0
+        
+        setTimeout(() => {
+          this.scrollLyrics()
+        }, 100)
+      })
     },
     
     closeFullscreenPlayer() {
       this.fullscreenPlayer = false
       this.showFsPlaylist = true
       document.body.style.overflow = ''
+      this.isMouseOverLyrics = false
     },
     
     toggleLyricsSidebar(music) {
@@ -1282,9 +1259,7 @@ export default {
       } else {
         this.loadLyrics(music)
         this.showLyricsSidebar = true
-        this.$nextTick(() => {
-          this.scrollLyrics()
-        })
+        this.$nextTick(() => this.scrollLyrics())
       }
     },
     
@@ -1292,7 +1267,6 @@ export default {
       this.showMiniPlaylist = !this.showMiniPlaylist
     },
     
-    // 筛选
     startFilter() {
       this.isFiltering = true
       this.selectedMusic = []
@@ -1312,12 +1286,10 @@ export default {
           this.selectedMusic.push(music.id)
         }
       } else {
-        // 非筛选模式下，点击行也播放
         this.playMusic(music)
       }
     },
     
-    // 信息和操作
     showMusicInfo(music) {
       this.infoModalData = { ...music, play_count: music.play_count || 0 }
       this.showInfoModal = true
@@ -1357,9 +1329,7 @@ export default {
           data: { userId: this.userId, musicIds: this.selectedMusic }
         })
         
-        // 处理删除后的播放状态
         if (this.currentMusic && this.selectedMusic.includes(this.currentMusic.id)) {
-          // 尝试播放下一首
           const remainingMusic = this.musicList.filter(m => !this.selectedMusic.includes(m.id))
           if (remainingMusic.length > 0) {
             const currentIdx = this.musicList.findIndex(m => m.id === this.currentMusic.id)
@@ -1380,21 +1350,12 @@ export default {
       }
     },
     
-    // 上传
     validateTitle() {
-      if (!this.uploadForm.title.trim()) {
-        this.errors.title = '请输入歌曲名'
-      } else {
-        this.errors.title = ''
-      }
+      this.errors.title = this.uploadForm.title.trim() ? '' : '请输入歌曲名'
     },
     
     validateArtist() {
-      if (!this.uploadForm.artist.trim()) {
-        this.errors.artist = '请输入歌手名'
-      } else {
-        this.errors.artist = ''
-      }
+      this.errors.artist = this.uploadForm.artist.trim() ? '' : '请输入歌手名'
     },
     
     handleFileSelect(event) {
@@ -1414,8 +1375,6 @@ export default {
         this.showToast('请选择音频文件', 'error')
         return
       }
-      
-      // 检查文件大小（最大100MB）
       if (file.size > 100 * 1024 * 1024) {
         this.showToast('文件大小不能超过100MB', 'error')
         return
@@ -1423,19 +1382,10 @@ export default {
       
       this.uploadForm.file = file
       
-      // 尝试读取元数据
-      this.readAudioMetadata(file)
-    },
-    
-    readAudioMetadata(file) {
       const audio = new Audio()
       audio.preload = 'metadata'
       audio.src = URL.createObjectURL(file)
-      
       audio.onloadedmetadata = () => {
-        // 获取时长
-        const duration = audio.duration
-        // 可以尝试提取其他元数据
         URL.revokeObjectURL(audio.src)
       }
     },
@@ -1491,7 +1441,6 @@ export default {
       this.uploadProgress = 0
     },
     
-    // 歌词编辑
     async saveLyrics() {
       if (!this.newLyricsText.trim() || !this.currentMusic) return
       
@@ -1501,16 +1450,13 @@ export default {
           lyrics: this.newLyricsText
         })
         
-        // 同时保存到本地
         localStorage.setItem(`lyrics_${this.currentMusic.id}`, this.newLyricsText)
-        
         this.currentLyrics = this.newLyricsText
         this.parseLyrics(this.newLyricsText)
         this.showAddLyrics = false
         this.newLyricsText = ''
         this.showToast('歌词保存成功')
       } catch (err) {
-        // 如果API失败，至少保存到本地
         localStorage.setItem(`lyrics_${this.currentMusic.id}`, this.newLyricsText)
         this.currentLyrics = this.newLyricsText
         this.parseLyrics(this.newLyricsText)
@@ -1520,7 +1466,6 @@ export default {
       }
     },
     
-    // 视觉特效
     getParticleStyle(n) {
       const randomX = Math.random() * 100
       const randomDelay = Math.random() * 2
@@ -2134,13 +2079,49 @@ export default {
   color: white;
 }
 
-.lyrics-content {
+/* 关键修复：歌词滚动容器 */
+.lyrics-scroll-wrapper {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 16px;
-  text-align: center;
-  scroll-behavior: smooth;
+  overflow-x: hidden;
   position: relative;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.2) transparent;
+}
+
+.lyrics-scroll-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lyrics-scroll-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lyrics-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.lyrics-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .lyrics-scroll-wrapper {
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+
+.dark-mode .lyrics-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dark-mode .lyrics-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.lyrics-content {
+  padding: 200px 20px;
+  min-height: 100%;
 }
 
 .lyrics-line {
@@ -2150,7 +2131,7 @@ export default {
   transition: all 0.3s;
   border-radius: 8px;
   margin: 4px 0;
-  position: relative;
+  text-align: center;
   font-size: 15px;
   line-height: 1.6;
 }
@@ -2168,22 +2149,6 @@ export default {
   transform: scale(1.02);
 }
 
-.play-hint {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  opacity: 0;
-  font-size: 12px;
-  color: var(--accent-color);
-  transition: opacity 0.3s;
-}
-
-.lyrics-line:hover .play-hint {
-  opacity: 1;
-}
-
-/* 逐字歌词 */
 .lyrics-fallback {
   display: flex;
   flex-wrap: wrap;
@@ -2211,6 +2176,7 @@ export default {
 .no-lyrics, .no-lyrics-playing {
   padding: 60px 20px;
   color: var(--text-tertiary);
+  text-align: center;
 }
 
 .add-lyrics-btn {
@@ -2504,7 +2470,6 @@ export default {
   border-color: var(--accent-color);
 }
 
-/* 迷你播放列表 */
 .mini-playlist {
   position: absolute;
   bottom: 100%;
@@ -2607,7 +2572,6 @@ export default {
   background: rgba(0, 0, 0, 0.4);
 }
 
-/* 粒子效果 */
 .particles {
   position: absolute;
   top: 0;
@@ -2645,7 +2609,6 @@ export default {
   }
 }
 
-/* 全屏头部 */
 .fs-header {
   position: relative;
   display: flex;
@@ -2716,7 +2679,6 @@ export default {
   cursor: pointer;
 }
 
-/* 全屏主体 */
 .fs-body {
   flex: 1;
   display: flex;
@@ -2724,9 +2686,10 @@ export default {
   z-index: 10;
   padding: 0 32px;
   gap: 40px;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* 专辑区域 */
 .fs-album-section {
   flex: 1;
   display: flex;
@@ -2783,98 +2746,115 @@ export default {
   50% { opacity: 0.5; transform: scale(1.1); }
 }
 
-/* 歌词区域 */
+/* 关键修复：全屏歌词区域 */
 .fs-lyrics-section {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  max-width: 500px;
+  max-width: 600px;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
 }
 
-.lyrics-container {
+.fs-lyrics-section .lyrics-scroll-wrapper {
   flex: 1;
   overflow-y: auto;
-  padding: 40px 0;
+  overflow-x: hidden;
+  position: relative;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
   mask-image: linear-gradient(
     to bottom,
     transparent 0%,
-    black 15%,
-    black 85%,
+    black 10%,
+    black 90%,
     transparent 100%
   );
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0%,
-    black 15%,
-    black 85%,
+    black 10%,
+    black 90%,
     transparent 100%
   );
 }
 
-.lyrics-scroll-content {
-  padding: 200px 0;
+.fs-lyrics-section .lyrics-scroll-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.fs-lyrics-section .lyrics-scroll-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.fs-lyrics-section .lyrics-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.fs-lyrics-section .lyrics-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.fs-lyrics-section .lyrics-content {
+  padding: 50vh 20px;
+  min-height: 100%;
 }
 
 .fs-lyric-line {
   padding: 16px 24px;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 20px;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 16px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  line-height: 1.6;
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  line-height: 1.8;
+  border-radius: 8px;
+  margin: 8px 0;
+  user-select: none;
 }
 
 .fs-lyric-line:hover {
   color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .fs-lyric-line.past {
   color: rgba(255, 255, 255, 0.2);
+  font-size: 14px;
 }
 
 .fs-lyric-line.active {
-  color: white;
-  font-size: 28px;
-  font-weight: 700;
-  text-shadow: 0 2px 20px rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
   transform: scale(1.05);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
 }
 
 .fs-lyric-line.active .lyric-text {
-  background: var(--accent-gradient);
+  background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.now-playing-indicator {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--accent-color);
-  font-size: 16px;
-  animation: beat 1s ease-in-out infinite;
-}
-
-@keyframes beat {
-  0%, 100% { transform: translateY(-50%) scale(1); }
-  50% { transform: translateY(-50%) scale(1.2); }
-}
-
 .next-lyric {
-  padding: 20px;
+  padding: 16px 20px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 14px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
 .next-lyric span {
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.25);
+  margin-right: 8px;
 }
 
 .fs-no-lyrics {
@@ -2906,7 +2886,6 @@ export default {
   box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
 }
 
-/* 播放列表区域 */
 .fs-playlist-section {
   width: 320px;
   display: flex;
@@ -3049,7 +3028,6 @@ export default {
   50% { transform: scaleY(1); }
 }
 
-/* 全屏控制区域 */
 .fs-controls {
   position: relative;
   z-index: 10;
@@ -3075,7 +3053,6 @@ export default {
   font-size: 16px;
 }
 
-/* 进度条 */
 .fs-progress-section {
   display: flex;
   align-items: center;
@@ -3137,7 +3114,6 @@ export default {
   opacity: 1;
 }
 
-/* 控制按钮 */
 .fs-buttons {
   display: flex;
   justify-content: center;
@@ -3254,7 +3230,6 @@ export default {
   background: var(--accent-color);
 }
 
-/* 过渡动画 */
 .slide-up-enter-active, .slide-up-leave-active {
   transition: all 0.3s ease;
 }
@@ -3272,7 +3247,6 @@ export default {
   opacity: 0;
 }
 
-/* 弹窗样式 */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -3292,7 +3266,6 @@ export default {
   z-index: 1200;
 }
 
-/* 现代弹窗样式 */
 .info-modal.modern, .delete-modal.modern, .upload-modal.modern {
   background: var(--bg-primary);
   border-radius: 24px;
@@ -3317,7 +3290,7 @@ export default {
 
 .info-header::after {
   content: '';
-    position: absolute;
+  position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
@@ -3464,7 +3437,6 @@ export default {
   transform: none;
 }
 
-/* 删除确认弹窗 */
 .delete-icon {
   width: 80px;
   height: 80px;
@@ -3529,7 +3501,6 @@ export default {
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
-/* 歌词输入弹窗 */
 .lyrics-input-modal {
   background: var(--bg-primary);
   border-radius: 24px;
@@ -3572,34 +3543,12 @@ export default {
   box-shadow: 0 0 0 3px var(--accent-light);
 }
 
-.lyrics-preview {
-  margin: 16px 0;
-  padding: 16px;
-  background: var(--bg-secondary);
-  border-radius: 12px;
-}
-
-.lyrics-preview h4 {
-  margin: 0 0 12px 0;
-  color: var(--text-primary);
-  font-size: 14px;
-}
-
-.preview-content {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-  max-height: 100px;
-  overflow: hidden;
-}
-
 .lyrics-input-modal .actions {
   display: flex;
   gap: 12px;
   margin-top: 24px;
 }
 
-/* 上传弹窗样式 */
 .upload-modal {
   max-width: 520px;
 }
@@ -3862,7 +3811,6 @@ export default {
   background: var(--bg-tertiary);
 }
 
-/* Toast提示 */
 .toast {
   position: fixed;
   top: 24px;
@@ -3902,7 +3850,6 @@ export default {
   border: none;
 }
 
-/* 快捷键提示 */
 .shortcuts-overlay {
   position: fixed;
   top: 0;
@@ -4006,7 +3953,6 @@ export default {
   border-color: var(--accent-color);
 }
 
-/* 响应式设计 */
 @media (max-width: 1200px) {
   .music-list-container.with-lyrics {
     flex-direction: column;
@@ -4171,12 +4117,12 @@ export default {
   }
   
   .fs-lyric-line {
-    font-size: 16px;
+    font-size: 14px;
     padding: 12px 16px;
   }
   
   .fs-lyric-line.active {
-    font-size: 22px;
+    font-size: 20px;
   }
   
   .info-modal.modern,
@@ -4264,7 +4210,6 @@ export default {
   }
 }
 
-/* 滚动条样式 */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -4284,106 +4229,22 @@ export default {
   background: var(--text-tertiary);
 }
 
-/* 歌词侧边栏滚动条 */
-.lyrics-content::-webkit-scrollbar,
-.fs-playlist-scroll::-webkit-scrollbar,
-.mini-playlist::-webkit-scrollbar {
-  width: 6px;
-}
-
-.lyrics-content::-webkit-scrollbar-thumb,
-.fs-playlist-scroll::-webkit-scrollbar-thumb,
-.mini-playlist::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-/* 选中文本样式 */
 ::selection {
   background: var(--accent-color);
   color: white;
 }
 
-/* 禁用状态 */
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* 焦点样式 */
 button:focus-visible,
 input:focus-visible {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
 }
 
-/* 加载动画 */
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--bg-tertiary);
-  border-top-color: var(--accent-color);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* 音频可视化动画（迷你播放器） */
-.mini-visualizer {
-  display: flex;
-  gap: 3px;
-  align-items: flex-end;
-  height: 20px;
-}
-
-.mini-visualizer span {
-  width: 4px;
-  background: var(--accent-color);
-  border-radius: 2px;
-  animation: visualizer-bar 0.8s ease-in-out infinite;
-}
-
-.mini-visualizer span:nth-child(1) { animation-delay: 0s; height: 30%; }
-.mini-visualizer span:nth-child(2) { animation-delay: 0.1s; height: 60%; }
-.mini-visualizer span:nth-child(3) { animation-delay: 0.2s; height: 40%; }
-.mini-visualizer span:nth-child(4) { animation-delay: 0.3s; height: 80%; }
-
-@keyframes visualizer-bar {
-  0%, 100% { transform: scaleY(0.3); }
-  50% { transform: scaleY(1); }
-}
-
-/* 额外的动画效果 */
-.music-row {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.music-row.playing {
-  animation: pulse-border 2s ease-in-out infinite;
-}
-
-@keyframes pulse-border {
-  0%, 100% { border-left-color: transparent; }
-  50% { border-left-color: var(--accent-color); }
-}
-
-/* 确保模态框在最上层 */
-.modal-overlay {
-  z-index: 1100;
-}
-
-.modal-overlay.info-overlay {
-  z-index: 1200;
-}
-
-.fullscreen-music-player {
-  z-index: 1000;
-}
-
-/* 打印样式 */
 @media print {
   .mini-player,
   .music-tools,

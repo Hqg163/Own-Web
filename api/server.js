@@ -8,6 +8,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const mime = require('mime-types'); // 需要安装: npm install mime-types
+const {imageSize} = require('image-size'); // 需要安装: npm install image-size
+const mm = require('music-metadata');   // 需要安装: npm install music-metadata
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -216,16 +218,6 @@ app.post('/api/register', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, salt);
         
         const insertQuery = `INSERT INTO users (username, email, password) VALUES (?, ?, ?)`;
-
-        // 关键修复：简化路径存储逻辑
-        let relativePath = req.file.path.replace(__dirname, '').replace(/\\/g, '/');
-
-        // 确保路径格式统一为 /uploads/userId/categoryId/filename
-        if (!relativePath.startsWith('/uploads')) {
-          relativePath = '/uploads' + relativePath;
-        }
-
-        console.log('存储的 file_path:', relativePath); // 应该是 /uploads/3/5/file-xxx.jpg
 
         db.query(insertQuery, [username, email, hashedPassword], (err, results) => {
           if (err) return res.status(500).json({ error: '用户注册失败' });
@@ -1004,6 +996,7 @@ const createMusicTable = `
     cover_path VARCHAR(500),
     duration VARCHAR(20),
     lyrics TEXT,
+    play_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )
@@ -1109,11 +1102,20 @@ app.post('/api/entertainment/images', imageUpload.single('image'), (req, res) =>
     const finalTitle = title || req.file.originalname.replace(ext, '');
     const finalStyle = style || '普通';
     
-    // 获取图片尺寸（使用sharp库或手动计算，这里简化处理）
+    // 获取图片尺寸 - 使用 fs 读取文件后再用 image-size
     let width = 0, height = 0;
-    
-    // 这里应该使用图像处理库获取尺寸，暂时设为0
-    // 在实际项目中可以使用 sharp 库：const sharp = require('sharp');
+    try {
+      // const fs = require('fs');
+      const {imageSize} = require('image-size');
+      const buffer = fs.readFileSync(req.file.path);
+      const dimensions = imageSize(buffer);
+      width = dimensions.width || 0;
+      height = dimensions.height || 0;
+    } catch (err) {
+      console.error('读取图片尺寸失败:', err);
+      width = 0;
+      height = 0;
+    }
     
     let relativePath = req.file.path.replace(__dirname, '').replace(/\\/g, '/');
     if (!relativePath.startsWith('/uploads')) {
@@ -1142,6 +1144,50 @@ app.post('/api/entertainment/images', imageUpload.single('image'), (req, res) =>
   }
 });
 
+// 批量更新图片风格
+app.put('/api/entertainment/images/batch-style', (req, res) => {
+  console.log('=== 收到批量归类请求 ===');  // 添加这行
+  console.log('请求体:', req.body);  // 添加这行
+
+  const { imageIds, style, userId } = req.body;
+  
+  if (!imageIds || imageIds.length === 0) {
+    return res.status(400).json({ error: '未选择图片' });
+  }
+  
+  if (!style) {
+    return res.status(400).json({ error: '风格不能为空' });
+  }
+  
+  // 生成占位符，例如：3个id -> '?,?,?'
+  const placeholders = imageIds.map(() => '?').join(',');
+  
+  const updateQuery = `
+    UPDATE entertainment_images 
+    SET style = ?
+    WHERE id IN (${placeholders}) AND user_id = ?
+  `;
+  
+  // 参数顺序：style, id1, id2, id3..., userId
+  const params = [style, ...imageIds, userId];
+  
+  console.log('批量归类SQL:', updateQuery);
+  console.log('参数:', params);
+  
+  db.query(updateQuery, params, (err, result) => {
+    if (err) {
+      console.error('批量归类失败:', err);
+      return res.status(500).json({ error: '批量归类失败: ' + err.message });
+    }
+    
+    console.log('归类成功，影响行数:', result.affectedRows);
+    res.status(200).json({ 
+      message: '归类成功', 
+      affectedRows: result.affectedRows 
+    });
+  });
+});
+
 // 更新图片信息
 app.put('/api/entertainment/images/:imageId', (req, res) => {
   const { imageId } = req.params;
@@ -1156,26 +1202,6 @@ app.put('/api/entertainment/images/:imageId', (req, res) => {
   db.query(updateQuery, [title, style, description, imageId, userId], (err) => {
     if (err) return res.status(500).json({ error: '更新失败' });
     res.status(200).json({ message: '更新成功' });
-  });
-});
-
-// 批量更新图片风格
-app.put('/api/entertainment/images/batch-style', (req, res) => {
-  const { imageIds, style, userId } = req.body;
-  
-  if (!imageIds || imageIds.length === 0) {
-    return res.status(400).json({ error: '未选择图片' });
-  }
-  
-  const updateQuery = `
-    UPDATE entertainment_images 
-    SET style = ?
-    WHERE id IN (?) AND user_id = ?
-  `;
-  
-  db.query(updateQuery, [style, imageIds, userId], (err) => {
-    if (err) return res.status(500).json({ error: '批量归类失败' });
-    res.status(200).json({ message: '归类成功' });
   });
 });
 
@@ -1295,9 +1321,9 @@ app.get('/api/entertainment/videos/:userId', (req, res) => {
 });
 
 // 上传视频
-app.post('/api/entertainment/videos', videoUpload.single('video'), (req, res) => {
+app.post('/api/entertainment/videos', videoUpload.single('video'), async (req, res) => {
   try {
-    const { userId, title, frameRate, frameCount } = req.body;
+    const { userId, title } = req.body;
     
     if (!req.file) {
       return res.status(400).json({ error: '请选择视频文件' });
@@ -1306,6 +1332,58 @@ app.post('/api/entertainment/videos', videoUpload.single('video'), (req, res) =>
     const ext = path.extname(req.file.originalname).toLowerCase();
     const finalTitle = title || req.file.originalname.replace(ext, '');
     
+    // 使用 fluent-ffmpeg 获取视频信息
+    let duration = '0:00';
+    let frameRate = '未知';
+    let frameCount = 0;
+    
+    try {
+      const ffmpeg = require('fluent-ffmpeg');
+      
+      // 获取视频元数据
+      const metadata = await new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(req.file.path, (err, data) => {
+          if (err) reject(err);
+          else resolve(data);
+        });
+      });
+      
+      // 提取时长
+      if (metadata.format && metadata.format.duration) {
+        const totalSeconds = Math.floor(metadata.format.duration);
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = totalSeconds % 60;
+        duration = `${mins}:${secs.toString().padStart(2, '0')}`;
+      }
+      
+      // 提取帧率和帧数
+      if (metadata.streams && metadata.streams[0]) {
+        const videoStream = metadata.streams.find(s => s.codec_type === 'video') || metadata.streams[0];
+        
+        // 帧率 (fps)
+        if (videoStream.r_frame_rate) {
+          const [num, den] = videoStream.r_frame_rate.split('/').map(Number);
+          frameRate = den ? Math.round(num / den) + 'fps' : videoStream.r_frame_rate;
+        } else if (videoStream.avg_frame_rate) {
+          const [num, den] = videoStream.avg_frame_rate.split('/').map(Number);
+          frameRate = den ? Math.round(num / den) + 'fps' : videoStream.avg_frame_rate;
+        }
+        
+        // 帧数
+        if (videoStream.nb_frames) {
+          frameCount = parseInt(videoStream.nb_frames);
+        } else if (metadata.format.duration && frameRate !== '未知') {
+          // 估算帧数 = 时长 * 帧率
+          const fps = parseInt(frameRate);
+          frameCount = Math.round(metadata.format.duration * fps);
+        }
+      }
+      
+    } catch (err) {
+      console.error('读取视频元数据失败:', err);
+      // 使用默认值继续上传
+    }
+    
     let relativePath = req.file.path.replace(__dirname, '').replace(/\\/g, '/');
     if (!relativePath.startsWith('/uploads')) {
       relativePath = '/uploads' + relativePath;
@@ -1313,13 +1391,13 @@ app.post('/api/entertainment/videos', videoUpload.single('video'), (req, res) =>
     
     const insertQuery = `
       INSERT INTO entertainment_videos 
-      (user_id, title, file_type, file_size, file_path, frame_rate, frame_count) 
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (user_id, title, file_type, file_size, file_path, duration, frame_rate, frame_count) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     db.query(insertQuery, [
       userId, finalTitle, ext, req.file.size, 
-      relativePath, frameRate || '', parseInt(frameCount) || 0
+      relativePath, duration, frameRate, frameCount
     ], (err, result) => {
       if (err) {
         fs.unlinkSync(req.file.path);
@@ -1472,9 +1550,9 @@ app.get('/api/entertainment/music/:userId', (req, res) => {
 });
 
 // 上传音乐
-app.post('/api/entertainment/music', musicUpload.single('music'), (req, res) => {
+app.post('/api/entertainment/music', musicUpload.single('music'), async (req, res) => {
   try {
-    const { userId, title, artist, releaseDate, duration } = req.body;
+    const { userId, title, artist, album, releaseDate } = req.body;
     
     if (!req.file) {
       return res.status(400).json({ error: '请选择音乐文件' });
@@ -1483,6 +1561,36 @@ app.post('/api/entertainment/music', musicUpload.single('music'), (req, res) => 
     const ext = path.extname(req.file.originalname).toLowerCase();
     const finalTitle = title || req.file.originalname.replace(ext, '');
     
+    // 使用 music-metadata 解析音频文件获取时长和元数据
+    let duration = '0:00';
+    let finalArtist = artist || '未知歌手';
+    let finalAlbum = album || '';
+    
+    try {
+      const metadata = await mm.parseFile(req.file.path);
+      
+      // 获取时长（转换为 mm:ss 格式）
+      if (metadata.format.duration) {
+        const totalSeconds = Math.floor(metadata.format.duration);
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = totalSeconds % 60;
+        duration = `${mins}:${secs.toString().padStart(2, '0')}`;
+      }
+      
+      // 从元数据获取歌手和专辑（如果前端没提供）
+      if (metadata.common) {
+        if (!artist && metadata.common.artist) {
+          finalArtist = metadata.common.artist;
+        }
+        if (!album && metadata.common.album) {
+          finalAlbum = metadata.common.album;
+        }
+      }
+    } catch (err) {
+      console.error('解析音频元数据失败:', err);
+      // 解析失败时继续使用默认值
+    }
+    
     let relativePath = req.file.path.replace(__dirname, '').replace(/\\/g, '/');
     if (!relativePath.startsWith('/uploads')) {
       relativePath = '/uploads' + relativePath;
@@ -1490,19 +1598,24 @@ app.post('/api/entertainment/music', musicUpload.single('music'), (req, res) => 
     
     const insertQuery = `
       INSERT INTO entertainment_music 
-      (user_id, title, artist, release_date, file_type, file_size, file_path, duration) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, title, artist, album, release_date, file_type, file_size, file_path, duration) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     db.query(insertQuery, [
-      userId, finalTitle, artist || '未知歌手', releaseDate || null,
-      ext, req.file.size, relativePath, duration || '0:00'
+      userId, finalTitle, finalArtist, finalAlbum, releaseDate || null,
+      ext, req.file.size, relativePath, duration
     ], (err, result) => {
       if (err) {
         fs.unlinkSync(req.file.path);
         return res.status(500).json({ error: '保存音乐信息失败' });
       }
-      res.status(201).json({ message: '上传成功', musicId: result.insertId });
+      res.status(201).json({ 
+        message: '上传成功', 
+        musicId: result.insertId,
+        duration: duration,
+        fileSize: req.file.size
+      });
     });
   } catch (error) {
     console.error('上传音乐错误:', error);
@@ -1567,6 +1680,37 @@ app.put('/api/entertainment/music/:musicId/lyrics', (req, res) => {
   db.query(updateQuery, [lyrics, musicId, userId], (err) => {
     if (err) return res.status(500).json({ error: '更新歌词失败' });
     res.status(200).json({ message: '更新成功' });
+  });
+});
+
+// 更新播放次数
+app.post('/api/entertainment/music/:musicId/play', (req, res) => {
+  const { musicId } = req.params;
+  const { userId } = req.body;
+  
+  // 先检查音乐是否存在且属于该用户
+  const checkQuery = 'SELECT id FROM entertainment_music WHERE id = ? AND user_id = ?';
+  db.query(checkQuery, [musicId, userId], (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: '查询失败' });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ error: '音乐不存在' });
+    }
+    
+    // 更新播放次数 - 需要先添加 play_count 字段到数据库表
+    const updateQuery = `
+      UPDATE entertainment_music 
+      SET play_count = COALESCE(play_count, 0) + 1 
+      WHERE id = ?
+    `;
+    
+    db.query(updateQuery, [musicId], (err) => {
+      if (err) {
+        return res.status(500).json({ error: '更新播放次数失败' });
+      }
+      res.status(200).json({ message: '播放次数已更新' });
+    });
   });
 });
 

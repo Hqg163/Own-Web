@@ -167,6 +167,10 @@
           <input type="text" v-model="uploadMusicForm.artist" placeholder="输入歌手名" required />
         </div>
         <div class="form-group">
+          <label>专辑（可选）</label>
+          <input type="text" v-model="uploadMusicForm.album" placeholder="输入专辑名" />
+        </div>
+        <div class="form-group">
           <label>发行时间（可选）</label>
           <input type="date" v-model="uploadMusicForm.releaseDate" />
         </div>
@@ -210,7 +214,7 @@ export default {
       // 上传表单
       uploadImageForm: { title: '', style: '普通', file: null },
       uploadVideoForm: { title: '', file: null },
-      uploadMusicForm: { title: '', artist: '', releaseDate: '', file: null },
+      uploadMusicForm: { title: '', artist: '', album: '', releaseDate: '', file: null },
       
       // 缩略图预览
       thumbnailImage: null,
@@ -363,6 +367,7 @@ export default {
       formData.append('userId', this.userId)
       formData.append('title', this.uploadMusicForm.title)
       formData.append('artist', this.uploadMusicForm.artist)
+      formData.append('album', this.uploadMusicForm.album)  // 添加专辑
       formData.append('releaseDate', this.uploadMusicForm.releaseDate)
       
       try {
