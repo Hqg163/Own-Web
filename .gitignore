@@ -25,3 +25,24 @@ dist-ssr
 
 # 排除上传目录
 api/uploads/*
+
+# 本地环境与敏感配置
+.env
+.env.*
+!.env.example
+
+# 本地测试媒体与个人资源
+web图片/
+web视频/
+web音乐/
+
+# 数据库备份与临时文件
+*.sql
+*.sql.gz
+*.bak
+*.tmp
+*.temp
+
+# FFmpeg / media processing leftovers
+*.part
+*.crdownload
