@@ -1,23 +1,7 @@
-// index.js - 修改后的路由配置
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 import Layout from '../layouts/Layout.vue'
-import Home from '../views/Home.vue'
-import PersonalCenter from '../views/PersonalCenter.vue'
-import Login from '../views/Login.vue'
-import Register from '../views/Register.vue'
-import About from '../views/About.vue'
-import Creation from '../views/Creation.vue'
 
-// 导入娱乐区组件
-import Entertainment from '../views/Entertainment.vue'
-import ImageZone from '../views/entertainment/ImageZone.vue'
-import VideoZone from '../views/entertainment/VideoZone.vue'
-import MusicZone from '../views/entertainment/MusicZone.vue'
-
-// 导入学习区组件
-import StudyZone from '../views/StudyZone.vue'
-
-const routes = [
+const routes: RouteRecordRaw[] = [
   {
     path: '/',
     component: Layout,
@@ -25,72 +9,69 @@ const routes = [
       {
         path: '',
         name: 'Home',
-        component: Home
+        component: () => import('../views/Home.vue')
       },
       {
         path: 'personal',
         name: 'PersonalCenter',
-        component: PersonalCenter,
-        redirect: '/personal/info',  // 默认重定向到个人信息
+        component: () => import('../views/PersonalCenter.vue'),
+        redirect: '/personal/info',
         meta: { requiresAuth: true },
         children: [
           {
             path: 'info',
             name: 'PersonalInfo',
-            component: () => import('../views/PersonalInfo.vue')  // 需要创建这个文件
+            component: () => import('../views/PersonalInfo.vue')
           },
           {
             path: 'study',
             name: 'StudyZone',
-            component: StudyZone
+            component: () => import('../views/StudyZone.vue')
           },
           {
             path: 'entertainment',
             name: 'Entertainment',
-            component: Entertainment
+            component: () => import('../views/Entertainment.vue')
           },
           {
             path: 'entertainment/images',
             name: 'ImageZone',
-            component: ImageZone,
-            meta: { requiresAuth: true }
+            component: () => import('../views/entertainment/ImageZone.vue')
           },
           {
             path: 'entertainment/videos',
             name: 'VideoZone',
-            component: VideoZone,
-            meta: { requiresAuth: true }
+            component: () => import('../views/entertainment/VideoZone.vue')
           },
           {
             path: 'entertainment/music',
             name: 'MusicZone',
-            component: MusicZone,
-            meta: { requiresAuth: true }
+            component: () => import('../views/entertainment/MusicZone.vue')
           }
         ]
       },
       {
         path: 'creation',
         name: 'Creation',
-        component: Creation
+        component: () => import('../views/Creation.vue')
       },
       {
         path: 'about',
         name: 'About',
-        component: About
+        component: () => import('../views/About.vue')
       }
     ]
   },
   {
     path: '/login',
     name: 'Login',
-    component: Login,
+    component: () => import('../views/Login.vue'),
     meta: { guestOnly: true }
   },
   {
     path: '/register',
     name: 'Register',
-    component: Register,
+    component: () => import('../views/Register.vue'),
     meta: { guestOnly: true }
   }
 ]
@@ -103,20 +84,20 @@ const router = createRouter({
   }
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
-  
+
   if (to.meta.requiresAuth && !isLoggedIn) {
     localStorage.setItem('redirectAfterLogin', to.fullPath)
     next('/login')
     return
   }
-  
+
   if (to.meta.guestOnly && isLoggedIn) {
     next('/personal')
     return
   }
-  
+
   next()
 })
 

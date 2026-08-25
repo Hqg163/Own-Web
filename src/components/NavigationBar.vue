@@ -3,13 +3,13 @@
     <nav class="navbar" :class="themeClass">
       <ul class="nav-links">
         <li v-for="link in navLinks" :key="link.name">
-          <a 
-            href="javascript:void(0)" 
+          <button 
+            type="button"
             :class="['nav-link', { 'active': isActive(link.to) }]"
-            @click.prevent="handleNavClick(link)"
+            @click="handleNavClick(link)"
           >
             {{ link.name }}
-          </a>
+          </button>
         </li>
       </ul>
       
@@ -17,14 +17,14 @@
         <!-- 未登录显示登录/注册按钮 -->
         <template v-if="!isLoggedIn">
           <li>
-            <a href="javascript:void(0)" class="auth-link login-link" @click="goToLogin">
+            <button type="button" class="auth-link login-link" @click="goToLogin">
               登录
-            </a>
+            </button>
           </li>
           <li>
-            <a href="javascript:void(0)" class="auth-link register-link" @click="goToRegister">
+            <button type="button" class="auth-link register-link" @click="goToRegister">
               注册
-            </a>
+            </button>
           </li>
         </template>
         
@@ -34,15 +34,15 @@
             <span class="user-greeting">你好, {{ currentUser.username || '用户' }}</span>
           </li>
           <li>
-            <a href="javascript:void(0)" class="auth-link logout-link" @click="logout">
+            <button type="button" class="auth-link logout-link" @click="logout">
               退出登录
-            </a>
+            </button>
           </li>
         </template>
       </ul>
       
       <div class="theme-toggle">
-        <div class="theme-icon sun-icon" :class="{ active: !isDarkMode }" @click="switchToLightMode">
+        <button type="button" class="theme-icon sun-icon" :class="{ active: !isDarkMode }" aria-label="切换到白天模式" @click="switchToLightMode">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="5" fill="currentColor" />
             <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
@@ -56,18 +56,18 @@
               <line x1="17.66" y1="6.34" x2="19.78" y2="4.22" />
             </g>
           </svg>
-        </div>
+        </button>
 
         <label class="switch">
           <input type="checkbox" v-model="isDarkMode" @change="toggleTheme" />
           <span class="slider round"></span>
         </label>
 
-        <div class="theme-icon moon-icon" :class="{ active: isDarkMode }" @click="switchToDarkMode">
+        <button type="button" class="theme-icon moon-icon" :class="{ active: isDarkMode }" aria-label="切换到黑夜模式" @click="switchToDarkMode">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" />
           </svg>
-        </div>
+        </button>
 
         <span class="theme-label">{{ isDarkMode ? '黑夜' : '白天' }}</span>
       </div>
@@ -76,6 +76,8 @@
 </template>
 
 <script>
+import axios from '@/services/http'
+
 export default {
   name: 'NavigationBar',
   data() {
@@ -122,7 +124,7 @@ export default {
     },
     
     isActive(path) {
-      return this.$route.path === path;
+      return this.$route.path === path || this.$route.path.startsWith(`${path}/`);
     },
 
     toggleTheme() {
@@ -164,14 +166,18 @@ export default {
       this.$router.push('/register');
     },
 
-    logout() {
-      // 清除登录状态
+    async logout() {
+      try {
+        await axios.post('/api/logout')
+      } catch (error) {
+        console.warn('退出服务端会话失败:', error)
+      }
+
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('userInfo');
       localStorage.removeItem('userId');
       localStorage.removeItem('userEmail');
       
-      // 修改5：立即更新组件内部状态（关键！）
       this.loginStatus = false;
       this.userData = {};
       
@@ -179,7 +185,6 @@ export default {
       if (this.$route.meta.requiresAuth) {
         this.$router.push('/');
       }
-      // 删除 this.$router.go(0)，避免页面刷新，依靠watch来更新
     },
 
     handleNavClick(link) {
@@ -236,6 +241,8 @@ export default {
 }
 
 .nav-link, .auth-link {
+  font-family: inherit;
+  appearance: none;
   text-decoration: none;
   font-size: 15px;
   font-weight: 500;
@@ -448,6 +455,10 @@ input:checked + .slider:before {
 
 /* 图标样式 */
 .theme-icon {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
   display: flex;
   align-items: center;
   justify-content: center;

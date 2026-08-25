@@ -1,6 +1,6 @@
 <!-- src/layouts/Layout.vue -->
 <template>
-  <div id="app">
+  <div class="app-shell">
     <NavigationBar />
     <router-view class="page" />
   </div>

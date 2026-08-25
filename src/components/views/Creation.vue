@@ -2,19 +2,14 @@
   <div :class="themeClass" class="page-container">
     <div class="content">
       <h1>创作中心</h1>
-      <p class="placeholder">开发中...</p>
+      <p class="placeholder">创作中心正在建设中，后续将支持文章、笔记和内容发布。</p>
     </div>
   </div>
 </template>
 
 <script>
-import NavigationBar from '../NavigationBar.vue'
-
 export default {
   name: 'Creation',
-  components: {
-    NavigationBar
-  },
   data() {
     return {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode'

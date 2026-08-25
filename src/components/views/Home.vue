@@ -4,34 +4,29 @@
       <h1>Welcome to Own-Web</h1>
       <p>这里是您的个人网站首页</p>
       <div class="features">
-        <div class="feature-card">
+        <router-link class="feature-card" to="/creation">
           <span class="icon">📝</span>
           <h3>创作中心</h3>
           <p>记录您的想法和创意</p>
-        </div>
-        <div class="feature-card">
+        </router-link>
+        <router-link class="feature-card" to="/personal">
           <span class="icon">👤</span>
           <h3>个人中心</h3>
           <p>管理您的个人信息</p>
-        </div>
-        <div class="feature-card">
+        </router-link>
+        <router-link class="feature-card" to="/personal/entertainment">
           <span class="icon">🎮</span>
           <h3>娱乐区</h3>
           <p>放松身心的空间</p>
-        </div>
+        </router-link>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import NavigationBar from '../NavigationBar.vue'
-
 export default {
   name: 'Home',
-  components: {
-    NavigationBar
-  },
   data() {
     return {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode'
@@ -100,6 +95,8 @@ export default {
 }
 
 .feature-card {
+  color: inherit;
+  text-decoration: none;
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   border-radius: 16px;
