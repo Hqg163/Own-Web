@@ -123,7 +123,7 @@
                   {{ getStudyFileIcon(file.file_type) }}
                 </div>
                 <div class="study-file-name" :title="getDisplayFileName(file)">
-                  <span v-html="getHighlightedFileName(file)"></span>
+                  <span>{{ getDisplayFileName(file) }}</span>
                 </div>
                 <div class="study-file-meta">{{ formatStudyDate(file.created_at) }}</div>
               </div>
@@ -153,7 +153,7 @@
                 {{ getStudyFileIcon(file.file_type) }}
               </div>
               <div class="study-file-name" :title="getDisplayFileName(file)">
-                <span v-html="getHighlightedFileName(file)"></span>
+                <span>{{ getDisplayFileName(file) }}</span>
               </div>
               <div class="study-file-meta">{{ formatStudyDate(file.created_at) }}</div>
             </div>
@@ -573,7 +573,7 @@
             </div>
             
             <!-- 邮件正文 -->
-            <div class="email-body-text" v-html="formatEmailContent(viewingEmail.content)"></div>
+            <div class="email-body-text">{{ viewingEmail.content }}</div>
             
             <!-- 附件部分 - 使用更稳定的条件判断 -->
             <div v-if="emailHasAttachments" class="email-attachments-section">
@@ -659,8 +659,9 @@
 </template>
 
 <script>
-import axios from 'axios'
+import axios from '@/services/http'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 export default {
   name: 'StudyZone',
@@ -769,11 +770,11 @@ export default {
       })
     },
     renderedMarkdown() {
-      return marked(this.markdownContent || '')
+      return DOMPurify.sanitize(marked.parse(this.markdownContent || ''))
     },
     renderedFileMarkdown() {
       if (this.studyFileContent && this.studyFileContent.content) {
-        return marked(this.studyFileContent.content)
+        return DOMPurify.sanitize(marked.parse(this.studyFileContent.content))
       }
       return ''
     },
@@ -1223,33 +1224,18 @@ export default {
       this.viewingStudyFile = file;
       this.currentStudyFileIndex = this.currentStudyFiles.findIndex(f => f.id === file.id);
       
-      let fileUrl = file.file_path || '';
-      
-      if (!fileUrl.startsWith('/')) {
-        fileUrl = '/' + fileUrl;
-      }
-      
-      fileUrl = fileUrl.replace(/^\/uploads\/uploads\//, '/uploads/');
-      
-      console.log('预览文件:', file.original_name, 'URL:', fileUrl);
-      
       if (this.isImageType(file.file_type) || this.isVideoType(file.file_type) || 
           this.isAudioType(file.file_type) || this.isPdfType(file.file_type)) {
-        
-        const fullUrl = `${fileUrl}?t=${Date.now()}`;
-        
-        console.log('完整预览URL:', fullUrl);
-        
         this.studyFileContent = {
           type: 'binary',
-          url: fullUrl,
+          url: `/api/file-stream/${file.id}`,
           file: file
         };
         return;
       }
       
       try {
-        const res = await axios.get(`/api/file-content/${file.id}?userId=${this.userId}`);
+        const res = await axios.get(`/api/file-content/${file.id}`);
         this.studyFileContent = res.data;
       } catch (err) {
         this.showStudyToast('加载文件失败', 'error');
