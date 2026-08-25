@@ -1,3 +1,4 @@
+// index.js - 修改后的路由配置
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Layout from '../layouts/Layout.vue'
 import Home from '../views/Home.vue'
@@ -13,6 +14,9 @@ import ImageZone from '../views/entertainment/ImageZone.vue'
 import VideoZone from '../views/entertainment/VideoZone.vue'
 import MusicZone from '../views/entertainment/MusicZone.vue'
 
+// 导入学习区组件
+import StudyZone from '../views/StudyZone.vue'
+
 const routes = [
   {
     path: '/',
@@ -26,39 +30,44 @@ const routes = [
       {
         path: 'personal',
         name: 'PersonalCenter',
+        component: PersonalCenter,
         redirect: '/personal/info',  // 默认重定向到个人信息
-        meta: { requiresAuth: true }
-      },
-      {
-        path: 'personal/info',
-        name: 'PersonalInfo',
-        component: PersonalCenter,  // 个人信息页面
-        meta: { requiresAuth: true }
-      },
-      // 娱乐区路由 - 与个人信息平级，但都受个人中心保护
-      {
-        path: 'personal/entertainment',
-        name: 'Entertainment',
-        component: Entertainment,
-        meta: { requiresAuth: true }
-      },
-      {
-        path: 'personal/entertainment/images',
-        name: 'ImageZone',
-        component: ImageZone,
-        meta: { requiresAuth: true }
-      },
-      {
-        path: 'personal/entertainment/videos',
-        name: 'VideoZone',
-        component: VideoZone,
-        meta: { requiresAuth: true }
-      },
-      {
-        path: 'personal/entertainment/music',
-        name: 'MusicZone',
-        component: MusicZone,
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true },
+        children: [
+          {
+            path: 'info',
+            name: 'PersonalInfo',
+            component: () => import('../views/PersonalInfo.vue')  // 需要创建这个文件
+          },
+          {
+            path: 'study',
+            name: 'StudyZone',
+            component: StudyZone
+          },
+          {
+            path: 'entertainment',
+            name: 'Entertainment',
+            component: Entertainment
+          },
+          {
+            path: 'entertainment/images',
+            name: 'ImageZone',
+            component: ImageZone,
+            meta: { requiresAuth: true }
+          },
+          {
+            path: 'entertainment/videos',
+            name: 'VideoZone',
+            component: VideoZone,
+            meta: { requiresAuth: true }
+          },
+          {
+            path: 'entertainment/music',
+            name: 'MusicZone',
+            component: MusicZone,
+            meta: { requiresAuth: true }
+          }
+        ]
       },
       {
         path: 'creation',
