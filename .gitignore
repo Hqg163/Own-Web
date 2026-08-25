@@ -35,6 +35,7 @@ api/uploads/*
 web图片/
 web视频/
 web音乐/
+prompt提示词/
 
 # 数据库备份与临时文件
 *.sql
