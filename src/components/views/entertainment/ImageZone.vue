@@ -624,10 +624,7 @@ export default {
     },
     
     saveWithReplace() {
-      // 实现替换逻辑
-      this.showToast('图片已替换')
-      this.showSaveOptions = false
-      this.closeEditor()
+      this.showToast('编辑后的图片保存接口尚未实现，原图未被修改', 'error')
     },
     
     saveAsNew() {
@@ -635,11 +632,7 @@ export default {
     },
     
     confirmNewName() {
-      // 保存为新图片的逻辑
-      this.showToast('新图片已生成')
-      this.showNewNameInput = false
-      this.showSaveOptions = false
-      this.closeEditor()
+      this.showToast('导出新图片的保存接口尚未实现，未创建新文件', 'error')
     },
     
     // 批量操作

@@ -976,11 +976,11 @@ export default {
     },
     
     splitClip() {
-      this.showToast('分割功能：在当前播放位置将视频分成两段（演示功能）')
+      this.showToast('视频分割尚未接入后端处理，本次未生成文件', 'error')
     },
     
     trimVideo() {
-      this.showToast(`已设置裁剪范围：${this.formatTime(this.clipStart)} - ${this.formatTime(this.clipEnd)}`)
+      this.showToast(`已设置预览范围：${this.formatTime(this.clipStart)} - ${this.formatTime(this.clipEnd)}；导出尚未实现`, 'error')
     },
     
     resetAdjustments() {
@@ -1034,23 +1034,11 @@ export default {
     },
     
     saveWithReplace() {
-      this.processingVideo = true
-      setTimeout(() => {
-        this.processingVideo = false
-        this.showToast('视频已覆盖（演示：实际需后端处理）')
-        this.showSaveOptions = false
-        this.closeEditor()
-      }, 2000)
+      this.showToast('视频导出接口尚未实现，原视频未被修改', 'error')
     },
     
     saveAsNew() {
-      this.processingVideo = true
-      setTimeout(() => {
-        this.processingVideo = false
-        this.showToast('新视频已生成（演示：实际需后端处理）')
-        this.showSaveOptions = false
-        this.closeEditor()
-      }, 2000)
+      this.showToast('视频导出接口尚未实现，未创建新视频', 'error')
     },
     
     // ========== 上传相关方法 ==========
