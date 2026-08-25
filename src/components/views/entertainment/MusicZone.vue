@@ -579,7 +579,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import axios from '@/services/http'
 
 export default {
   name: 'MusicZone',
@@ -638,7 +638,8 @@ export default {
       uploadForm: { title: '', artist: '', album: '', releaseDate: '', file: null },
       errors: {},
       
-      toast: { show: false, message: '', type: 'success' }
+      toast: { show: false, message: '', type: 'success' },
+      themeHandler: null
     }
   },
   computed: {
@@ -708,13 +709,15 @@ export default {
   },
   beforeUnmount() {
     this.removeKeyboardShortcuts()
+    if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler)
     if (this.$refs.audioPlayer) this.$refs.audioPlayer.pause()
   },
   methods: {
     setupThemeListener() {
-      window.addEventListener('theme-changed', (e) => {
+      this.themeHandler = (e) => {
         this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
-      })
+      }
+      window.addEventListener('theme-changed', this.themeHandler)
     },
     
     loadVolumeSetting() {
@@ -815,8 +818,7 @@ export default {
     },
     
     getMusicUrl(music) {
-      if (music.file_path && music.file_path.startsWith('/uploads')) return music.file_path
-      return `/api/entertainment/music-file/${music.id}?userId=${this.userId}`
+      return `/api/entertainment/music-file/${music.id}`
     },
     
     formatDuration(duration) {

@@ -192,7 +192,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import axios from '@/services/http'
 
 export default {
   name: 'Entertainment',
@@ -220,7 +220,8 @@ export default {
       thumbnailImage: null,
       
       // 提示
-      toast: { show: false, message: '', type: 'success' }
+      toast: { show: false, message: '', type: 'success' },
+      themeHandler: null
     }
   },
   created() {
@@ -233,11 +234,15 @@ export default {
     this.loadRecentData()
     this.setupThemeListener()
   },
+  beforeUnmount() {
+    if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler)
+  },
   methods: {
     setupThemeListener() {
-      window.addEventListener('theme-changed', (e) => {
+      this.themeHandler = (e) => {
         this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
-      })
+      }
+      window.addEventListener('theme-changed', this.themeHandler)
     },
     
     async loadRecentData() {
@@ -267,11 +272,7 @@ export default {
     },
     
     getImageUrl(image) {
-      // 直接使用存储的路径
-      if (image.file_path && image.file_path.startsWith('/uploads')) {
-        return image.file_path
-      }
-      return `/api/entertainment/image-file/${image.id}?userId=${this.userId}`
+      return `/api/entertainment/image-file/${image.id}`
     },
     
     goToImageZone() {

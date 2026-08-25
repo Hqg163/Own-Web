@@ -93,7 +93,7 @@
 
 <script>
 import NavigationBar from '../NavigationBar.vue'
-import axios from 'axios'
+import axios from '@/services/http'
 
 export default {
   name: 'Login',

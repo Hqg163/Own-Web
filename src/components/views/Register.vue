@@ -106,7 +106,7 @@
 
 <script>
 import NavigationBar from '../NavigationBar.vue'
-import axios from 'axios'
+import axios from '@/services/http'
 
 export default {
   name: 'Register',
@@ -130,7 +130,7 @@ export default {
     window.addEventListener('theme-changed', this.handleThemeChange)
     
     // 如果已登录，跳转到首页
-    if (localStorage.getItem('isLoggedIn')) {
+    if (localStorage.getItem('isLoggedIn') === 'true') {
       this.$router.push('/')
     }
   },

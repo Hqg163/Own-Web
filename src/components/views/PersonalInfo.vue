@@ -293,7 +293,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import axios from '@/services/http'
 
 const clickOutside = {
   mounted(el, binding) {
@@ -343,7 +343,8 @@ export default {
         occupation: '',
         notes: ''
       },
-      originalUserInfo: {}
+      originalUserInfo: {},
+      themeHandler: null
     }
   },
   computed: {
@@ -418,22 +419,23 @@ export default {
     // 关键修改：添加主题监听器
     this.setupThemeListener()
   },
+  beforeUnmount() {
+    if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler)
+  },
   methods: {
     // 关键修改：添加主题监听方法
     setupThemeListener() {
-      window.addEventListener('theme-changed', (e) => {
+      this.themeHandler = (e) => {
         this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
-      })
+      }
+      window.addEventListener('theme-changed', this.themeHandler)
     },
     async loadUserInfo() {
       try {
-        const userId = localStorage.getItem('userId')
-        if (userId) {
-          const response = await axios.get(`/api/user/${userId}`)
-          this.userInfo = response.data.user
-          this.userInfo.password = '********'
-          this.originalUserInfo = { ...this.userInfo }
-        }
+        const response = await axios.get('/api/me')
+        this.userInfo = response.data.user
+        this.userInfo.password = '********'
+        this.originalUserInfo = { ...this.userInfo }
       } catch (error) {
         console.error('加载用户信息失败:', error)
       }

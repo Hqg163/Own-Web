@@ -296,7 +296,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import axios from '@/services/http'
 
 export default {
   name: 'ImageZone',
@@ -350,7 +350,8 @@ export default {
       // 图片变换
       imageScale: 1,
       
-      toast: { show: false, message: '', type: 'success' }
+      toast: { show: false, message: '', type: 'success' },
+      themeHandler: null
     }
   },
   computed: {
@@ -384,11 +385,15 @@ export default {
     this.loadImages()
     this.setupThemeListener()
   },
+  beforeUnmount() {
+    if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler)
+  },
   methods: {
     setupThemeListener() {
-      window.addEventListener('theme-changed', (e) => {
+      this.themeHandler = (e) => {
         this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
-      })
+      }
+      window.addEventListener('theme-changed', this.themeHandler)
     },
     
     async loadImages() {
@@ -401,10 +406,7 @@ export default {
     },
     
     getImageUrl(image) {
-      if (image.file_path && image.file_path.startsWith('/uploads')) {
-        return image.file_path
-      }
-      return `/api/entertainment/image-file/${image.id}?userId=${this.userId}`
+      return `/api/entertainment/image-file/${image.id}`
     },
     
     handleImageError(e) {

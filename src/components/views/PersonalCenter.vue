@@ -34,7 +34,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import axios from '@/services/http'
 
 export default {
   name: 'PersonalCenter',
@@ -49,11 +49,12 @@ export default {
       userInfo: {
         username: '',
         email: ''
-      }
+      },
+      themeHandler: null
     }
   },
   created() {
-    if (!localStorage.getItem('isLoggedIn')) {
+    if (localStorage.getItem('isLoggedIn') !== 'true') {
       this.$router.push('/login')
       return
     }
@@ -62,9 +63,10 @@ export default {
   },
   methods: {
     setupThemeListener() {
-      window.addEventListener('theme-changed', (e) => {
+      this.themeHandler = (e) => {
         this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
-      })
+      }
+      window.addEventListener('theme-changed', this.themeHandler)
     },
     isActive(optionId) {
       // 根据当前路由判断哪个选项是激活的
@@ -73,26 +75,25 @@ export default {
         'study': '/personal/study',
         'entertainment': '/personal/entertainment'
       }
-      return this.$route.path === routeMap[optionId]
+      const route = routeMap[optionId]
+      return this.$route.path === route || this.$route.path.startsWith(`${route}/`)
     },
     selectOption(optionId) {
-      const routeMap = {
-        'personal-info': '/personal/info',
-        'study': '/personal/study',
-        'entertainment': '/personal/entertainment'
-      }
-      this.$router.push(routeMap[optionId])
+      const option = this.options.find(item => item.id === optionId)
+      if (option) this.$router.push(option.route)
     },
     async loadUserInfo() {
       try {
-        const userId = localStorage.getItem('userId')
-        if (userId) {
-          const response = await axios.get(`/api/user/${userId}`)
-          this.userInfo = response.data.user
-        }
+        const response = await axios.get('/api/me')
+        this.userInfo = response.data.user
       } catch (error) {
         console.error('加载用户信息失败:', error)
       }
+    }
+  },
+  beforeUnmount() {
+    if (this.themeHandler) {
+      window.removeEventListener('theme-changed', this.themeHandler)
     }
   }
 }

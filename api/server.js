@@ -1,45 +1,163 @@
 
+const path = require('path');
+const fs = require('fs');
+const dotenv = require('dotenv');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const mysql = require('mysql2');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const mime = require('mime-types'); // 需要安装: npm install mime-types
-const {imageSize} = require('image-size'); // 需要安装: npm install image-size
-const mm = require('music-metadata');   // 需要安装: npm install music-metadata
+const mime = require('mime-types');
+const { imageSize } = require('image-size');
+const mm = require('music-metadata');
+
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
+const requiredEnv = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'AUTH_SECRET'];
+const missingEnv = requiredEnv.filter((key) => !process.env[key]);
+if (missingEnv.length > 0) {
+  console.error(`[config] Missing required environment variables: ${missingEnv.join(', ')}`);
+  process.exit(1);
+}
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || 3000);
+const DB_PORT = Number(process.env.DB_PORT || 3306);
+const UPLOAD_ROOT = path.resolve(__dirname, 'uploads');
+const AUTH_COOKIE_NAME = 'own_web_session';
+const AUTH_EXPIRES_IN = process.env.AUTH_EXPIRES_IN || '7d';
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-// 允许跨域请求
-app.use(cors());
-// 解析 JSON 请求体
+function resolveStoredFile(storedPath) {
+  const normalizedPath = String(storedPath || '').replace(/^[/\\]+/, '');
+  const resolvedPath = path.resolve(__dirname, normalizedPath);
+  if (resolvedPath !== UPLOAD_ROOT && !resolvedPath.startsWith(`${UPLOAD_ROOT}${path.sep}`)) {
+    return null;
+  }
+  return resolvedPath;
+}
+
+function safePathSegment(value, fallback = 'unknown') {
+  const segment = String(value ?? '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+  return segment || fallback;
+}
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Origin is not allowed by CORS'));
+  },
+  credentials: true
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// 静态文件服务 - 用于访问上传的文件
-// 在 server.js 中，修改静态文件服务配置
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-  setHeaders: (res, filePath) => {
-    // 自动设置正确的 Content-Type
-    const mimeType = mime.lookup(filePath);
-    if (mimeType) {
-      res.setHeader('Content-Type', mimeType);
-    }
-    // 禁用缓存，确保实时预览
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+function parseCookies(cookieHeader = '') {
+  return cookieHeader.split(';').reduce((cookies, item) => {
+    const separatorIndex = item.indexOf('=');
+    if (separatorIndex === -1) return cookies;
+    const key = item.slice(0, separatorIndex).trim();
+    const value = item.slice(separatorIndex + 1).trim();
+    cookies[key] = decodeURIComponent(value);
+    return cookies;
+  }, {});
+}
+
+function createAuthToken(user) {
+  return jwt.sign(
+    { sub: String(user.id), email: user.email },
+    process.env.AUTH_SECRET,
+    { expiresIn: AUTH_EXPIRES_IN }
+  );
+}
+
+function setAuthCookie(res, user) {
+  const secure = process.env.NODE_ENV === 'production';
+  const attributes = ['HttpOnly', 'Path=/', 'SameSite=Lax'];
+  if (secure) attributes.push('Secure');
+  res.setHeader(
+    'Set-Cookie',
+    `${AUTH_COOKIE_NAME}=${encodeURIComponent(createAuthToken(user))}; ${attributes.join('; ')}`
+  );
+}
+
+function clearAuthCookie(res) {
+  res.setHeader(
+    'Set-Cookie',
+    `${AUTH_COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`
+  );
+}
+
+function getAuthToken(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  if (cookies[AUTH_COOKIE_NAME]) return cookies[AUTH_COOKIE_NAME];
+
+  const authorization = req.headers.authorization || '';
+  if (authorization.startsWith('Bearer ')) return authorization.slice(7);
+  return null;
+}
+
+function requireAuth(req, res, next) {
+  const token = getAuthToken(req);
+  if (!token) return res.status(401).json({ error: '请先登录' });
+
+  try {
+    const payload = jwt.verify(token, process.env.AUTH_SECRET);
+    req.user = { id: Number(payload.sub), email: payload.email };
+    return next();
+  } catch (error) {
+    return res.status(401).json({ error: '登录状态已失效，请重新登录' });
   }
-}));
+}
+
+function findRequestedUserIds(req) {
+  const values = [
+    req.params.userId,
+    req.query.userId,
+    req.body && req.body.userId,
+    req.body && req.body.senderId,
+    req.headers['x-user-id']
+  ];
+  return values
+    .filter((value) => value !== undefined && value !== null && value !== '')
+    .map((value) => String(value));
+}
+
+function authenticatedApiRequest(req, res, next) {
+  if (req.method === 'OPTIONS' || req.path === '/login' || req.path === '/register' || req.path === '/health') {
+    return next();
+  }
+
+  return requireAuth(req, res, () => {
+    const requestedUserIds = findRequestedUserIds(req);
+    if (requestedUserIds.some((id) => id !== String(req.user.id))) {
+      return res.status(403).json({ error: '无权访问其他用户的数据' });
+    }
+    req.authUserId = req.user.id;
+    return next();
+  });
+}
+
+app.use('/api', authenticatedApiRequest);
+
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
 
 // MySQL数据库连接配置
 const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'Qqg20040424',
-  database: 'user_management'
+  host: process.env.DB_HOST,
+  port: DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME
 });
 
 // 连接到数据库
@@ -164,13 +282,12 @@ db.connect((err) => {
 // 修改 server.js 中的 storage 配置（第68-84行附近）
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // 优先从 body 获取 userId，其次从 header
-    const userId = req.body.userId || req.headers['x-user-id'] || 'temp';
+    const userId = req.authUserId;
     const categoryId = req.body.categoryId || req.body.category || '其它';
     
     // 需要根据 categoryId 查询分类名称，或者直接使用 categoryId 作为目录名
     // 这里简化处理，使用 categoryId
-    const uploadPath = path.join(__dirname, 'uploads', userId.toString(), categoryId.toString());
+    const uploadPath = path.join(__dirname, 'uploads', safePathSegment(userId), safePathSegment(categoryId, 'other'));
     
     fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
@@ -258,13 +375,28 @@ app.post('/api/login', (req, res) => {
     if (!isPasswordValid) return res.status(401).json({ error: '邮箱或密码错误' });
     
     const { password: _, ...userWithoutPassword } = user;
+    setAuthCookie(res, userWithoutPassword);
     res.status(200).json({ message: '登录成功', user: userWithoutPassword });
+  });
+});
+
+app.post('/api/logout', (req, res) => {
+  clearAuthCookie(res);
+  res.status(200).json({ message: '已退出登录' });
+});
+
+app.get('/api/me', (req, res) => {
+  const query = 'SELECT id, username, email, birthday, hobbies, occupation, notes FROM users WHERE id = ?';
+  db.query(query, [req.authUserId], (err, results) => {
+    if (err) return res.status(500).json({ error: '数据库查询失败' });
+    if (results.length === 0) return res.status(404).json({ error: '用户不存在' });
+    res.status(200).json({ user: results[0] });
   });
 });
 
 // 获取用户信息 API
 app.get('/api/user/:userId', (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const query = 'SELECT id, username, email, birthday, hobbies, occupation, notes FROM users WHERE id = ?';
   db.query(query, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: '数据库查询失败' });
@@ -275,7 +407,7 @@ app.get('/api/user/:userId', (req, res) => {
 
 // 更新用户信息 API
 app.put('/api/user/:userId', (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const { username, birthday, hobbies, occupation, notes } = req.body;
   
   const checkUsernameQuery = 'SELECT * FROM users WHERE username = ? AND id != ?';
@@ -294,7 +426,7 @@ app.put('/api/user/:userId', (req, res) => {
 
 // 更新密码 API
 app.put('/api/user/:userId/password', async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const { oldPassword, newPassword } = req.body;
   
   if (!oldPassword || !newPassword) {
@@ -328,7 +460,7 @@ app.put('/api/user/:userId/password', async (req, res) => {
 
 // 获取分类列表
 app.get('/api/categories/:userId', (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const query = 'SELECT * FROM learning_categories WHERE user_id = ? ORDER BY sort_order ASC, id ASC';
   db.query(query, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: '获取分类失败' });
@@ -338,7 +470,8 @@ app.get('/api/categories/:userId', (req, res) => {
 
 // 添加新分类
 app.post('/api/categories', (req, res) => {
-  const { userId, name } = req.body;
+  const { name } = req.body;
+  const userId = req.authUserId;
   if (!name || name.trim() === '') {
     return res.status(400).json({ error: '分类名称不能为空' });
   }
@@ -365,7 +498,7 @@ app.post('/api/categories', (req, res) => {
 
 // 获取文件列表（支持按分类筛选）
 app.get('/api/files/:userId', (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const { categoryId, search } = req.query;
   
   let query = `
@@ -397,7 +530,8 @@ app.get('/api/files/:userId', (req, res) => {
 // 上传文件
 app.post('/api/upload', upload.single('file'), (req, res) => {
   try {
-    const { userId, categoryId, customName } = req.body;
+    const { categoryId, customName } = req.body;
+    const userId = req.authUserId;
     
     if (!req.file) {
       return res.status(400).json({ error: '请选择要上传的文件' });
@@ -464,7 +598,8 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 
 // 上传Markdown内容
 app.post('/api/upload-markdown', (req, res) => {
-  const { userId, categoryId, title, content } = req.body;
+  const { categoryId, title, content } = req.body;
+  const userId = req.authUserId;
   
   // 创建markdown文件
   const categoryDir = path.join(__dirname, 'uploads', userId.toString(), 'markdown');
@@ -504,7 +639,7 @@ app.post('/api/upload-markdown', (req, res) => {
 // 下载文件
 app.get('/api/download/:fileId', (req, res) => {
   const { fileId } = req.params;
-  const { userId } = req.query;
+  const userId = req.authUserId;
   
   const query = 'SELECT * FROM learning_files WHERE id = ? AND user_id = ?';
   db.query(query, [fileId, userId], (err, results) => {
@@ -512,9 +647,9 @@ app.get('/api/download/:fileId', (req, res) => {
     if (results.length === 0) return res.status(404).json({ error: '文件不存在' });
     
     const file = results[0];
-    const fullPath = path.join(__dirname, file.file_path);
+    const fullPath = resolveStoredFile(file.file_path);
     
-    if (!fs.existsSync(fullPath)) {
+    if (!fullPath || !fs.existsSync(fullPath)) {
       return res.status(404).json({ error: '文件已丢失' });
     }
     
@@ -585,7 +720,7 @@ app.get('/api/download/:fileId', (req, res) => {
 // 获取文件内容（预览）
 app.get('/api/file-content/:fileId', (req, res) => {
   const { fileId } = req.params;
-  const { userId } = req.query;
+  const userId = req.authUserId;
   
   const query = 'SELECT * FROM learning_files WHERE id = ? AND user_id = ?';
   db.query(query, [fileId, userId], (err, results) => {
@@ -593,9 +728,9 @@ app.get('/api/file-content/:fileId', (req, res) => {
     if (results.length === 0) return res.status(404).json({ error: '文件不存在' });
     
     const file = results[0];
-    const fullPath = path.join(__dirname, file.file_path);
+    const fullPath = resolveStoredFile(file.file_path);
     
-    if (!fs.existsSync(fullPath)) {
+    if (!fullPath || !fs.existsSync(fullPath)) {
       return res.status(404).json({ error: '文件已丢失' });
     }
     
@@ -631,15 +766,33 @@ app.get('/api/file-content/:fileId', (req, res) => {
         file: file, 
         content: null, 
         type: 'binary',
-        url: `/uploads${file.file_path.replace('/uploads', '').replace('uploads', '')}`
+        url: `/api/file-stream/${file.id}`
       });
     }
   });
 });
 
+app.get('/api/file-stream/:fileId', (req, res) => {
+  const query = 'SELECT * FROM learning_files WHERE id = ? AND user_id = ?';
+  db.query(query, [req.params.fileId, req.authUserId], (err, results) => {
+    if (err) return res.status(500).json({ error: '查询文件失败' });
+    if (results.length === 0) return res.status(404).json({ error: '文件不存在' });
+
+    const file = results[0];
+    const fullPath = resolveStoredFile(file.file_path);
+    if (!fullPath || !fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: '文件已丢失' });
+    }
+
+    res.type(mime.lookup(fullPath) || 'application/octet-stream');
+    return res.sendFile(fullPath);
+  });
+});
+
 // 批量删除文件
 app.delete('/api/files', (req, res) => {
-  const { fileIds, userId } = req.body;
+  const { fileIds } = req.body;
+  const userId = req.authUserId;
   
   if (!fileIds || fileIds.length === 0) {
     return res.status(400).json({ error: '未选择要删除的文件' });
@@ -652,7 +805,7 @@ app.delete('/api/files', (req, res) => {
     
     // 删除物理文件
     files.forEach(file => {
-      const fullPath = path.join(__dirname, file.file_path);
+      const fullPath = resolveStoredFile(file.file_path);
       if (fs.existsSync(fullPath)) {
         fs.unlinkSync(fullPath);
       }
@@ -702,7 +855,9 @@ app.get('/api/check-user', (req, res) => {
 
 // 发送邮件（带收件人检查）
 app.post('/api/emails', (req, res) => {
-  const { senderId, senderEmail, senderName, recipientEmail, subject, content, attachments } = req.body;
+  const { senderName, recipientEmail, subject, content, attachments } = req.body;
+  const senderId = req.authUserId;
+  const senderEmail = req.user.email;
   
   if (!recipientEmail || !subject) {
     return res.status(400).json({ error: '收件人和主题不能为空' });
@@ -743,7 +898,7 @@ app.post('/api/emails', (req, res) => {
 
 // 获取收件箱
 app.get('/api/emails/:userEmail', (req, res) => {
-  const { userEmail } = req.params;
+  const userEmail = req.user.email;
   const { filter } = req.query; // all, unread, read
   
   let query = 'SELECT * FROM learning_emails WHERE recipient_email = ?';
@@ -782,10 +937,10 @@ app.get('/api/emails/:userEmail', (req, res) => {
 // 标记邮件已读
 app.put('/api/emails/:emailId/read', (req, res) => {
   const { emailId } = req.params;
-  
-  const query = 'UPDATE learning_emails SET is_read = TRUE WHERE id = ?';
-  db.query(query, [emailId], (err) => {
+  const query = 'UPDATE learning_emails SET is_read = TRUE WHERE id = ? AND recipient_email = ?';
+  db.query(query, [emailId, req.user.email], (err, result) => {
     if (err) return res.status(500).json({ error: '更新状态失败' });
+    if (result.affectedRows === 0) return res.status(404).json({ error: '邮件不存在或无权操作' });
     res.status(200).json({ message: '已标记为已读' });
   });
 });
@@ -793,11 +948,7 @@ app.put('/api/emails/:emailId/read', (req, res) => {
 // 获取单封邮件详情（修复版 - 包含附件下载链接）
 app.get('/api/email/:emailId/detail', (req, res) => {
   const { emailId } = req.params;
-  const { userEmail } = req.query;
-  
-  if (!userEmail) {
-    return res.status(400).json({ error: '缺少用户邮箱参数' });
-  }
+  const userEmail = req.user.email;
   
   // 查询邮件 - 收件人或发件人都可以查看
   const query = 'SELECT * FROM learning_emails WHERE id = ? AND (recipient_email = ? OR sender_email = ?)';
@@ -827,12 +978,11 @@ app.get('/api/email/:emailId/detail', (req, res) => {
     }
     
     // 为每个附件添加下载URL
-    const attachmentsWithUrls = attachments.map(att => {
+    const attachmentsWithUrls = attachments.map((att, index) => {
       if (att.type === 'internal' && att.fileId) {
-        // 站内文件：使用发件人ID作为文件拥有者
         return {
           ...att,
-          downloadUrl: `/api/download/${att.fileId}?userId=${email.sender_id}`
+          downloadUrl: `/api/email-attachment/${email.id}/${index}`
         };
       }
       return att;
@@ -851,11 +1001,7 @@ app.get('/api/email/:emailId/detail', (req, res) => {
 // 下载邮件附件（专用API）
 app.get('/api/email-attachment/:emailId/:attachmentIndex', (req, res) => {
   const { emailId, attachmentIndex } = req.params;
-  const { userEmail } = req.query;
-  
-  if (!userEmail) {
-    return res.status(400).json({ error: '缺少用户邮箱参数' });
-  }
+  const userEmail = req.user.email;
   
   // 查询邮件
   const query = 'SELECT * FROM learning_emails WHERE id = ? AND (recipient_email = ? OR sender_email = ?)';
@@ -893,16 +1039,16 @@ app.get('/api/email-attachment/:emailId/:attachmentIndex', (req, res) => {
     // 处理不同类型的附件
     if (att.type === 'internal' && att.fileId) {
       // 站内文件：查询文件信息并下载
-      const fileQuery = 'SELECT * FROM learning_files WHERE id = ?';
-      db.query(fileQuery, [att.fileId], (err, files) => {
+      const fileQuery = 'SELECT * FROM learning_files WHERE id = ? AND user_id = ?';
+      db.query(fileQuery, [att.fileId, email.sender_id], (err, files) => {
         if (err || files.length === 0) {
           return res.status(404).json({ error: '文件不存在' });
         }
         
         const file = files[0];
-        const fullPath = path.join(__dirname, file.file_path);
+        const fullPath = resolveStoredFile(file.file_path);
         
-        if (!fs.existsSync(fullPath)) {
+        if (!fullPath || !fs.existsSync(fullPath)) {
           return res.status(404).json({ error: '文件已丢失' });
         }
         
@@ -1010,8 +1156,7 @@ db.query(createMusicTable, (err) => {
 // 图片上传配置
 const imageStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const userId = req.body.userId || 'temp';
-    const uploadPath = path.join(__dirname, 'uploads', 'entertainment', 'images', userId.toString());
+    const uploadPath = path.join(__dirname, 'uploads', 'entertainment', 'images', String(req.authUserId));
     fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
@@ -1038,7 +1183,7 @@ const imageUpload = multer({
 
 // 获取最新5张图片（用于娱乐区首页预览）
 app.get('/api/entertainment/images/recent/:userId', (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const query = `
     SELECT id, title, file_type, style, created_at, 
            CONCAT('/uploads/entertainment/images/', user_id, '/', filename) as thumbnail_path
@@ -1065,7 +1210,7 @@ app.get('/api/entertainment/images/recent/:userId', (req, res) => {
 
 // 获取所有图片
 app.get('/api/entertainment/images/:userId', (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const { style } = req.query;
   
   let query = `
@@ -1092,7 +1237,8 @@ app.get('/api/entertainment/images/:userId', (req, res) => {
 // 上传图片
 app.post('/api/entertainment/images', imageUpload.single('image'), (req, res) => {
   try {
-    const { userId, title, style, description } = req.body;
+    const { title, style, description } = req.body;
+    const userId = req.authUserId;
     
     if (!req.file) {
       return res.status(400).json({ error: '请选择图片文件' });
@@ -1149,7 +1295,8 @@ app.put('/api/entertainment/images/batch-style', (req, res) => {
   console.log('=== 收到批量归类请求 ===');  // 添加这行
   console.log('请求体:', req.body);  // 添加这行
 
-  const { imageIds, style, userId } = req.body;
+  const { imageIds, style } = req.body;
+  const userId = req.authUserId;
   
   if (!imageIds || imageIds.length === 0) {
     return res.status(400).json({ error: '未选择图片' });
@@ -1191,7 +1338,8 @@ app.put('/api/entertainment/images/batch-style', (req, res) => {
 // 更新图片信息
 app.put('/api/entertainment/images/:imageId', (req, res) => {
   const { imageId } = req.params;
-  const { title, style, description, userId } = req.body;
+  const { title, style, description } = req.body;
+  const userId = req.authUserId;
   
   const updateQuery = `
     UPDATE entertainment_images 
@@ -1207,7 +1355,8 @@ app.put('/api/entertainment/images/:imageId', (req, res) => {
 
 // 批量删除图片
 app.delete('/api/entertainment/images', (req, res) => {
-  const { imageIds, userId } = req.body;
+  const { imageIds } = req.body;
+  const userId = req.authUserId;
   
   if (!imageIds || imageIds.length === 0) {
     return res.status(400).json({ error: '未选择要删除的图片' });
@@ -1220,7 +1369,7 @@ app.delete('/api/entertainment/images', (req, res) => {
     
     // 删除物理文件
     images.forEach(img => {
-      const fullPath = path.join(__dirname, img.file_path);
+      const fullPath = resolveStoredFile(img.file_path);
       if (fs.existsSync(fullPath)) {
         fs.unlinkSync(fullPath);
       }
@@ -1238,7 +1387,7 @@ app.delete('/api/entertainment/images', (req, res) => {
 // 获取图片文件
 app.get('/api/entertainment/image-file/:imageId', (req, res) => {
   const { imageId } = req.params;
-  const { userId } = req.query;
+  const userId = req.authUserId;
   
   const query = 'SELECT * FROM entertainment_images WHERE id = ? AND user_id = ?';
   db.query(query, [imageId, userId], (err, results) => {
@@ -1246,9 +1395,9 @@ app.get('/api/entertainment/image-file/:imageId', (req, res) => {
     if (results.length === 0) return res.status(404).json({ error: '图片不存在' });
     
     const image = results[0];
-    const fullPath = path.join(__dirname, image.file_path);
+    const fullPath = resolveStoredFile(image.file_path);
     
-    if (!fs.existsSync(fullPath)) {
+    if (!fullPath || !fs.existsSync(fullPath)) {
       return res.status(404).json({ error: '文件已丢失' });
     }
     
@@ -1260,8 +1409,7 @@ app.get('/api/entertainment/image-file/:imageId', (req, res) => {
 
 const videoStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const userId = req.body.userId || 'temp';
-    const uploadPath = path.join(__dirname, 'uploads', 'entertainment', 'videos', userId.toString());
+    const uploadPath = path.join(__dirname, 'uploads', 'entertainment', 'videos', String(req.authUserId));
     fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
@@ -1288,7 +1436,7 @@ const videoUpload = multer({
 
 // 获取最新5个视频（用于娱乐区首页预览）
 app.get('/api/entertainment/videos/recent/:userId', (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const query = `
     SELECT id, title, file_type, duration, created_at
     FROM entertainment_videos 
@@ -1305,7 +1453,7 @@ app.get('/api/entertainment/videos/recent/:userId', (req, res) => {
 
 // 获取所有视频
 app.get('/api/entertainment/videos/:userId', (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const query = `
     SELECT id, title, file_type, file_path, cover_path, duration, 
            frame_rate, frame_count, created_at
@@ -1323,7 +1471,8 @@ app.get('/api/entertainment/videos/:userId', (req, res) => {
 // 上传视频
 app.post('/api/entertainment/videos', videoUpload.single('video'), async (req, res) => {
   try {
-    const { userId, title } = req.body;
+    const { title } = req.body;
+    const userId = req.authUserId;
     
     if (!req.file) {
       return res.status(400).json({ error: '请选择视频文件' });
@@ -1413,7 +1562,8 @@ app.post('/api/entertainment/videos', videoUpload.single('video'), async (req, r
 
 // 批量删除视频
 app.delete('/api/entertainment/videos', (req, res) => {
-  const { videoIds, userId } = req.body;
+  const { videoIds } = req.body;
+  const userId = req.authUserId;
   
   if (!videoIds || videoIds.length === 0) {
     return res.status(400).json({ error: '未选择要删除的视频' });
@@ -1424,7 +1574,7 @@ app.delete('/api/entertainment/videos', (req, res) => {
     if (err) return res.status(500).json({ error: '查询失败' });
     
     videos.forEach(video => {
-      const fullPath = path.join(__dirname, video.file_path);
+      const fullPath = resolveStoredFile(video.file_path);
       if (fs.existsSync(fullPath)) {
         fs.unlinkSync(fullPath);
       }
@@ -1441,7 +1591,7 @@ app.delete('/api/entertainment/videos', (req, res) => {
 // 获取视频文件
 app.get('/api/entertainment/video-file/:videoId', (req, res) => {
   const { videoId } = req.params;
-  const { userId } = req.query;
+  const userId = req.authUserId;
   
   const query = 'SELECT * FROM entertainment_videos WHERE id = ? AND user_id = ?';
   db.query(query, [videoId, userId], (err, results) => {
@@ -1449,9 +1599,9 @@ app.get('/api/entertainment/video-file/:videoId', (req, res) => {
     if (results.length === 0) return res.status(404).json({ error: '视频不存在' });
     
     const video = results[0];
-    const fullPath = path.join(__dirname, video.file_path);
+    const fullPath = resolveStoredFile(video.file_path);
     
-    if (!fs.existsSync(fullPath)) {
+    if (!fullPath || !fs.existsSync(fullPath)) {
       return res.status(404).json({ error: '文件已丢失' });
     }
     
@@ -1489,8 +1639,7 @@ app.get('/api/entertainment/video-file/:videoId', (req, res) => {
 
 const musicStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const userId = req.body.userId || 'temp';
-    const uploadPath = path.join(__dirname, 'uploads', 'entertainment', 'music', userId.toString());
+    const uploadPath = path.join(__dirname, 'uploads', 'entertainment', 'music', String(req.authUserId));
     fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
@@ -1517,7 +1666,7 @@ const musicUpload = multer({
 
 // 获取最新5首音乐（用于娱乐区首页预览）
 app.get('/api/entertainment/music/recent/:userId', (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const query = `
     SELECT id, title, artist, duration, created_at
     FROM entertainment_music 
@@ -1534,7 +1683,7 @@ app.get('/api/entertainment/music/recent/:userId', (req, res) => {
 
 // 获取所有音乐
 app.get('/api/entertainment/music/:userId', (req, res) => {
-  const { userId } = req.params;
+  const userId = req.authUserId;
   const query = `
     SELECT id, title, artist, album, release_date, file_type, 
            file_path, cover_path, duration, lyrics, created_at
@@ -1552,7 +1701,8 @@ app.get('/api/entertainment/music/:userId', (req, res) => {
 // 上传音乐
 app.post('/api/entertainment/music', musicUpload.single('music'), async (req, res) => {
   try {
-    const { userId, title, artist, album, releaseDate } = req.body;
+    const { title, artist, album, releaseDate } = req.body;
+    const userId = req.authUserId;
     
     if (!req.file) {
       return res.status(400).json({ error: '请选择音乐文件' });
@@ -1625,7 +1775,8 @@ app.post('/api/entertainment/music', musicUpload.single('music'), async (req, re
 
 // 批量删除音乐
 app.delete('/api/entertainment/music', (req, res) => {
-  const { musicIds, userId } = req.body;
+  const { musicIds } = req.body;
+  const userId = req.authUserId;
   
   if (!musicIds || musicIds.length === 0) {
     return res.status(400).json({ error: '未选择要删除的歌曲' });
@@ -1636,7 +1787,7 @@ app.delete('/api/entertainment/music', (req, res) => {
     if (err) return res.status(500).json({ error: '查询失败' });
     
     musics.forEach(music => {
-      const fullPath = path.join(__dirname, music.file_path);
+      const fullPath = resolveStoredFile(music.file_path);
       if (fs.existsSync(fullPath)) {
         fs.unlinkSync(fullPath);
       }
@@ -1653,7 +1804,7 @@ app.delete('/api/entertainment/music', (req, res) => {
 // 获取音乐文件
 app.get('/api/entertainment/music-file/:musicId', (req, res) => {
   const { musicId } = req.params;
-  const { userId } = req.query;
+  const userId = req.authUserId;
   
   const query = 'SELECT * FROM entertainment_music WHERE id = ? AND user_id = ?';
   db.query(query, [musicId, userId], (err, results) => {
@@ -1661,9 +1812,9 @@ app.get('/api/entertainment/music-file/:musicId', (req, res) => {
     if (results.length === 0) return res.status(404).json({ error: '音乐不存在' });
     
     const music = results[0];
-    const fullPath = path.join(__dirname, music.file_path);
+    const fullPath = resolveStoredFile(music.file_path);
     
-    if (!fs.existsSync(fullPath)) {
+    if (!fullPath || !fs.existsSync(fullPath)) {
       return res.status(404).json({ error: '文件已丢失' });
     }
     
@@ -1674,7 +1825,8 @@ app.get('/api/entertainment/music-file/:musicId', (req, res) => {
 // 更新音乐歌词
 app.put('/api/entertainment/music/:musicId/lyrics', (req, res) => {
   const { musicId } = req.params;
-  const { lyrics, userId } = req.body;
+  const { lyrics } = req.body;
+  const userId = req.authUserId;
   
   const updateQuery = 'UPDATE entertainment_music SET lyrics = ? WHERE id = ? AND user_id = ?';
   db.query(updateQuery, [lyrics, musicId, userId], (err) => {
@@ -1686,7 +1838,7 @@ app.put('/api/entertainment/music/:musicId/lyrics', (req, res) => {
 // 更新播放次数
 app.post('/api/entertainment/music/:musicId/play', (req, res) => {
   const { musicId } = req.params;
-  const { userId } = req.body;
+  const userId = req.authUserId;
   
   // 先检查音乐是否存在且属于该用户
   const checkQuery = 'SELECT id FROM entertainment_music WHERE id = ? AND user_id = ?';
@@ -1714,16 +1866,14 @@ app.post('/api/entertainment/music/:musicId/play', (req, res) => {
   });
 });
 
-// 静态文件服务 - 娱乐区文件
-app.use('/uploads/entertainment', express.static(path.join(__dirname, 'uploads', 'entertainment'), {
-  setHeaders: (res, filePath) => {
-    const mimeType = mime.lookup(filePath);
-    if (mimeType) {
-      res.setHeader('Content-Type', mimeType);
-    }
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  }
-}));
+app.use((error, req, res, next) => {
+  console.error('[api error]', error);
+  if (res.headersSent) return next(error);
+  const statusCode = error instanceof multer.MulterError ? 400 : (error.status || 500);
+  return res.status(statusCode).json({
+    error: statusCode === 500 ? '服务器内部错误' : error.message
+  });
+});
 
 // 启动服务器
 app.listen(PORT, () => {

@@ -565,7 +565,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import axios from '@/services/http'
 
 export default {
   name: 'VideoZone',
@@ -666,7 +666,8 @@ export default {
       // 删除确认
       showDeleteConfirm: false,
       
-      toast: { show: false, message: '', type: 'success' }
+      toast: { show: false, message: '', type: 'success' },
+      themeHandler: null
     }
   },
   computed: {
@@ -740,11 +741,15 @@ export default {
     this.loadVideos()
     this.setupThemeListener()
   },
+  beforeUnmount() {
+    if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler)
+  },
   methods: {
     setupThemeListener() {
-      window.addEventListener('theme-changed', (e) => {
+      this.themeHandler = (e) => {
         this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
-      })
+      }
+      window.addEventListener('theme-changed', this.themeHandler)
     },
     
     async loadVideos() {
@@ -757,10 +762,7 @@ export default {
     },
     
     getVideoUrl(video) {
-      if (video.file_path && video.file_path.startsWith('/uploads')) {
-        return video.file_path
-      }
-      return `/api/entertainment/video-file/${video.id}?userId=${this.userId}`
+      return `/api/entertainment/video-file/${video.id}`
     },
     
     getVideoCover(video) {
