@@ -12,6 +12,8 @@ const multer = require('multer');
 const mime = require('mime-types');
 const { imageSize } = require('image-size');
 const mm = require('music-metadata');
+const { runMigrations } = require('./migrations');
+const { mountBlogRoutes } = require('./blog');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -164,8 +166,6 @@ function authenticatedApiRequest(req, res, next) {
   });
 }
 
-app.use('/api', authenticatedApiRequest);
-
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
@@ -178,6 +178,15 @@ const db = mysql.createConnection({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME
 });
+
+// 博客路由在旧的全局鉴权前注册：公开读取接口自行做可选会话识别，
+// 写入接口则明确使用 requireAuth。旧接口仍由下方的全局中间件保护。
+mountBlogRoutes(app, db, {
+  getAuthToken,
+  authSecret: process.env.AUTH_SECRET,
+  uploadRoot: UPLOAD_ROOT
+});
+app.use('/api', authenticatedApiRequest);
 
 // 连接到数据库
 db.connect((err) => {
@@ -205,7 +214,12 @@ db.connect((err) => {
   
   db.query(createUsersTable, (err) => {
     if (err) console.error('创建用户表失败:', err);
-    else console.log('用户表创建成功或已存在');
+    else {
+      console.log('用户表创建成功或已存在');
+      runMigrations(db).then(() => console.log('博客数据库迁移完成')).catch((migrationError) => {
+        console.error('博客数据库迁移失败:', migrationError);
+      });
+    }
   });
 
   // 创建学习区分类表
@@ -1884,6 +1898,12 @@ app.post('/api/entertainment/music/:musicId/play', (req, res) => {
     });
   });
 });
+
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.resolve(__dirname, '..', 'dist');
+  app.use(express.static(clientDist));
+  app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+}
 
 app.use((error, req, res, next) => {
   console.error('[api error]', error);
