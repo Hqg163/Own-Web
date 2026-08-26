@@ -1,6 +1,6 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 import Layout from '../layouts/Layout.vue'
-import http, { cacheAuthenticatedUser, clearCachedAuth } from '@/services/http'
+import http, { cacheAuthenticatedUser, clearCachedAuth } from '../../services/http'
 
 const routes: RouteRecordRaw[] = [
   {
