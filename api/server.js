@@ -23,6 +23,8 @@ if (missingEnv.length > 0) {
 }
 
 const app = express();
+// API 返回的是会话相关或用户私有数据，不应被浏览器或代理复用。
+app.disable('etag');
 const PORT = Number(process.env.PORT || 3000);
 const DB_PORT = Number(process.env.DB_PORT || 3306);
 const UPLOAD_ROOT = path.resolve(__dirname, 'uploads');
@@ -58,6 +60,13 @@ app.use(cors({
 }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 
 function parseCookies(cookieHeader = '') {
   return cookieHeader.split(';').reduce((cookies, item) => {

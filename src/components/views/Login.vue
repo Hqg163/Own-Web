@@ -54,7 +54,7 @@
           <div class="form-options">
             <label class="remember-me">
               <input type="checkbox" v-model="rememberMe" />
-              <span>记住我</span>
+              <span>记住邮箱</span>
             </label>
             <a href="#" class="forgot-password">忘记密码？</a>
           </div>
@@ -103,7 +103,7 @@ export default {
   data() {
     return {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
-      email: '',
+      email: localStorage.getItem('rememberUser') || '',
       password: '',
       passwordVisible: false,
       rememberMe: false,
@@ -150,9 +150,11 @@ export default {
         localStorage.setItem('userId', response.data.user.id)
         localStorage.setItem('userInfo', JSON.stringify(response.data.user))
         
-        // 如果选了"记住我"，可以设置更长时间的存储（实际项目中使用cookie或更安全的存储）
+        // 这里只记住邮箱，不记住登录状态；真正的会话由 HttpOnly Cookie 管理。
         if (this.rememberMe) {
           localStorage.setItem('rememberUser', this.email)
+        } else {
+          localStorage.removeItem('rememberUser')
         }
         
         // 检查是否有重定向目标
