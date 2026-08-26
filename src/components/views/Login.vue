@@ -56,25 +56,11 @@
               <input type="checkbox" v-model="rememberMe" />
               <span>记住邮箱</span>
             </label>
-            <a href="#" class="forgot-password">忘记密码？</a>
           </div>
           
           <button type="submit" class="login-btn" :disabled="loading">
             {{ loading ? '登录中...' : '立即登录' }}
           </button>
-          
-          <div class="divider">
-            <span>或</span>
-          </div>
-          
-          <div class="social-login">
-            <button type="button" class="social-btn wechat">
-              微信登录
-            </button>
-            <button type="button" class="social-btn github">
-              GitHub登录
-            </button>
-          </div>
           
           <div class="login-footer">
             <router-link to="/">返回首页</router-link>

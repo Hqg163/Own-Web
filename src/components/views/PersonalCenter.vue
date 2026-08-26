@@ -19,7 +19,7 @@
             :class="['option-item', { active: isActive(option.id) }]"
             @click="selectOption(option.id)"
           >
-            <span class="option-icon">{{ option.icon }}</span>
+            <span class="option-icon"><AppIcon :name="option.icon" :size="18" /></span>
             <span class="option-name">{{ option.name }}</span>
           </div>
         </div>
@@ -35,16 +35,18 @@
 
 <script>
 import axios from '@/services/http'
+import AppIcon from '@/components/AppIcon.vue'
 
 export default {
   name: 'PersonalCenter',
+  components: { AppIcon },
   data() {
     return {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
       options: [
-        { id: 'personal-info', name: '个人信息', icon: '👤', route: '/personal/info' },
-        { id: 'study', name: '学习区', icon: '📚', route: '/personal/study' },
-        { id: 'entertainment', name: '娱乐区', icon: '🎮', route: '/personal/entertainment' }
+        { id: 'personal-info', name: '个人信息', icon: 'user', route: '/personal/info' },
+        { id: 'study', name: '学习区', icon: 'home', route: '/personal/study' },
+        { id: 'entertainment', name: '娱乐区', icon: 'menu', route: '/personal/entertainment' }
       ],
       userInfo: {
         username: '',
