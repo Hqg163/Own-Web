@@ -17,7 +17,7 @@ const routes: RouteRecordRaw[] = [{ path: '/', component: Layout, children: [
   { path:'settings', name:'Settings', component:()=>import('../views/Settings.vue'), meta:protectedMeta },
   { path:'dashboard', name:'Dashboard', component:()=>import('../views/Dashboard.vue'), meta:protectedMeta },
   { path:'dashboard/notifications', name:'Notifications', component:()=>import('../views/Notifications.vue'), meta:protectedMeta },
-  { path:'dashboard/bookmarks', redirect:'/creation?status=bookmarks' },
+  { path:'dashboard/bookmarks', name:'Bookmarks', component:()=>import('../views/Bookmarks.vue'), meta:protectedMeta },
   { path:'personal', name:'PersonalCenter', component:()=>import('../views/PersonalCenter.vue'), redirect:'/personal/info', meta:protectedMeta, children:[
     {path:'info',name:'PersonalInfo',component:()=>import('../views/PersonalInfo.vue')}, {path:'study',name:'StudyZone',component:()=>import('../views/StudyZone.vue')}, {path:'entertainment',name:'Entertainment',component:()=>import('../views/Entertainment.vue')},
     {path:'entertainment/images',name:'ImageZone',component:()=>import('../views/entertainment/ImageZone.vue')}, {path:'entertainment/videos',name:'VideoZone',component:()=>import('../views/entertainment/VideoZone.vue')}, {path:'entertainment/music',name:'MusicZone',component:()=>import('../views/entertainment/MusicZone.vue')}
