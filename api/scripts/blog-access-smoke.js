@@ -107,6 +107,16 @@ async function run() {
   await query('INSERT INTO post_tags (post_id,tag_id) VALUES (?,?)', [posts.private.id, privateTagId]);
 
   const baseUrl = await startTestServer();
+  await expectStatus(baseUrl, '/api/me/avatar', 401, { method: 'POST' });
+  const avatarForm = new FormData();
+  avatarForm.set('avatar', new Blob([Buffer.from([137, 80, 78, 71])], { type: 'image/png' }), 'avatar.png');
+  const avatarResult = await expectStatus(baseUrl, '/api/me/avatar', 201, { method: 'POST', headers: auth(author), body: avatarForm });
+  assert.equal(avatarResult.avatarUrl, `/api/public/avatars/${author.id}`, '头像上传应返回公开读取 URL');
+  await expectStatus(baseUrl, `/api/public/avatars/${author.id}`, 200);
+  await query("UPDATE users SET profile_visibility='private' WHERE id=?", [author.id]);
+  await expectStatus(baseUrl, `/api/public/avatars/${author.id}`, 404);
+  await expectStatus(baseUrl, `/api/public/avatars/${author.id}`, 200, { headers: auth(author) });
+  await query("UPDATE users SET profile_visibility='public' WHERE id=?", [author.id]);
   await expectStatus(baseUrl, `/api/public/posts/${posts.public.slug}`, 200);
   const publicPost = await expectStatus(baseUrl, `/api/public/posts/${posts.public.slug}`, 200);
   assert.equal('share_token' in publicPost.post, false, '公开 DTO 不得包含 share_token');

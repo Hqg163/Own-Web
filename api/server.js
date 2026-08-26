@@ -419,22 +419,28 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/me', (req, res) => {
-  const query = 'SELECT id, username, email, birthday, hobbies, occupation, notes FROM users WHERE id = ?';
+  const query = 'SELECT id, username, email, birthday, hobbies, occupation, notes, avatar_path FROM users WHERE id = ?';
   db.query(query, [req.authUserId], (err, results) => {
     if (err) return res.status(500).json({ error: '数据库查询失败' });
     if (results.length === 0) return res.status(404).json({ error: '用户不存在' });
-    res.status(200).json({ user: results[0] });
+    const user = results[0];
+    user.avatar_url = user.avatar_path ? `/api/public/avatars/${user.id}` : null;
+    delete user.avatar_path;
+    res.status(200).json({ user });
   });
 });
 
 // 获取用户信息 API
 app.get('/api/user/:userId', (req, res) => {
   const userId = req.authUserId;
-  const query = 'SELECT id, username, email, birthday, hobbies, occupation, notes FROM users WHERE id = ?';
+  const query = 'SELECT id, username, email, birthday, hobbies, occupation, notes, avatar_path FROM users WHERE id = ?';
   db.query(query, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: '数据库查询失败' });
     if (results.length === 0) return res.status(404).json({ error: '用户不存在' });
-    res.status(200).json({ user: results[0] });
+    const user = results[0];
+    user.avatar_url = user.avatar_path ? `/api/public/avatars/${user.id}` : null;
+    delete user.avatar_path;
+    res.status(200).json({ user });
   });
 });
 
