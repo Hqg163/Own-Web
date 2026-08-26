@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 import Layout from '../layouts/Layout.vue'
+import http, { cacheAuthenticatedUser, clearCachedAuth } from '@/services/http'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -84,21 +85,30 @@ const router = createRouter({
   }
 })
 
-router.beforeEach((to, _from, next) => {
-  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
+router.beforeEach(async (to) => {
+  const hasCachedLogin = localStorage.getItem('isLoggedIn') === 'true'
+  let isLoggedIn = false
+
+  if (hasCachedLogin || to.meta.requiresAuth || to.meta.guestOnly) {
+    try {
+      const response = await http.get('/api/me')
+      cacheAuthenticatedUser(response.data.user)
+      isLoggedIn = true
+    } catch {
+      clearCachedAuth()
+    }
+  }
 
   if (to.meta.requiresAuth && !isLoggedIn) {
     localStorage.setItem('redirectAfterLogin', to.fullPath)
-    next('/login')
-    return
+    return '/login'
   }
 
   if (to.meta.guestOnly && isLoggedIn) {
-    next('/personal')
-    return
+    return '/personal'
   }
 
-  next()
+  return true
 })
 
 export default router

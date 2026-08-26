@@ -88,6 +88,7 @@ export default {
         this.userInfo = response.data.user
       } catch (error) {
         console.error('加载用户信息失败:', error)
+        if (error.response?.status === 401) this.$router.push('/login')
       }
     }
   },

@@ -78,9 +78,19 @@ function createAuthToken(user) {
   );
 }
 
+function durationToSeconds(value) {
+  const match = String(value).match(/^(\d+)([smhd])$/i);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const multipliers = { s: 1, m: 60, h: 3600, d: 86400 };
+  return amount * multipliers[match[2].toLowerCase()];
+}
+
 function setAuthCookie(res, user) {
   const secure = process.env.NODE_ENV === 'production';
   const attributes = ['HttpOnly', 'Path=/', 'SameSite=Lax'];
+  const maxAge = durationToSeconds(AUTH_EXPIRES_IN);
+  if (maxAge) attributes.push(`Max-Age=${maxAge}`);
   if (secure) attributes.push('Secure');
   res.setHeader(
     'Set-Cookie',

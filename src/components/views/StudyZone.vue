@@ -820,7 +820,7 @@ export default {
     }
   },
   created() {
-    if (!localStorage.getItem('isLoggedIn')) {
+    if (localStorage.getItem('isLoggedIn') !== 'true') {
       this.$router.push('/login')
       return
     }

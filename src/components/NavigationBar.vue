@@ -76,7 +76,7 @@
 </template>
 
 <script>
-import axios from '@/services/http'
+import axios, { cacheAuthenticatedUser, clearCachedAuth } from '@/services/http'
 
 export default {
   name: 'NavigationBar',
@@ -86,6 +86,7 @@ export default {
       // 修改1：添加响应式的登录状态数据
       loginStatus: localStorage.getItem('isLoggedIn') === 'true',
       userData: JSON.parse(localStorage.getItem('userInfo') || '{}'),
+      authExpiredHandler: null,
       navLinks: [
         { name: '首页', to: '/' },
         { name: '个人中心', to: '/personal', requiresAuth: true },
@@ -121,6 +122,24 @@ export default {
     refreshAuthState() {
       this.loginStatus = localStorage.getItem('isLoggedIn') === 'true';
       this.userData = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    },
+
+    handleAuthExpired() {
+      clearCachedAuth()
+      this.loginStatus = false
+      this.userData = {}
+      if (this.$route.meta.requiresAuth) this.$router.push('/login')
+    },
+
+    async verifySession() {
+      try {
+        const response = await axios.get('/api/me')
+        cacheAuthenticatedUser(response.data.user)
+        this.loginStatus = true
+        this.userData = response.data.user
+      } catch {
+        this.handleAuthExpired()
+      }
     },
     
     isActive(path) {
@@ -173,10 +192,7 @@ export default {
         console.warn('退出服务端会话失败:', error)
       }
 
-      localStorage.removeItem('isLoggedIn');
-      localStorage.removeItem('userInfo');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('userEmail');
+      clearCachedAuth();
       
       this.loginStatus = false;
       this.userData = {};
@@ -197,10 +213,16 @@ export default {
     }
   },
   mounted() {
+    this.authExpiredHandler = this.handleAuthExpired
+    window.addEventListener('auth-expired', this.authExpiredHandler)
     const currentTheme = localStorage.getItem('theme');
     this.isDarkMode = currentTheme === 'dark';
-    // 初始化时检查一次状态
-    this.refreshAuthState();
+    this.verifySession();
+  },
+  beforeUnmount() {
+    if (this.authExpiredHandler) {
+      window.removeEventListener('auth-expired', this.authExpiredHandler)
+    }
   }
 };
 </script>
