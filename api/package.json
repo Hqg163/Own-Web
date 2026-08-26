@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "check": "node --check server.js && node --check blog.js && node --check migrations.js"
+    "check": "node --check server.js && node --check blog.js && node --check migrations.js",
+    "test:blog-access": "node scripts/blog-access-smoke.js"
   },
   "keywords": [],
   "author": "",
