@@ -94,8 +94,13 @@ router.beforeEach(async (to) => {
       const response = await http.get('/api/me')
       cacheAuthenticatedUser(response.data.user)
       isLoggedIn = true
-    } catch {
-      clearCachedAuth()
+    } catch (error) {
+      const status = (error as { response?: { status?: number } }).response?.status
+      if (status === 401) {
+        clearCachedAuth()
+      } else {
+        isLoggedIn = hasCachedLogin
+      }
     }
   }
 

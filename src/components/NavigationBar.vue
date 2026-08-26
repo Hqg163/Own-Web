@@ -137,8 +137,8 @@ export default {
         cacheAuthenticatedUser(response.data.user)
         this.loginStatus = true
         this.userData = response.data.user
-      } catch {
-        this.handleAuthExpired()
+      } catch (error) {
+        if (error.response?.status === 401) this.handleAuthExpired()
       }
     },
     
