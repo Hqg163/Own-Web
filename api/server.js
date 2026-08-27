@@ -1216,6 +1216,7 @@ const createMusicTable = `
     cover_path VARCHAR(500),
     duration VARCHAR(20),
     lyrics TEXT,
+    lyrics_offset_ms INT NOT NULL DEFAULT 0,
     play_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -1364,6 +1365,111 @@ app.post('/api/entertainment/images', imageUpload.single('image'), (req, res) =>
   }
 });
 
+// 从浏览器 Canvas 生成一个新的私有图片。原图记录与文件始终保留。
+app.post('/api/entertainment/images/:imageId/derivatives', editedImageUpload.single('image'), (req, res) => {
+  const imageId = Number(req.params.imageId);
+  const userId = req.authUserId;
+  if (!Number.isInteger(imageId) || imageId < 1) {
+    removeUploadedImage(req.file);
+    return res.status(400).json({ error: '图片标识无效' });
+  }
+  if (!req.file) return res.status(400).json({ error: '请选择编辑后的图片文件' });
+
+  db.query('SELECT * FROM entertainment_images WHERE id = ? AND user_id = ?', [imageId, userId], (lookupError, rows) => {
+    if (lookupError) {
+      removeUploadedImage(req.file);
+      return res.status(500).json({ error: '查询原图片失败' });
+    }
+    const original = rows[0];
+    if (!original) {
+      removeUploadedImage(req.file);
+      return res.status(404).json({ error: '图片不存在或无权操作' });
+    }
+
+    let metadata;
+    try {
+      metadata = getEditedImageMetadata(req.file);
+    } catch (error) {
+      removeUploadedImage(req.file);
+      return res.status(400).json({ error: error.message || '编辑后的图片无效' });
+    }
+
+    const title = String(req.body.title || `${original.title}（编辑副本）`).trim().slice(0, 255) || `${original.title}（编辑副本）`;
+    const description = String(req.body.description || original.description || title).slice(0, 5000);
+    db.query(
+      `INSERT INTO entertainment_images
+        (user_id, title, style, file_type, file_size, file_path, description, width, height)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [userId, title, original.style || '普通', metadata.fileType, metadata.fileSize, metadata.filePath, description, metadata.width, metadata.height],
+      (insertError, result) => {
+        if (insertError) {
+          removeUploadedImage(req.file);
+          return res.status(500).json({ error: '创建编辑副本失败' });
+        }
+        db.query('SELECT * FROM entertainment_images WHERE id = ? AND user_id = ?', [result.insertId, userId], (readError, savedRows) => {
+          if (readError || !savedRows[0]) return res.status(201).json({ message: '已生成新图片', imageId: result.insertId });
+          res.status(201).json({ message: '已生成新图片', image: presentOwnedImage(savedRows[0]) });
+        });
+      }
+    );
+  });
+});
+
+// 替换保留同一数据库记录：先安全落盘新文件，数据库成功更新后再清理旧文件。
+app.put('/api/entertainment/images/:imageId/file', editedImageUpload.single('image'), (req, res) => {
+  const imageId = Number(req.params.imageId);
+  const userId = req.authUserId;
+  if (!Number.isInteger(imageId) || imageId < 1) {
+    removeUploadedImage(req.file);
+    return res.status(400).json({ error: '图片标识无效' });
+  }
+  if (String(req.body.confirmReplace) !== 'true') {
+    removeUploadedImage(req.file);
+    return res.status(400).json({ error: '请确认替换原图' });
+  }
+  if (!req.file) return res.status(400).json({ error: '请选择编辑后的图片文件' });
+
+  db.query('SELECT * FROM entertainment_images WHERE id = ? AND user_id = ?', [imageId, userId], (lookupError, rows) => {
+    if (lookupError) {
+      removeUploadedImage(req.file);
+      return res.status(500).json({ error: '查询原图片失败' });
+    }
+    const original = rows[0];
+    if (!original) {
+      removeUploadedImage(req.file);
+      return res.status(404).json({ error: '图片不存在或无权操作' });
+    }
+
+    let metadata;
+    try {
+      metadata = getEditedImageMetadata(req.file);
+    } catch (error) {
+      removeUploadedImage(req.file);
+      return res.status(400).json({ error: error.message || '编辑后的图片无效' });
+    }
+
+    db.query(
+      `UPDATE entertainment_images
+       SET file_type = ?, file_size = ?, file_path = ?, width = ?, height = ?
+       WHERE id = ? AND user_id = ?`,
+      [metadata.fileType, metadata.fileSize, metadata.filePath, metadata.width, metadata.height, imageId, userId],
+      (updateError, result) => {
+        if (updateError || !result.affectedRows) {
+          removeUploadedImage(req.file);
+          return res.status(updateError ? 500 : 404).json({ error: updateError ? '替换原图失败' : '图片不存在或无权操作' });
+        }
+        const previousFile = resolveStoredFile(original.file_path);
+        const nextFile = path.resolve(req.file.path);
+        if (previousFile && previousFile !== nextFile) fs.unlink(previousFile, () => {});
+        db.query('SELECT * FROM entertainment_images WHERE id = ? AND user_id = ?', [imageId, userId], (readError, savedRows) => {
+          if (readError || !savedRows[0]) return res.json({ message: '原图已替换', imageId });
+          res.json({ message: '原图已替换', image: presentOwnedImage(savedRows[0]) });
+        });
+      }
+    );
+  });
+});
+
 // 批量更新图片风格
 app.put('/api/entertainment/images/batch-style', (req, res) => {
   const { style } = req.body;
@@ -1421,6 +1527,63 @@ app.put('/api/entertainment/images/:imageId', (req, res) => {
     res.status(200).json({ message: '更新成功' });
   });
 });
+
+// 编辑器导出的文件只接受无动画、可安全重新编码的格式。原始 GIF/BMP
+// 仍可在媒体库中查看和下载，但不会被静默压扁为单帧图片。
+const editedImageUpload = multer({
+  storage: imageStorage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: function (_req, file, cb) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowed = {
+      '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'
+    };
+    if (allowed[ext] && allowed[ext] === file.mimetype) return cb(null, true);
+    cb(new Error('编辑后的图片仅支持 JPEG、PNG 或 WebP 格式'));
+  }
+});
+
+function removeUploadedImage(file) {
+  if (file?.path) fs.unlink(file.path, () => {});
+}
+
+function getEditedImageMetadata(file) {
+  const buffer = fs.readFileSync(file.path);
+  const dimensions = imageSize(buffer);
+  const typeToExtension = { jpg: '.jpg', png: '.png', webp: '.webp' };
+  const typeToMime = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+  if (!dimensions?.type || !typeToExtension[dimensions.type]) {
+    throw new Error('编辑后的文件不是受支持的图片格式');
+  }
+  const requestedExtension = path.extname(file.originalname).toLowerCase();
+  if (requestedExtension !== typeToExtension[dimensions.type] && !(dimensions.type === 'jpg' && requestedExtension === '.jpeg')) {
+    throw new Error('图片文件扩展名与实际格式不匹配');
+  }
+  return {
+    fileType: typeToExtension[dimensions.type],
+    mimeType: typeToMime[dimensions.type],
+    width: Number(dimensions.width) || 0,
+    height: Number(dimensions.height) || 0,
+    fileSize: file.size,
+    filePath: file.path.replace(__dirname, '').replace(/\\/g, '/')
+  };
+}
+
+function presentOwnedImage(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    style: row.style,
+    description: row.description,
+    file_type: row.file_type,
+    file_size: row.file_size,
+    width: row.width,
+    height: row.height,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    url: `/api/entertainment/image-file/${row.id}`
+  };
+}
 
 // 批量删除图片
 app.delete('/api/entertainment/images', (req, res) => {
@@ -1744,7 +1907,7 @@ app.get('/api/entertainment/music/:userId', (req, res) => {
   const userId = req.authUserId;
   const query = `
     SELECT id, title, artist, album, release_date, file_type, 
-           file_path, cover_path, duration, lyrics, created_at
+           file_path, cover_path, duration, lyrics, lyrics_offset_ms, created_at
     FROM entertainment_music 
     WHERE user_id = ?
     ORDER BY created_at DESC
@@ -1878,11 +2041,19 @@ app.get('/api/entertainment/music-file/:musicId', (req, res) => {
 // 更新音乐歌词
 app.put('/api/entertainment/music/:musicId/lyrics', (req, res) => {
   const { musicId } = req.params;
-  const { lyrics } = req.body;
+  const { lyrics, lyricsOffsetMs } = req.body;
   const userId = req.authUserId;
-  
-  const updateQuery = 'UPDATE entertainment_music SET lyrics = ? WHERE id = ? AND user_id = ?';
-  db.query(updateQuery, [lyrics, musicId, userId], (err, result) => {
+
+  const parsedOffset = lyricsOffsetMs == null ? 0 : Number(lyricsOffsetMs);
+  if (!Number.isInteger(parsedOffset) || Math.abs(parsedOffset) > 30000) {
+    return res.status(400).json({ error: '歌词偏移必须在正负 30 秒内' });
+  }
+  if (typeof lyrics !== 'string' || lyrics.length > 200000) {
+    return res.status(400).json({ error: '歌词内容无效或过长' });
+  }
+
+  const updateQuery = 'UPDATE entertainment_music SET lyrics = ?, lyrics_offset_ms = ? WHERE id = ? AND user_id = ?';
+  db.query(updateQuery, [lyrics, parsedOffset, musicId, userId], (err, result) => {
     if (err) return res.status(500).json({ error: '更新歌词失败' });
     if (result.affectedRows === 0) return res.status(404).json({ error: '音乐不存在或无权操作' });
     res.status(200).json({ message: '更新成功' });

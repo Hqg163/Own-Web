@@ -1,5 +1,5 @@
 <template>
-  <div :class="themeClass" class="music-zone">
+  <div class="music-zone">
     <!-- 头部 -->
     <div class="zone-header">
       <button class="back-btn" type="button" @click="goBack">
@@ -123,30 +123,21 @@
           <button class="close-lyrics-btn" type="button" aria-label="关闭歌词侧栏" @click="showLyricsSidebar = false"><AppIcon name="close" :size="18" /></button>
         </div>
         
-        <div class="lyrics-scroll-wrapper" ref="lyricsWrapper" @scroll="onLyricsScroll">
+        <div class="lyrics-scroll-wrapper" ref="lyricsWrapper" @scroll="onLyricsScroll" @wheel="pauseLyricsFollow" @touchstart="pauseLyricsFollow" @pointerdown="pauseLyricsFollow">
           <div class="lyrics-content">
             <div 
               v-for="(line, index) in parsedLyrics" 
               :key="index"
-              :class="['lyrics-line', { active: currentLyricIndex === index }]"
+              :class="['lyrics-line', { active: isCurrentLyric(index) }]"
               @click="seekToLyric(line.time)"
             >
               {{ line.text }}
             </div>
             
-            <div v-if="parsedLyrics.length === 0 && currentMusic" class="lyrics-fallback">
-              <div class="lyric-word" 
-                   v-for="(word, idx) in fallbackLyrics" 
-                   :key="idx"
-                   :class="{ active: fallbackIndex === idx }">
-                {{ word }}
-              </div>
-            </div>
-            
             <div v-if="!currentMusic" class="no-lyrics-playing">
               <p>请选择一首歌曲播放</p>
             </div>
-            <div v-else-if="parsedLyrics.length === 0 && !fallbackLyrics.length" class="no-lyrics">
+            <div v-else-if="parsedLyrics.length === 0" class="no-lyrics">
               <p>该歌曲暂无可显示歌词</p>
               <button class="add-lyrics-btn" @click="showAddLyrics = true">添加歌词</button>
             </div>
@@ -158,6 +149,7 @@
           <span>歌词偏移: {{ lyricsOffset.toFixed(1) }}s</span>
           <button @click="adjustLyricsOffset(0.5)" title="歌词延后0.5秒">+0.5s</button>
           <button type="button" @click="resetLyricsOffset" aria-label="重置歌词偏移"><AppIcon name="rotate-ccw" :size="16" /></button>
+          <button v-if="!lyricsAutoScroll" type="button" class="return-lyrics-btn" @click="resumeLyricsFollow"><AppIcon name="arrow-down" :size="16" />回到当前歌词</button>
         </div>
       </div>
     </div>
@@ -231,10 +223,6 @@
         <div class="fs-background" :style="fsBackgroundStyle"></div>
         <div class="fs-background-overlay"></div>
         
-        <div class="particles" v-if="isPlaying">
-          <span v-for="n in 20" :key="n" :style="getParticleStyle(n)"></span>
-        </div>
-        
         <div class="fs-header">
           <button class="back-btn" type="button" @click="closeFullscreenPlayer">
             <AppIcon name="arrow-left" :size="17" />
@@ -264,16 +252,17 @@
             <div 
               class="lyrics-scroll-wrapper" 
               ref="fsLyricsWrapper"
-              @mouseenter="isMouseOverLyrics = true"
-              @mouseleave="onLyricsMouseLeave"
               @scroll="onFsLyricsScroll"
+              @wheel="pauseLyricsFollow"
+              @touchstart="pauseLyricsFollow"
+              @pointerdown="pauseLyricsFollow"
             >
               <div class="lyrics-content">
                 <div 
                   v-for="(line, index) in parsedLyrics" 
                   :key="index"
                   :class="['fs-lyric-line', { 
-                    active: currentLyricIndex === index,
+                    active: isCurrentLyric(index),
                     past: index < currentLyricIndex
                   }]"
                   @click="seekToLyric(line.time)"
@@ -293,6 +282,7 @@
               <span>下一句：</span>
               {{ parsedLyrics[currentLyricIndex + 1]?.text || '' }}
             </div>
+            <button v-if="!lyricsAutoScroll" type="button" class="return-lyrics-btn fs-return-lyrics-btn" @click="resumeLyricsFollow"><AppIcon name="arrow-down" :size="16" />回到当前歌词</button>
           </div>
           
           <div class="fs-playlist-section" :class="{ collapsed: !showFsPlaylist }">
@@ -366,9 +356,11 @@
             <div class="extra-controls">
               <button 
                 :class="['lyrics-toggle-btn', { active: showLyricsSidebar }]" 
+                type="button"
                 @click="toggleLyricsSidebar(currentMusic)"
+                aria-label="切换歌词侧栏"
               >
-                词
+                <AppIcon name="panel-right" :size="18" />
               </button>
               <button class="playlist-toggle-fs" type="button" @click="showFsPlaylist = !showFsPlaylist" aria-label="播放列表">
                 <AppIcon name="list" :size="18" />
@@ -581,13 +573,13 @@
 <script>
 import axios from '@/services/http'
 import AppIcon from '@/components/AppIcon.vue'
+import { findActiveLyricIndex, getCenteredScrollTop, parseLrc } from '@/utils/lrc'
 
 export default {
   name: 'MusicZone',
   components: { AppIcon },
   data() {
     return {
-      themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
       userId: null,
       musicList: [],
       
@@ -609,11 +601,13 @@ export default {
       parsedLyrics: [],
       currentLyricIndex: -1,
       lyricsOffset: 0,
+      lrcOffset: 0,
+      lyricsOffsetSaveTimer: null,
       lyricsAutoScroll: true,
       lyricsScrollTimer: null,
-      fallbackLyrics: [],
-      fallbackIndex: 0,
-      isMouseOverLyrics: false,  // 新增：鼠标是否在歌词上
+      lyricsProgrammaticScroll: false,
+      lyricsSyncFrame: null,
+      lyricsResizeObserver: null,
       
       // 筛选
       isFiltering: false,
@@ -640,8 +634,7 @@ export default {
       uploadForm: { title: '', artist: '', album: '', releaseDate: '', file: null },
       errors: {},
       
-      toast: { show: false, message: '', type: 'success' },
-      themeHandler: null
+      toast: { show: false, message: '', type: 'success' }
     }
   },
   computed: {
@@ -688,8 +681,7 @@ export default {
   },
   watch: {
     currentTime(newVal) {
-      this.updateCurrentLyric(newVal)
-      this.updateFallbackIndex(newVal)
+      this.scheduleLyricsSync(newVal)
     },
     volume(newVal) {
       if (this.$refs.audioPlayer) {
@@ -705,24 +697,21 @@ export default {
       return
     }
     this.loadMusic()
-    this.setupThemeListener()
     this.setupKeyboardShortcuts()
     this.loadVolumeSetting()
   },
+  mounted() {
+    this.lyricsResizeObserver = new ResizeObserver(() => this.scheduleLyricsSync(this.currentTime, true))
+  },
   beforeUnmount() {
     this.removeKeyboardShortcuts()
-    if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler)
+    if (this.lyricsScrollTimer) clearTimeout(this.lyricsScrollTimer)
+    if (this.lyricsSyncFrame) cancelAnimationFrame(this.lyricsSyncFrame)
+    if (this.lyricsResizeObserver) this.lyricsResizeObserver.disconnect()
     if (this.$refs.audioPlayer) this.$refs.audioPlayer.pause()
     document.body.style.overflow = ''
   },
   methods: {
-    setupThemeListener() {
-      this.themeHandler = (e) => {
-        this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
-      }
-      window.addEventListener('theme-changed', this.themeHandler)
-    },
-    
     loadVolumeSetting() {
       const saved = localStorage.getItem('musicVolume')
       if (saved !== null) this.volume = parseInt(saved)
@@ -885,7 +874,6 @@ export default {
         audio.play()
         this.isPlaying = true
         this.loadLyrics(music)
-        this.generateFallbackLyrics(music)
       }
     },
     
@@ -990,13 +978,13 @@ export default {
       }
     },
     
-    // ========== 歌词处理（已修复） ==========
-    
+    // ========== 歌词处理 ==========
     loadLyrics(music) {
       if (!music) return
       
       this.currentLyricIndex = -1
       this.lyricsOffset = 0
+      this.lyricsAutoScroll = true
       
       if (music.lyrics) {
         this.currentLyrics = music.lyrics
@@ -1010,144 +998,78 @@ export default {
           this.parseLyrics(savedLyrics)
         }
       }
+      this.lyricsOffset = this.lrcOffset + (Number(music.lyrics_offset_ms) || 0) / 1000
       
       if (this.parsedLyrics.length > 0) {
         this.$nextTick(() => {
-          this.currentLyricIndex = 0
-          this.scrollLyrics()
+          this.observeLyricsWrappers()
+          this.scheduleLyricsSync(this.currentTime, true)
         })
       }
     },
     
     parseLyrics(lyricsText) {
-      if (!lyricsText) {
-        this.parsedLyrics = []
-        return
-      }
-      
-      const lines = lyricsText.split('\n')
-      const parsed = []
-      const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/
-      
-      lines.forEach(line => {
-        const match = line.match(timeRegex)
-        if (match) {
-          const minutes = parseInt(match[1])
-          const seconds = parseInt(match[2])
-          const ms = parseInt((match[3] || '0').toString().padEnd(3, '0').substring(0, 3))
-          const time = minutes * 60 + seconds + ms / 1000
-          const text = match[4].trim()
-          
-          if (text) parsed.push({ time, text })
-        }
+      const parsed = parseLrc(lyricsText || '')
+      this.parsedLyrics = parsed.lines
+      this.lrcOffset = parsed.offsetSeconds
+    },
+
+    isCurrentLyric(index) {
+      const active = this.parsedLyrics[this.currentLyricIndex]
+      return Boolean(active && this.parsedLyrics[index]?.time === active.time)
+    },
+
+    observeLyricsWrappers() {
+      if (!this.lyricsResizeObserver) return
+      const wrappers = [this.$refs.lyricsWrapper, this.$refs.fsLyricsWrapper].filter(Boolean)
+      wrappers.forEach((wrapper) => this.lyricsResizeObserver.observe(wrapper))
+    },
+
+    scheduleLyricsSync(currentTime, force = false) {
+      if (this.lyricsSyncFrame) cancelAnimationFrame(this.lyricsSyncFrame)
+      this.lyricsSyncFrame = requestAnimationFrame(() => {
+        this.lyricsSyncFrame = null
+        const nextIndex = findActiveLyricIndex(this.parsedLyrics, currentTime, this.lyricsOffset)
+        const changed = nextIndex !== this.currentLyricIndex
+        this.currentLyricIndex = nextIndex
+        if ((changed || force) && this.lyricsAutoScroll) this.scrollLyrics()
       })
-      
-      this.parsedLyrics = parsed.sort((a, b) => a.time - b.time)
     },
-    
-    generateFallbackLyrics(music) {
-      const title = music.title || ''
-      const artist = music.artist || ''
-      const text = `${title} - ${artist}`
-      this.fallbackLyrics = text.split('').filter(c => c.trim())
-    },
-    
-    // 关键修复：歌词索引更新
-    updateCurrentLyric(currentTime) {
-      if (this.parsedLyrics.length === 0) {
-        this.currentLyricIndex = -1
-        this.updateFallbackIndex(currentTime)
-        return
-      }
-      
-      const adjustedTime = currentTime - this.lyricsOffset
-      
-      // 找到当前时间对应的歌词索引
-      let idx = -1
-      for (let i = 0; i < this.parsedLyrics.length; i++) {
-        if (adjustedTime >= this.parsedLyrics[i].time) {
-          idx = i
-        } else {
-          break
-        }
-      }
-      
-      // 只有索引变化时才更新
-      if (idx !== -1 && this.currentLyricIndex !== idx) {
-        this.currentLyricIndex = idx
-        if (this.lyricsAutoScroll && !this.isMouseOverLyrics) {
-          this.scrollLyrics()
-        }
-      }
-    },
-    
-    updateFallbackIndex(currentTime) {
-      if (this.fallbackLyrics.length === 0) return
-      const progress = currentTime / (this.totalDuration || 1)
-      this.fallbackIndex = Math.floor(progress * this.fallbackLyrics.length)
-    },
-    
-    // 关键修复：歌词滚动 - 使用居中算法
+
     scrollLyrics() {
       this.$nextTick(() => {
-        // 确定使用哪个容器
-        let wrapper
-        if (this.fullscreenPlayer) {
-          wrapper = this.$refs.fsLyricsWrapper
-        } else {
-          wrapper = this.$refs.lyricsWrapper
-        }
-        
-        if (!wrapper) return
-        
-        // 找到当前激活的歌词行
-        const activeLine = wrapper.querySelector('.active')
-        if (!activeLine) return
-        
-        // 计算居中位置
-        const wrapperHeight = wrapper.clientHeight
-        const lineTop = activeLine.offsetTop
-        const lineHeight = activeLine.clientHeight
-        
-        // 目标位置：让当前行居中
-        const targetScrollTop = lineTop - (wrapperHeight / 2) + (lineHeight / 2)
-        
-        wrapper.scrollTo({
-          top: Math.max(0, targetScrollTop),
-          behavior: 'smooth'
+        const wrappers = [this.$refs.lyricsWrapper, this.$refs.fsLyricsWrapper].filter(Boolean)
+        wrappers.forEach((wrapper) => {
+          const activeLine = wrapper.querySelector('.active')
+          if (!activeLine) return
+          const target = getCenteredScrollTop(wrapper.clientHeight, wrapper.scrollHeight, activeLine.offsetTop, activeLine.clientHeight)
+          this.lyricsProgrammaticScroll = true
+          wrapper.scrollTo({ top: target, behavior: 'auto' })
+          requestAnimationFrame(() => { this.lyricsProgrammaticScroll = false })
         })
       })
     },
-    
-    // 歌词滚动事件 - 用户手动滚动时暂停自动滚动
-    onLyricsScroll() {
-      if (!this.lyricsAutoScroll) return
-      
+
+    pauseLyricsFollow() {
+      if (this.lyricsProgrammaticScroll) return
       this.lyricsAutoScroll = false
       if (this.lyricsScrollTimer) clearTimeout(this.lyricsScrollTimer)
-      
-      this.lyricsScrollTimer = setTimeout(() => {
-        if (!this.isMouseOverLyrics) {
-          this.lyricsAutoScroll = true
-          this.scrollLyrics()
-        }
-      }, 3000)
+      this.lyricsScrollTimer = setTimeout(() => this.resumeLyricsFollow(), 5000)
+    },
+
+    resumeLyricsFollow() {
+      if (this.lyricsScrollTimer) clearTimeout(this.lyricsScrollTimer)
+      this.lyricsAutoScroll = true
+      this.scheduleLyricsSync(this.currentTime, true)
+    },
+
+    onLyricsScroll() {
+      if (!this.lyricsProgrammaticScroll) this.pauseLyricsFollow()
     },
     
     onFsLyricsScroll(e) {
-      // 阻止事件冒泡
       e.stopPropagation()
       this.onLyricsScroll()
-    },
-    
-    onLyricsMouseLeave() {
-      this.isMouseOverLyrics = false
-      // 鼠标离开后3秒恢复自动滚动
-      if (this.lyricsScrollTimer) clearTimeout(this.lyricsScrollTimer)
-      this.lyricsScrollTimer = setTimeout(() => {
-        this.lyricsAutoScroll = true
-        this.scrollLyrics()
-      }, 3000)
     },
     
     seekToLyric(time) {
@@ -1155,14 +1077,38 @@ export default {
       const adjustedTime = time + this.lyricsOffset
       this.$refs.audioPlayer.currentTime = Math.max(0, adjustedTime)
       this.currentTime = adjustedTime
+      this.resumeLyricsFollow()
     },
     
     adjustLyricsOffset(delta) {
-      this.lyricsOffset += delta
+      this.lyricsOffset = Math.max(-30, Math.min(30, this.lyricsOffset + delta))
+      this.scheduleLyricsSync(this.currentTime, true)
+      this.queueLyricsOffsetSave()
     },
     
     resetLyricsOffset() {
-      this.lyricsOffset = 0
+      this.lyricsOffset = this.lrcOffset
+      this.scheduleLyricsSync(this.currentTime, true)
+      this.queueLyricsOffsetSave()
+    },
+
+    queueLyricsOffsetSave() {
+      if (!this.currentMusic) return
+      if (this.lyricsOffsetSaveTimer) clearTimeout(this.lyricsOffsetSaveTimer)
+      this.lyricsOffsetSaveTimer = setTimeout(() => this.saveLyricsOffset(), 500)
+    },
+
+    async saveLyricsOffset() {
+      if (!this.currentMusic) return
+      try {
+        await axios.put(`/api/entertainment/music/${this.currentMusic.id}/lyrics`, {
+          lyrics: this.currentLyrics || '',
+          lyricsOffsetMs: Math.round((this.lyricsOffset - this.lrcOffset) * 1000)
+        })
+        this.currentMusic.lyrics_offset_ms = Math.round((this.lyricsOffset - this.lrcOffset) * 1000)
+      } catch (_) {
+        this.showToast('歌词偏移未能保存，请稍后重试', 'error')
+      }
     },
     
     // ========== 音频事件 ==========
@@ -1236,21 +1182,15 @@ export default {
       if (!this.currentMusic) return
       
       this.fullscreenPlayer = true
-      this.loadLyrics(this.currentMusic)
       document.body.style.overflow = 'hidden'
       
-      // 重置歌词状态
       this.lyricsAutoScroll = true
-      this.isMouseOverLyrics = false
       
-      // 延迟初始化滚动
       this.$nextTick(() => {
         const wrapper = this.$refs.fsLyricsWrapper
         if (wrapper) wrapper.scrollTop = 0
-        
-        setTimeout(() => {
-          this.scrollLyrics()
-        }, 100)
+        this.observeLyricsWrappers()
+        requestAnimationFrame(() => this.scheduleLyricsSync(this.currentTime, true))
       })
     },
     
@@ -1258,16 +1198,20 @@ export default {
       this.fullscreenPlayer = false
       this.showFsPlaylist = true
       document.body.style.overflow = ''
-      this.isMouseOverLyrics = false
     },
     
     toggleLyricsSidebar(music) {
+      if (!music) return
       if (this.showLyricsSidebar && this.currentMusic && this.currentMusic.id === music.id) {
         this.showLyricsSidebar = false
       } else {
-        this.loadLyrics(music)
+        if (!this.currentMusic || this.currentMusic.id !== music.id) this.playMusic(music)
+        else this.loadLyrics(music)
         this.showLyricsSidebar = true
-        this.$nextTick(() => this.scrollLyrics())
+        this.$nextTick(() => {
+          this.observeLyricsWrappers()
+          this.scheduleLyricsSync(this.currentTime, true)
+        })
       }
     },
     
@@ -1454,8 +1398,8 @@ export default {
       
       try {
         await axios.put(`/api/entertainment/music/${this.currentMusic.id}/lyrics`, {
-          userId: this.userId,
-          lyrics: this.newLyricsText
+          lyrics: this.newLyricsText,
+          lyricsOffsetMs: 0
         })
         
         localStorage.setItem(`lyrics_${this.currentMusic.id}`, this.newLyricsText)
@@ -1465,23 +1409,7 @@ export default {
         this.newLyricsText = ''
         this.showToast('歌词保存成功')
       } catch (err) {
-        localStorage.setItem(`lyrics_${this.currentMusic.id}`, this.newLyricsText)
-        this.currentLyrics = this.newLyricsText
-        this.parseLyrics(this.newLyricsText)
-        this.showAddLyrics = false
-        this.newLyricsText = ''
-        this.showToast('歌词已保存（本地）')
-      }
-    },
-    
-    getParticleStyle(n) {
-      const randomX = Math.random() * 100
-      const randomDelay = Math.random() * 2
-      const randomDuration = 3 + Math.random() * 4
-      return {
-        left: randomX + '%',
-        animationDelay: randomDelay + 's',
-        animationDuration: randomDuration + 's'
+        this.showToast(err.response?.data?.error || '歌词保存失败，请稍后重试', 'error')
       }
     },
     
@@ -1494,42 +1422,21 @@ export default {
 </script>
 
 <style scoped>
-/* 主题变量 */
-.light-mode {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --bg-tertiary: #f1f5f9;
-  --border-color: #e2e8f0;
-  --text-primary: #1e293b;
-  --text-secondary: #64748b;
-  --text-tertiary: #94a3b8;
-  --accent-color: #3b82f6;
-  --accent-light: #dbeafe;
-  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-  --danger-color: #ef4444;
-  --success-color: #10b981;
-  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-}
-
-.dark-mode {
-  --bg-primary: #1e293b;
-  --bg-secondary: #334155;
-  --bg-tertiary: #475569;
-  --border-color: #475569;
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-tertiary: #94a3b8;
-  --accent-color: #60a5fa;
-  --accent-light: rgba(96, 165, 250, 0.2);
-  --accent-gradient: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-  --danger-color: #f87171;
-  --success-color: #34d399;
-  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
-}
-
 .music-zone {
+  /* Transitional aliases keep legacy selectors tied to the shared token system. */
+  --bg-primary: var(--surface);
+  --bg-secondary: var(--bg);
+  --bg-tertiary: var(--surface-raised);
+  --border-color: var(--border);
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
+  --text-tertiary: var(--subtle);
+  --accent-color: var(--accent);
+  --accent-light: var(--accent-soft);
+  --accent-gradient: var(--accent);
+  --danger-color: var(--danger);
+  --success-color: var(--accent);
+  --shadow-lg: var(--shadow);
   min-height: 100vh;
   padding: 20px;
   padding-bottom: 120px;
@@ -2157,30 +2064,6 @@ export default {
   transform: scale(1.02);
 }
 
-.lyrics-fallback {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px;
-  padding: 20px;
-}
-
-.lyric-word {
-  padding: 8px 12px;
-  background: var(--bg-secondary);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 18px;
-  transition: all 0.3s;
-}
-
-.lyric-word.active {
-  background: var(--accent-color);
-  color: white;
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-
 .no-lyrics, .no-lyrics-playing {
   padding: 60px 20px;
   color: var(--text-tertiary);
@@ -2578,43 +2461,6 @@ export default {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.4);
-}
-
-.particles {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.particles span {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  background: var(--accent-color);
-  border-radius: 50%;
-  opacity: 0;
-  animation: particle-float 8s ease-in-out infinite;
-}
-
-@keyframes particle-float {
-  0% {
-    opacity: 0;
-    transform: translateY(100vh) scale(0);
-  }
-  10% {
-    opacity: 0.8;
-  }
-  90% {
-    opacity: 0.8;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-100vh) scale(1.5);
-  }
 }
 
 .fs-header {
@@ -4445,6 +4291,14 @@ input:focus-visible {
 .music-zone .lyrics-header span,
 .music-zone .lyrics-line { color: var(--muted); }
 .music-zone .lyrics-line.active { color: var(--accent); }
+.music-zone .lyrics-scroll-wrapper { scrollbar-color: var(--border) transparent; }
+.music-zone .lyrics-scroll-wrapper::-webkit-scrollbar-thumb { background: var(--border); }
+.music-zone .lyrics-content { padding-block: max(72px, 35vh); }
+.music-zone .lyrics-line,
+.music-zone .fs-lyric-line { transition: color .16s ease, background-color .16s ease; }
+.music-zone .return-lyrics-btn { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--accent); border: 1px solid var(--border); background: var(--surface-raised); }
+.music-zone .return-lyrics-btn:hover { color: var(--accent-strong); border-color: var(--accent); background: var(--accent-soft); }
+.music-zone .fs-return-lyrics-btn { position: absolute; right: var(--space-3); bottom: var(--space-3); }
 .music-zone .mini-player {
   z-index: 30;
   border-top: 1px solid var(--border);
@@ -4468,7 +4322,6 @@ input:focus-visible {
 .music-zone .fullscreen-music-player { z-index: 1000; background: var(--bg); color: var(--text); }
 .music-zone .fs-background { opacity: .06; filter: grayscale(1) blur(18px); }
 .music-zone .fs-background-overlay { background: var(--bg); opacity: .94; }
-.music-zone .particles,
 .music-zone .album-glow { display: none; }
 .music-zone .fs-header,
 .music-zone .fs-controls { border-color: var(--border); background: var(--surface); box-shadow: none; }

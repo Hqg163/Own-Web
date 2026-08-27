@@ -30,6 +30,7 @@
     <path v-else-if="name === 'archive'" d="M4 7h16v13H4zM3 4h18v3H3zM10 12h4" />
     <path v-else-if="name === 'arrow-left'" d="M19 12H5m6-6-6 6 6 6" />
     <path v-else-if="name === 'arrow-right'" d="M5 12h14m-6-6 6 6-6 6" />
+    <path v-else-if="name === 'arrow-down'" d="M12 5v14m-6-6 6 6 6-6" />
     <path v-else-if="name === 'chevron-down'" d="m6 9 6 6 6-6" />
     <path v-else-if="name === 'paperclip'" d="m8.5 12.5 6.7-6.7a3.5 3.5 0 0 1 5 5l-8.1 8.1a5 5 0 0 1-7.1-7.1l7.4-7.4" />
     <path v-else-if="name === 'rotate-cw'" d="M20 11a8 8 0 1 0 2 5m-2-5V5m0 6h-6" />

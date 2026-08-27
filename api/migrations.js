@@ -20,7 +20,7 @@ async function runMigrations(db) {
     id VARCHAR(100) PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`);
   const [done] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260826_blog_v1']);
-  if (done.length) return;
+  if (!done.length) {
 
   await addColumn(db, 'users', 'avatar_path', 'VARCHAR(500) NULL');
   await addColumn(db, 'users', 'bio', 'TEXT NULL');
@@ -101,7 +101,17 @@ async function runMigrations(db) {
   for (const [name, slug] of [['技术','technology'],['学习','learning'],['生活','life'],['作品','work']]) {
     await query('INSERT IGNORE INTO categories (name, slug) VALUES (?, ?)', [name, slug]);
   }
-  await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260826_blog_v1']);
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260826_blog_v1']);
+  }
+
+  // Keep migrations additive. Existing deployments have already recorded the
+  // blog migration above, so later schema changes must never be hidden behind
+  // that single sentinel.
+  const [mediaEditorDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260828_media_editor_v1']);
+  if (!mediaEditorDone.length) {
+    await addColumn(db, 'entertainment_music', 'lyrics_offset_ms', 'INT NOT NULL DEFAULT 0');
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260828_media_editor_v1']);
+  }
 }
 
 function createShareToken() { return crypto.randomBytes(32).toString('hex'); }
