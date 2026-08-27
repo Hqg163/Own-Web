@@ -19,6 +19,19 @@
     <path v-else-if="name === 'music'" d="M9 18V5l10-2v13M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3Zm10-2a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z" />
     <path v-else-if="name === 'grid'" d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />
     <path v-else-if="name === 'upload'" d="M12 16V4m0 0L7 9m5-5 5 5M5 20h14" />
+    <path v-else-if="name === 'download'" d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14" />
+    <path v-else-if="name === 'plus'" d="M12 5v14M5 12h14" />
+    <path v-else-if="name === 'check'" d="m5 12 4.2 4.2L19 6.5" />
+    <path v-else-if="name === 'trash'" d="M4 7h16M10 11v6m4-6v6M9 7l1-3h4l1 3m-9 0 1 14h10l1-14" />
+    <path v-else-if="name === 'mail'" d="M4 5h16v14H4zM4 7l8 6 8-6" />
+    <path v-else-if="name === 'inbox'" d="M4 4h16v12l-3 4H7l-3-4zM4 15h5l1.5 2h3L15 15h5" />
+    <path v-else-if="name === 'file'" d="M6 3h8l4 4v14H6zM14 3v5h5" />
+    <path v-else-if="name === 'code'" d="m9 18-6-6 6-6m6 0 6 6-6 6M13 4l-2 16" />
+    <path v-else-if="name === 'archive'" d="M4 7h16v13H4zM3 4h18v3H3zM10 12h4" />
+    <path v-else-if="name === 'arrow-left'" d="M19 12H5m6-6-6 6 6 6" />
+    <path v-else-if="name === 'arrow-right'" d="M5 12h14m-6-6 6 6-6 6" />
+    <path v-else-if="name === 'chevron-down'" d="m6 9 6 6 6-6" />
+    <path v-else-if="name === 'paperclip'" d="m8.5 12.5 6.7-6.7a3.5 3.5 0 0 1 5 5l-8.1 8.1a5 5 0 0 1-7.1-7.1l7.4-7.4" />
     <path v-else-if="name === 'chevron-right'" d="m9 18 6-6-6-6" />
     <path v-else d="M4 6h16M4 12h16M4 18h10" />
   </svg>

@@ -2,166 +2,54 @@
 <template>
   <div class="study-zone-container" :class="themeClass">
     <div class="study-layout">
-      <!-- 头部：分类标签 + 搜索 + 邮件 -->
-      <div class="study-header-bar">
-        <div class="category-tabs-wrapper">
-          <button 
-            v-for="cat in studyCategories" 
-            :key="cat.id"
-            :class="['study-category-btn', { active: currentStudyCategory === cat.id }]"
-            @click="switchStudyCategory(cat.id)"
-          >
-            {{ cat.name }}
-          </button>
+      <header class="study-page-header">
+        <div><p class="eyebrow">Learning workspace</p><h2>学习资料</h2><p>文件、Markdown 与站内邮件都保留在此处。</p></div>
+        <div class="study-email-btns" aria-label="邮件与通知">
+          <button class="email-action-btn" type="button" @click="showSendEmail = true"><AppIcon name="mail" :size="17" />发送邮件</button>
+          <button class="email-action-btn" type="button" @click="showInbox = true"><AppIcon name="inbox" :size="17" />收件箱 <span v-if="unreadEmailCount > 0" class="email-badge">{{ unreadEmailCount }}</span></button>
+          <button class="email-action-btn icon-only" type="button" aria-label="发送通知记录" @click="showNotificationPanel = true"><AppIcon name="bell" :size="17" /><span v-if="unreadNotificationCount > 0" class="email-badge">{{ unreadNotificationCount }}</span></button>
         </div>
-        
-        <div class="study-header-actions">
-          <div class="study-search-box">
-            <input 
-              type="text" 
-              v-model="studySearchQuery" 
-              placeholder="搜索文件..." 
-              @keyup.enter="handleStudySearch"
-              @input="handleSearchInput"
-            />
-            <button 
-              class="search-icon-btn" 
-              @click="handleStudySearch"
-              :class="{ 'searching': isSearching }"
-            >
-              {{ isSearching ? '🔍' : '🔍' }}
-            </button>
-            <button 
-              v-if="studySearchQuery" 
-              class="clear-search-btn"
-              @click="clearSearch"
-            >
-              ✕
-            </button>
-          </div>
-          
-          <div class="study-email-btns">
-            <button class="email-action-btn send-btn" @click="showSendEmail = true">
-              📧 发送邮件
-            </button>
-            <button class="email-action-btn inbox-btn" @click="showInbox = true">
-              📥 收件箱
-              <span v-if="unreadEmailCount > 0" class="email-badge">{{ unreadEmailCount }}</span>
-            </button>
-            <!-- 新增通知按钮 -->
-            <button class="email-action-btn notification-btn" @click="showNotificationPanel = true">
-              🔔 通知
-              <span v-if="unreadNotificationCount > 0" class="email-badge">{{ unreadNotificationCount }}</span>
-            </button>
-          </div>
+      </header>
+      <div class="study-header-bar">
+        <div class="category-tabs-wrapper" aria-label="文件分类">
+          <button v-for="cat in studyCategories" :key="cat.id" :class="['study-category-btn', { active: currentStudyCategory === cat.id }]" type="button" :aria-pressed="currentStudyCategory === cat.id" @click="switchStudyCategory(cat.id)">{{ cat.name }}</button>
+        </div>
+        <div class="study-search-box">
+          <label class="visually-hidden" for="study-file-search">搜索文件</label>
+          <input id="study-file-search" v-model="studySearchQuery" type="search" placeholder="搜索文件" @keyup.enter="handleStudySearch" @input="handleSearchInput" />
+          <button class="search-icon-btn" type="button" aria-label="搜索文件" :aria-busy="isSearching" @click="handleStudySearch"><AppIcon name="search" :size="17" /></button>
+          <button v-if="studySearchQuery" class="clear-search-btn" type="button" aria-label="清除搜索" @click="clearSearch"><AppIcon name="close" :size="16" /></button>
         </div>
       </div>
-
-      <!-- 工具栏 -->
-      <div class="study-toolbar">
+      <div class="study-toolbar" aria-label="文件操作">
         <div class="toolbar-left-group">
-          <button class="study-tool-btn upload-download-btn" @click="showUploadDialog = true">
-            ⬆️⬇️ 上传/下载
-          </button>
-          <button class="study-tool-btn edit-md-btn" @click="openMarkdownEditor">
-            ✏️ 编辑
-          </button>
+          <button class="study-tool-btn button-primary" type="button" @click="showUploadDialog = true"><AppIcon name="upload" :size="17" />上传或下载</button>
+          <button class="study-tool-btn" type="button" @click="openMarkdownEditor"><AppIcon name="pen" :size="17" />新建 Markdown</button>
         </div>
-        
         <div class="toolbar-right-group">
-          <button 
-            v-if="currentStudyCategory === 'all'" 
-            class="study-tool-btn add-category-btn"
-            @click="showAddCategoryDialog = true"
-          >
-            ➕ 添加分类
-          </button>
-          
-          <template v-if="currentStudyCategory !== 'all'">
-            <button 
-              v-if="!isBatchDeleteMode" 
-              class="study-tool-btn batch-delete-btn" 
-              :disabled="currentStudyFiles.length === 0"
-              @click="startBatchDelete"
-            >
-              🗑️ 批量删除
-            </button>
-            <template v-else>
-              <button 
-                class="study-tool-btn confirm-delete-btn" 
-                :disabled="selectedStudyFiles.length === 0"
-                @click="confirmBatchDelete"
-              >
-                ⚠️ 确认删除
-              </button>
-              <button class="study-tool-btn cancel-btn" @click="cancelBatchDelete">
-                取消
-              </button>
-            </template>
+          <div class="view-toggle" aria-label="文件视图"><button type="button" :class="{ active: viewMode === 'grid' }" :aria-pressed="viewMode === 'grid'" aria-label="网格视图" @click="viewMode = 'grid'"><AppIcon name="grid" :size="16" /></button><button type="button" :class="{ active: viewMode === 'list' }" :aria-pressed="viewMode === 'list'" aria-label="列表视图" @click="viewMode = 'list'"><AppIcon name="menu" :size="16" /></button></div>
+          <button v-if="currentStudyCategory === 'all'" class="study-tool-btn" type="button" @click="showAddCategoryDialog = true"><AppIcon name="plus" :size="17" />添加分类</button>
+          <template v-else>
+            <button v-if="!isBatchDeleteMode" class="study-tool-btn button-danger" type="button" :disabled="currentStudyFiles.length === 0" @click="startBatchDelete"><AppIcon name="trash" :size="17" />批量删除</button>
+            <template v-else><button class="study-tool-btn button-danger" type="button" :disabled="selectedStudyFiles.length === 0" @click="confirmBatchDelete"><AppIcon name="check" :size="17" />删除 {{ selectedStudyFiles.length || '' }}</button><button class="study-tool-btn" type="button" @click="cancelBatchDelete">取消</button></template>
           </template>
         </div>
       </div>
-
-      <!-- 文件展示区 -->
       <div class="study-files-container">
-        <!-- 所有分类视图 -->
         <template v-if="currentStudyCategory === 'all'">
-          <div 
-            v-for="cat in studyCategories.filter(c => c.id !== 'all')" 
-            :key="cat.id" 
-            class="study-category-block"
-          >
-            <h4 class="study-cat-title">{{ cat.name }}</h4>
-            <div class="study-files-grid" v-if="studyFilesByCategory[cat.id] && studyFilesByCategory[cat.id].length > 0">
-              <div 
-                v-for="file in studyFilesByCategory[cat.id]" 
-                :key="file.id"
-                class="study-file-card"
-                @click="openStudyFile(file)"
-              >
-                <div class="study-file-icon" :class="getStudyFileIconClass(file.file_type)">
-                  {{ getStudyFileIcon(file.file_type) }}
-                </div>
-                <div class="study-file-name" :title="getDisplayFileName(file)">
-                  <span>{{ getDisplayFileName(file) }}</span>
-                </div>
-                <div class="study-file-meta">{{ formatStudyDate(file.created_at) }}</div>
-              </div>
+          <section v-for="cat in studyCategories.filter(c => c.id !== 'all')" :key="cat.id" class="study-category-block">
+            <div class="study-category-heading"><h3>{{ cat.name }}</h3><span>{{ (studyFilesByCategory[cat.id] || []).length }} 个文件</span></div>
+            <div v-if="studyFilesByCategory[cat.id] && studyFilesByCategory[cat.id].length > 0" class="study-files-grid" :class="{ 'is-list': viewMode === 'list' }">
+              <button v-for="file in studyFilesByCategory[cat.id]" :key="file.id" type="button" class="study-file-card" @click="openStudyFile(file)"><span class="study-file-icon" :class="getStudyFileIconClass(file.file_type)"><AppIcon :name="getStudyFileIconName(file.file_type)" :size="22" /></span><span class="study-file-name" :title="getDisplayFileName(file)">{{ getDisplayFileName(file) }}</span><span class="study-file-meta">{{ formatFileSize(file.file_size) }} · {{ formatStudyDate(file.created_at) }}</span></button>
             </div>
-            <div v-else class="study-empty-block">
-              <span class="empty-icon">📭</span>
-              <span>此类别现在空空如也哟~~</span>
-            </div>
-          </div>
+            <div v-else class="study-empty-block"><AppIcon name="folder" :size="21" /><span>此分类暂时没有文件。</span></div>
+          </section>
         </template>
-        
-        <!-- 单个分类视图 -->
         <template v-else>
-          <div class="study-files-grid" v-if="currentStudyFiles.length > 0">
-            <div 
-              v-for="file in currentStudyFiles" 
-              :key="file.id"
-              class="study-file-card"
-              :class="{ 'selectable': isBatchDeleteMode, 'selected': selectedStudyFiles.includes(file.id) }"
-              @click="isBatchDeleteMode ? toggleStudyFileSelection(file.id) : openStudyFile(file)"
-            >
-              <div v-if="isBatchDeleteMode" class="selection-indicator">
-                <span v-if="selectedStudyFiles.includes(file.id)">✓</span>
-              </div>
-              
-              <div class="study-file-icon" :class="getStudyFileIconClass(file.file_type)">
-                {{ getStudyFileIcon(file.file_type) }}
-              </div>
-              <div class="study-file-name" :title="getDisplayFileName(file)">
-                <span>{{ getDisplayFileName(file) }}</span>
-              </div>
-              <div class="study-file-meta">{{ formatStudyDate(file.created_at) }}</div>
-            </div>
+          <div v-if="currentStudyFiles.length > 0" class="study-files-grid" :class="{ 'is-list': viewMode === 'list' }">
+            <button v-for="file in currentStudyFiles" :key="file.id" type="button" class="study-file-card" :class="{ selectable: isBatchDeleteMode, selected: selectedStudyFiles.includes(file.id) }" :aria-pressed="isBatchDeleteMode ? selectedStudyFiles.includes(file.id) : undefined" @click="isBatchDeleteMode ? toggleStudyFileSelection(file.id) : openStudyFile(file)"><span v-if="isBatchDeleteMode" class="selection-indicator"><AppIcon v-if="selectedStudyFiles.includes(file.id)" name="check" :size="14" /></span><span class="study-file-icon" :class="getStudyFileIconClass(file.file_type)"><AppIcon :name="getStudyFileIconName(file.file_type)" :size="22" /></span><span class="study-file-name" :title="getDisplayFileName(file)">{{ getDisplayFileName(file) }}</span><span class="study-file-meta">{{ formatFileSize(file.file_size) }} · {{ formatStudyDate(file.created_at) }}</span></button>
           </div>
-          <div v-else class="study-empty-block main-empty">
-            <span class="empty-icon">📭</span>
-            <span>此类别现在空空如也哟~~</span>
-          </div>
+          <div v-else class="study-empty-block main-empty"><AppIcon name="folder" :size="24" /><span>此分类暂时没有文件。</span></div>
         </template>
       </div>
     </div>
@@ -173,16 +61,16 @@
       <div class="modal-content">
         <h3>选择操作</h3>
         <div class="choice-buttons">
-          <button class="choice-card upload-card" @click="switchToUploadMode">
-            <span class="choice-icon">⬆️</span>
+          <button class="choice-card upload-card" type="button" @click="switchToUploadMode">
+            <AppIcon class="choice-icon" name="upload" :size="28" />
             <span>上传文件</span>
           </button>
-          <button class="choice-card download-card" @click="switchToDownloadMode">
-            <span class="choice-icon">⬇️</span>
+          <button class="choice-card download-card" type="button" @click="switchToDownloadMode">
+            <AppIcon class="choice-icon" name="download" :size="28" />
             <span>下载文件</span>
           </button>
         </div>
-        <button class="modal-close-btn" @click="showUploadDialog = false">取消</button>
+          <button class="modal-close-btn" type="button" @click="showUploadDialog = false">取消</button>
       </div>
     </div>
 
@@ -210,8 +98,8 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button class="btn-secondary" @click="cancelUpload">取消</button>
-          <button class="btn-primary" :disabled="!uploadFormData.selectedFile || uploadingFile" @click="confirmUpload">
+          <button class="btn-secondary" type="button" @click="cancelUpload">取消</button>
+          <button class="btn-primary" type="button" :disabled="!uploadFormData.selectedFile || uploadingFile" @click="confirmUpload">
             {{ uploadingFile ? '上传中...' : '确认上传' }}
           </button>
         </div>
@@ -223,30 +111,30 @@
       <div class="modal-content download-modal">
         <h3>选择要下载的文件</h3>
         <div class="download-tree-view">
-          <div class="tree-root" @click="toggleAllDownloadExpansion">
-            <span class="tree-toggle-icon">{{ allDownloadExpanded ? '▼' : '▶' }}</span>
-            <span class="tree-icon">📁</span>
+          <button class="tree-root" type="button" :aria-expanded="allDownloadExpanded" @click="toggleAllDownloadExpansion">
+            <AppIcon class="tree-toggle-icon" :class="{ expanded: allDownloadExpanded }" name="chevron-down" :size="15" />
+            <AppIcon class="tree-icon" name="folder" :size="18" />
             <span>所有</span>
-          </div>
+          </button>
           <div v-show="allDownloadExpanded" class="tree-children">
             <div v-for="cat in studyCategories.filter(c => c.id !== 'all')" :key="cat.id" class="tree-category-item">
-              <div class="tree-category-header" @click="toggleDownloadCategory(cat.id)">
-                <span class="tree-toggle-icon">{{ expandedDownloadCats.includes(cat.id) ? '▼' : '▶' }}</span>
-                <span class="tree-icon">📂</span>
+              <button class="tree-category-header" type="button" :aria-expanded="expandedDownloadCats.includes(cat.id)" @click="toggleDownloadCategory(cat.id)">
+                <AppIcon class="tree-toggle-icon" :class="{ expanded: expandedDownloadCats.includes(cat.id) }" name="chevron-down" :size="15" />
+                <AppIcon class="tree-icon" name="folder" :size="18" />
                 <span>{{ cat.name }}</span>
-              </div>
+              </button>
               <div v-show="expandedDownloadCats.includes(cat.id)" class="tree-files">
-                <div 
+                <button
                   v-for="file in studyFilesByCategory[cat.id] || []" 
                   :key="file.id"
                   class="tree-file-row"
                   :class="{ selected: selectedDownloadFiles.includes(file.id) }"
                   @click="selectDownloadFile(file.id)"
                 >
-                  <span class="tree-file-icon">{{ getStudyFileIcon(file.file_type) }}</span>
+                  <AppIcon class="tree-file-icon" :name="getStudyFileIconName(file.file_type)" :size="16" />
                   <span class="tree-file-name">{{ getDisplayFileName(file) }}</span>
-                  <span v-if="selectedDownloadFiles.includes(file.id)" class="selected-check">✓</span>
-                </div>
+                  <AppIcon v-if="selectedDownloadFiles.includes(file.id)" class="selected-check" name="check" :size="16" />
+                </button>
                 <div v-if="!studyFilesByCategory[cat.id] || studyFilesByCategory[cat.id].length === 0" class="tree-empty">
                   暂无文件
                 </div>
@@ -255,8 +143,8 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button class="btn-secondary" @click="cancelDownload">取消</button>
-          <button class="btn-primary" :disabled="selectedDownloadFiles.length === 0" @click="confirmDownload">
+          <button class="btn-secondary" type="button" @click="cancelDownload">取消</button>
+          <button class="btn-primary" type="button" :disabled="selectedDownloadFiles.length === 0" @click="confirmDownload">
             下载到本地
           </button>
         </div>
@@ -277,8 +165,8 @@
           />
         </div>
         <div class="modal-actions">
-          <button class="btn-secondary" @click="showAddCategoryDialog = false">取消</button>
-          <button class="btn-primary" :disabled="!newStudyCategoryName.trim()" @click="confirmAddCategory">
+          <button class="btn-secondary" type="button" @click="showAddCategoryDialog = false">取消</button>
+          <button class="btn-primary" type="button" :disabled="!newStudyCategoryName.trim()" @click="confirmAddCategory">
             确定
           </button>
         </div>
@@ -291,8 +179,8 @@
         <h3>确认删除</h3>
         <p>你确定要删除这 {{ selectedStudyFiles.length }} 个文件吗？</p>
         <div class="modal-actions">
-          <button class="btn-secondary" @click="showDeleteConfirmDialog = false">取消</button>
-          <button class="btn-danger" :disabled="deletingFiles" @click="executeBatchDelete">
+          <button class="btn-secondary" type="button" @click="showDeleteConfirmDialog = false">取消</button>
+          <button class="btn-danger" type="button" :disabled="deletingFiles" @click="executeBatchDelete">
             {{ deletingFiles ? '删除中...' : '确认' }}
           </button>
         </div>
@@ -302,26 +190,26 @@
     <!-- Markdown编辑器 -->
     <div v-if="showMarkdownEditor" class="fullscreen-modal">
       <div class="fullscreen-header">
-        <button class="back-btn" @click="closeMarkdownEditor">
-          <span>←</span> 返回
+        <button class="back-btn" type="button" @click="closeMarkdownEditor">
+          <AppIcon name="arrow-left" :size="17" /> 返回
         </button>
         <h3>Markdown编辑器</h3>
         <div class="header-actions">
-          <button class="btn-secondary" @click="closeMarkdownEditor">取消编辑</button>
-          <button class="btn-primary" @click="showPublishMarkdownDialog = true">发布</button>
+          <button class="btn-secondary" type="button" @click="closeMarkdownEditor">取消编辑</button>
+          <button class="btn-primary" type="button" @click="showPublishMarkdownDialog = true">发布</button>
         </div>
       </div>
       
       <div class="md-toolbar">
-        <button @click="insertMdSyntax('**', '**')" title="粗体"><b>B</b></button>
-        <button @click="insertMdSyntax('*', '*')" title="斜体"><i>I</i></button>
-        <button @click="insertMdSyntax('# ')">H1</button>
-        <button @click="insertMdSyntax('## ')">H2</button>
-        <button @click="insertMdSyntax('- ')">• 列表</button>
-        <button @click="insertMdSyntax('> ')">引用</button>
-        <button @click="insertMdSyntax('```\n', '\n```')">代码块</button>
-        <button @click="insertMdSyntax('[', '](url)')">链接</button>
-        <button @click="insertMdSyntax('![alt](', ')')">图片</button>
+        <button type="button" aria-label="粗体" @click="insertMdSyntax('**', '**')"><b>B</b></button>
+        <button type="button" aria-label="斜体" @click="insertMdSyntax('*', '*')"><i>I</i></button>
+        <button type="button" aria-label="一级标题" @click="insertMdSyntax('# ')">H1</button>
+        <button type="button" aria-label="二级标题" @click="insertMdSyntax('## ')">H2</button>
+        <button type="button" aria-label="列表" @click="insertMdSyntax('- ')">列表</button>
+        <button type="button" aria-label="引用" @click="insertMdSyntax('> ')">引用</button>
+        <button type="button" aria-label="代码块" @click="insertMdSyntax('```\n', '\n```')">代码</button>
+        <button type="button" aria-label="链接" @click="insertMdSyntax('[', '](url)')">链接</button>
+        <button type="button" aria-label="插入图片（需填写 alt 文本）" @click="insertMdSyntax('![alt](', ')')">图片</button>
       </div>
       
       <div class="md-editor-body">
@@ -351,8 +239,8 @@
             </select>
           </div>
           <div class="modal-actions">
-            <button class="btn-secondary" @click="showPublishMarkdownDialog = false">取消</button>
-            <button class="btn-primary" :disabled="!publishMdForm.title.trim()" @click="confirmPublishMarkdown">
+            <button class="btn-secondary" type="button" @click="showPublishMarkdownDialog = false">取消</button>
+            <button class="btn-primary" type="button" :disabled="!publishMdForm.title.trim()" @click="confirmPublishMarkdown">
               发布
             </button>
           </div>
@@ -364,13 +252,13 @@
     <!-- 文件预览器 -->
     <div v-if="viewingStudyFile" class="fullscreen-modal file-viewer" @click.self="closeFileViewer">
       <div class="fullscreen-header">
-        <button class="back-btn" @click="closeFileViewer">
-          <span>←</span> 返回
+        <button class="back-btn" type="button" @click="closeFileViewer">
+          <AppIcon name="arrow-left" :size="17" /> 返回
         </button>
         <span class="viewer-filename">{{ viewingStudyFile.original_name }}</span>
         <div class="viewer-nav-btns">
-          <button :disabled="!hasPrevStudyFile" @click="prevStudyFile">← 上一个</button>
-          <button :disabled="!hasNextStudyFile" @click="nextStudyFile">下一个 →</button>
+          <button type="button" :disabled="!hasPrevStudyFile" @click="prevStudyFile"><AppIcon name="arrow-left" :size="15" />上一个</button>
+          <button type="button" :disabled="!hasNextStudyFile" @click="nextStudyFile">下一个<AppIcon name="arrow-right" :size="15" /></button>
         </div>
       </div>
       
@@ -419,11 +307,11 @@
         
         <!-- Office文档提示（新增） -->
         <div v-else-if="isOfficeType(viewingStudyFile.file_type)" class="preview-unsupported office-preview">
-          <div class="big-file-icon">📊</div>
+          <AppIcon class="big-file-icon" name="file" :size="44" />
           <h3>Office 文档</h3>
           <p>浏览器无法直接预览 {{ viewingStudyFile.file_type.toUpperCase() }} 格式文件</p>
           <p class="sub-hint">建议下载后使用相应软件打开</p>
-          <button class="btn-primary" @click="downloadCurrentStudyFile">📥 下载到本地</button>
+          <button class="btn-primary" type="button" @click="downloadCurrentStudyFile"><AppIcon name="download" :size="17" />下载到本地</button>
         </div>
         
         <!-- 文本/Markdown预览 -->
@@ -434,10 +322,10 @@
         
         <!-- 其他不支持的格式 -->
         <div v-else class="preview-unsupported">
-          <div class="big-file-icon">📄</div>
+          <AppIcon class="big-file-icon" name="file" :size="44" />
           <h3>无法预览此格式</h3>
           <p>当前不方便预览 {{ viewingStudyFile.file_type.toUpperCase() }} 格式文件</p>
-          <button class="btn-primary" @click="downloadCurrentStudyFile">📥 下载到本地查看</button>
+          <button class="btn-primary" type="button" @click="downloadCurrentStudyFile"><AppIcon name="download" :size="17" />下载到本地查看</button>
         </div>
       </div>
     </div>
@@ -445,11 +333,11 @@
     <!-- 发送邮件 -->
     <div v-if="showSendEmail" class="fullscreen-modal">
       <div class="fullscreen-header">
-        <button class="back-btn" @click="closeSendEmail">
-          <span>←</span> 返回
+        <button class="back-btn" type="button" @click="closeSendEmail">
+          <AppIcon name="arrow-left" :size="17" /> 返回
         </button>
         <h3>发送邮件</h3>
-        <button class="btn-primary" :disabled="!emailForm.recipient || !emailForm.subject" @click="sendEmail">
+        <button class="btn-primary" type="button" :disabled="!emailForm.recipient || !emailForm.subject || emailSendingStatus === 'sending'" @click="sendEmail">
           确认发送
         </button>
       </div>
@@ -472,12 +360,12 @@
           <div class="attachments-list">
             <div v-for="(att, idx) in emailForm.attachments" :key="idx" class="attachment-tag-item">
               <span>{{ att.name }}</span>
-              <button class="remove-attachment" @click="removeEmailAttachment(idx)">×</button>
+              <button class="remove-attachment" type="button" :aria-label="`移除附件 ${att.name}`" @click="removeEmailAttachment(idx)"><AppIcon name="close" :size="14" /></button>
             </div>
-            <button class="add-att-btn" @click="showAttOptions = !showAttOptions">➕ 添加附件</button>
+            <button class="add-att-btn" type="button" @click="showAttOptions = !showAttOptions"><AppIcon name="plus" :size="16" />添加附件</button>
             <div v-if="showAttOptions" class="att-options-menu">
-              <button @click="addLocalAttachment">本地上传</button>
-              <button @click="openInternalFileSelector">站内选择</button>
+              <button type="button" @click="addLocalAttachment">本地上传</button>
+              <button type="button" @click="openInternalFileSelector">站内选择</button>
             </div>
           </div>
 
@@ -489,19 +377,19 @@
                 <div v-for="cat in studyCategories.filter(c => c.id !== 'all')" :key="cat.id" class="selector-cat">
                   <div class="selector-cat-name">{{ cat.name }}</div>
                   <div class="selector-file-list">
-                    <div 
+                    <button
                       v-for="file in studyFilesByCategory[cat.id] || []" 
                       :key="file.id"
                       class="selector-file-row"
                       @click="selectInternalFileForEmail(file)"
                     >
-                      <span>{{ getStudyFileIcon(file.file_type) }}</span>
+                      <AppIcon :name="getStudyFileIconName(file.file_type)" :size="16" />
                       <span>{{ file.original_name }}</span>
-                    </div>
+                    </button>
                   </div>
                 </div>
               </div>
-              <button class="btn-secondary" @click="closeInternalSelector">关闭</button>
+              <button class="btn-secondary" type="button" @click="closeInternalSelector">关闭</button>
             </div>
           </div>
 
@@ -513,8 +401,8 @@
     <!-- 收件箱 -->
     <div v-if="showInbox" class="fullscreen-modal">
       <div class="fullscreen-header">
-        <button class="back-btn" @click="closeInbox">
-          <span>←</span> 返回
+        <button class="back-btn" type="button" @click="closeInbox">
+          <AppIcon name="arrow-left" :size="17" /> 返回
         </button>
         <h3>收件箱</h3>
         <div class="inbox-filter-tabs">
@@ -522,6 +410,8 @@
             v-for="filter in ['all', 'unread', 'read']" 
             :key="filter"
             :class="['filter-tab', { active: emailFilter === filter }]"
+            type="button"
+            :aria-pressed="emailFilter === filter"
             @click="emailFilter = filter"
           >
             {{ filter === 'all' ? '全部' : filter === 'unread' ? '未读' : '已读' }}
@@ -531,9 +421,10 @@
       
       <div class="inbox-content">
         <div v-if="!viewingEmail" class="email-list-view">
-          <div 
+          <button
             v-for="email in filteredEmails" 
             :key="email.id"
+            type="button"
             class="email-row"
             :class="{ unread: !email.is_read }"
             @click="viewEmail(email)"
@@ -544,10 +435,10 @@
               <span v-if="!email.is_read" class="unread-indicator"></span>
             </div>
             <div class="email-row-meta">
-              <span v-if="email.has_attachments" class="has-attachment-icon">📎</span>
+              <AppIcon v-if="email.has_attachments" class="has-attachment-icon" name="paperclip" :size="15" />
               <span class="email-time">{{ formatEmailTime(email.created_at) }}</span>
             </div>
-          </div>
+          </button>
           <div v-if="filteredEmails.length === 0" class="empty-inbox-msg">
             <p>暂无邮件</p>
           </div>
@@ -556,12 +447,12 @@
         <div v-else class="email-detail-view">
           <!-- 返回按钮 -->
           <div class="email-detail-nav">
-            <button @click="viewingEmail = null">
-              ← 返回邮件列表
+            <button type="button" @click="viewingEmail = null">
+              <AppIcon name="arrow-left" :size="15" />返回邮件列表
             </button>
             <div class="nav-spacer"></div>
-            <button :disabled="!hasPrevEmail" @click="prevEmail">← 上一封</button>
-            <button :disabled="!hasNextEmail" @click="nextEmail">下一封 →</button>
+            <button type="button" :disabled="!hasPrevEmail" @click="prevEmail"><AppIcon name="arrow-left" :size="15" />上一封</button>
+            <button type="button" :disabled="!hasNextEmail" @click="nextEmail">下一封<AppIcon name="arrow-right" :size="15" /></button>
           </div>
           
           <div class="email-detail-content">
@@ -584,12 +475,12 @@
                 class="email-att-item"
               >
                 <div class="att-info">
-                  <span class="att-icon">📎</span>
+                  <AppIcon class="att-icon" name="paperclip" :size="16" />
                   <span class="att-name">{{ att.name || '未命名文件' }}</span>
                   <span v-if="att.type === 'internal'" class="att-type-tag">站内文件</span>
                   <span v-else class="att-type-tag">本地文件</span>
                 </div>
-                <button class="btn-small btn-download" @click="downloadEmailAttachment(att, idx)">
+                <button class="btn-small btn-download" type="button" @click="downloadEmailAttachment(att, idx)">
                   下载
                 </button>
               </div>
@@ -602,13 +493,14 @@
     <!-- 通知面板 -->
     <div v-if="showNotificationPanel" class="fullscreen-modal">
       <div class="fullscreen-header">
-        <button class="back-btn" @click="showNotificationPanel = false">
-          <span>←</span> 返回
+        <button class="back-btn" type="button" @click="showNotificationPanel = false">
+          <AppIcon name="arrow-left" :size="17" /> 返回
         </button>
         <h3>发送通知记录</h3>
-        <button 
+        <button
           v-if="notifications.length > 0" 
           class="btn-secondary" 
+          type="button"
           @click="clearAllNotifications"
         >
           清空全部
@@ -617,7 +509,7 @@
       
       <div class="notification-content">
         <div v-if="notifications.length === 0" class="empty-notifications">
-          <span class="empty-icon">📭</span>
+          <AppIcon class="empty-icon" name="inbox" :size="32" />
           <p>暂无发送记录</p>
         </div>
         
@@ -629,8 +521,8 @@
             @click="markNotificationRead(notif.id)"
           >
             <div class="notification-indicator" :class="notif.type">
-              <span v-if="notif.type === 'success'">✓</span>
-              <span v-else>✗</span>
+              <AppIcon v-if="notif.type === 'success'" name="check" :size="16" />
+              <AppIcon v-else name="close" :size="16" />
             </div>
             
             <div class="notification-body">
@@ -645,7 +537,7 @@
               <div class="notification-time">{{ formatEmailTime(notif.time) }}</div>
             </div>
             
-            <button class="notification-delete" @click.stop="removeNotification(notif.id)">×</button>
+            <button class="notification-delete" type="button" aria-label="删除通知记录" @click.stop="removeNotification(notif.id)"><AppIcon name="close" :size="15" /></button>
           </div>
         </div>
       </div>
@@ -662,9 +554,11 @@
 import axios from '@/services/http'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import AppIcon from '@/components/AppIcon.vue'
 
 export default {
   name: 'StudyZone',
+  components: { AppIcon },
   data() {
     return {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
@@ -676,6 +570,7 @@ export default {
       studyFilesByCategory: {},
       studySearchQuery: '',
       isSearching: false,
+      viewMode: 'grid',
       
       // 上传/下载
       showUploadDialog: false,
@@ -819,22 +714,24 @@ export default {
       return this.viewingEmail.attachments.length;
     }
   },
-  created() {
+  async created() {
     if (localStorage.getItem('isLoggedIn') !== 'true') {
       this.$router.push('/login')
       return
     }
     this.userId = localStorage.getItem('userId')
     this.userEmail = localStorage.getItem('userEmail')
-    this.loadStudyCategories()
-    this.loadStudyFiles()
+    await this.loadStudyCategories()
+    await this.loadStudyFiles()
     this.loadEmails()
     this.loadNotifications()
     this.setupThemeListener()
+    document.addEventListener('keydown', this.handleEscape)
   },
   beforeUnmount() {
     window.removeEventListener('theme-changed', this.handleThemeChange)
     window.removeEventListener('storage', this.handleStorageChange)
+    document.removeEventListener('keydown', this.handleEscape)
   },
   methods: {
     setupThemeListener() {
@@ -848,6 +745,32 @@ export default {
         }
       }
       window.addEventListener('storage', this.handleStorageChange)
+    },
+    handleEscape(event) {
+      if (event.key !== 'Escape') return
+      if (this.showPublishMarkdownDialog) {
+        this.showPublishMarkdownDialog = false
+      } else if (this.showDeleteConfirmDialog) {
+        this.showDeleteConfirmDialog = false
+      } else if (this.showAddCategoryDialog) {
+        this.showAddCategoryDialog = false
+      } else if (this.showDownloadForm) {
+        this.cancelDownload()
+      } else if (this.showUploadForm) {
+        this.cancelUpload()
+      } else if (this.showUploadDialog) {
+        this.showUploadDialog = false
+      } else if (this.viewingStudyFile) {
+        this.closeFileViewer()
+      } else if (this.showMarkdownEditor) {
+        this.closeMarkdownEditor()
+      } else if (this.showSendEmail) {
+        this.closeSendEmail()
+      } else if (this.showInbox) {
+        this.closeInbox()
+      } else if (this.showNotificationPanel) {
+        this.showNotificationPanel = false
+      }
     },
     
     // ==================== 学习区方法 ====================
@@ -870,12 +793,7 @@ export default {
       try {
         const res = await axios.get(`/api/files/${this.userId}`)
         this.studyFiles = res.data.files
-        this.studyFilesByCategory = {}
-        this.studyCategories.forEach(cat => {
-          if (cat.id !== 'all') {
-            this.studyFilesByCategory[cat.id] = this.studyFiles.filter(f => f.category_id === cat.id)
-          }
-        })
+        this.updateCategoryMap()
       } catch (err) {
         this.showStudyToast('加载文件失败', 'error')
       }
@@ -951,20 +869,15 @@ export default {
       if (!this.studySearchQuery.trim()) return name
       return this.highlightMatch(name, this.studySearchQuery)
     },
-    getStudyFileIcon(ext) {
-      const iconMap = {
-        '.pdf': '📕', '.doc': '📘', '.docx': '📘', '.txt': '📄',
-        '.md': '📝', '.js': '📜', '.html': '🌐', '.css': '🎨',
-        '.py': '🐍', '.c': '🔧', '.cpp': '🔧', '.h': '🔧',
-        '.java': '☕', '.json': '📋', '.xml': '📋', '.ts': '📘',
-        '.vue': '💚', '.php': '🐘', '.go': '🐹', '.rs': '⚙️',
-        '.rb': '💎', '.swift': '🦉', '.kt': '🎯', '.sql': '🗃️',
-        '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️', '.gif': '🖼️',
-        '.mp4': '🎬', '.avi': '🎬', '.mp3': '🎵', '.wav': '🎵',
-        '.zip': '📦', '.rar': '📦', '.ppt': '📽️', '.pptx': '📽️',
-        '.xls': '📊', '.xlsx': '📊'
-      }
-      return iconMap[ext.toLowerCase()] || '📄'
+    getStudyFileIconName(ext) {
+      const value = String(ext || '').toLowerCase()
+      if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].includes(value)) return 'image'
+      if (['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv'].includes(value)) return 'video'
+      if (['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'].includes(value)) return 'music'
+      if (['.zip', '.rar', '.7z', '.tar', '.gz'].includes(value)) return 'archive'
+      if (['.js', '.ts', '.html', '.css', '.py', '.c', '.cpp', '.h', '.java', '.json', '.xml', '.vue', '.php', '.go', '.rs', '.rb', '.swift', '.kt', '.sql'].includes(value)) return 'code'
+      if (value === '.md') return 'pen'
+      return 'file'
     },
     getStudyFileIconClass(ext) {
       const classMap = {
@@ -1005,6 +918,12 @@ export default {
     formatStudyDate(dateStr) {
       const date = new Date(dateStr)
       return `${date.getMonth() + 1}/${date.getDate()}`
+    },
+    formatFileSize(bytes) {
+      const value = Number(bytes)
+      if (!Number.isFinite(value) || value < 1024) return `${Math.max(0, value || 0)} B`
+      if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+      return `${(value / (1024 * 1024)).toFixed(1)} MB`
     },
     formatEmailTime(dateStr) {
       const date = new Date(dateStr)
@@ -1059,7 +978,8 @@ export default {
           name: this.newStudyCategoryName.trim()
         })
         this.showStudyToast('分类添加成功')
-        this.loadStudyCategories()
+        await this.loadStudyCategories()
+        this.updateCategoryMap()
         this.showAddCategoryDialog = false
         this.newStudyCategoryName = ''
       } catch (err) {
@@ -3419,5 +3339,207 @@ button:disabled {
   .email-sender-name {
     min-width: auto;
   }
+}
+
+/* 文稿室工作区覆盖层：保留旧业务状态与弹窗，统一入口、文件集合和主题令牌。 */
+.study-zone-container { min-height: 0; padding: 0; background: transparent; color: var(--text); }
+.study-layout { max-width: none; gap: var(--space-4); margin: 0; }
+.study-page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }.study-page-header h2 { margin: var(--space-1) 0; font-size: 1.6rem; letter-spacing: -.025em; }.study-page-header > div > p:last-child { margin: 0; color: var(--muted); }
+.study-header-bar { align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-color: var(--border); }.category-tabs-wrapper { gap: var(--space-2); }.study-category-btn { min-height: 34px; padding: 0 var(--space-3); border-color: var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--muted); transition: border-color .15s ease, background .15s ease, color .15s ease; }.study-category-btn:hover { transform: none; border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.study-category-btn.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: none; color: var(--accent); }
+.study-search-box { min-width: min(100%, 260px); padding: 0 var(--space-2); border-color: var(--border); border-radius: var(--radius-sm); box-shadow: none; background: var(--surface-raised); }.study-search-box input { width: 100%; min-height: 38px; padding: 0 var(--space-2); color: var(--text); }.search-icon-btn, .clear-search-btn { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 0; border-radius: var(--radius-sm); color: var(--muted); }.search-icon-btn:hover, .clear-search-btn:hover { transform: none; color: var(--accent); background: var(--accent-soft); }
+.study-email-btns { display: flex; flex-wrap: wrap; gap: var(--space-2); }.email-action-btn { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 38px; padding: 0 var(--space-3); border-color: var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }.email-action-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.email-action-btn.icon-only { position: relative; width: 38px; padding: 0; justify-content: center; }.email-badge { top: -5px; right: -5px; background: var(--danger); }
+.study-toolbar { justify-content: space-between; padding: var(--space-3); border-color: var(--border); border-radius: var(--radius); background: var(--surface); }.toolbar-left-group, .toolbar-right-group { align-items: center; flex-wrap: wrap; gap: var(--space-2); }.study-tool-btn { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 38px; padding: 0 var(--space-3); border-color: var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }.study-tool-btn:hover:not(:disabled) { transform: none; border-color: var(--accent); background: var(--accent-soft); }.study-tool-btn.button-primary { background: var(--accent); border-color: var(--accent); color: #fff; }.study-tool-btn.button-primary:hover:not(:disabled) { background: var(--accent-strong); color: #fff; }.study-tool-btn.button-danger { color: var(--danger); }.view-toggle { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); }.view-toggle button { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 0; border-radius: 6px; color: var(--muted); background: transparent; }.view-toggle button.active { color: var(--accent); background: var(--accent-soft); }
+.study-files-container { display: grid; gap: var(--space-5); }.study-category-block { padding-top: 0; border: 0; }.study-category-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-2); }.study-category-heading h3 { margin: 0; font-size: 1rem; }.study-category-heading span { color: var(--muted); font-size: .8rem; }.study-files-grid { gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }.study-files-grid.is-list { grid-template-columns: 1fr; }.study-file-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-3); min-height: 86px; padding: var(--space-3); text-align: left; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: none; cursor: pointer; }.study-file-card:hover { transform: none; border-color: var(--accent); box-shadow: var(--shadow); }.study-files-grid.is-list .study-file-card { grid-template-columns: auto minmax(0, 1fr) auto; min-height: 58px; }.study-file-icon { display: grid; width: 38px; height: 38px; place-items: center; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent); font-size: inherit; }.study-file-name { min-width: 0; overflow: hidden; color: var(--text); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }.study-file-meta { grid-column: 2; color: var(--muted); font-size: .78rem; }.study-files-grid.is-list .study-file-meta { grid-column: 3; white-space: nowrap; }.selection-indicator { position: absolute; display: grid; width: 20px; height: 20px; place-items: center; border: 1px solid var(--accent); border-radius: 50%; background: var(--accent); color: #fff; }.study-file-card.selectable { position: relative; }.study-file-card.selected { border-color: var(--accent); background: var(--accent-soft); }.study-empty-block { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-4); border: 1px dashed var(--border); border-radius: var(--radius); background: transparent; color: var(--muted); }.main-empty { width: 100%; justify-content: center; min-height: 180px; }
+@media (max-width: 760px) { .study-page-header { align-items: stretch; flex-direction: column; }.study-email-btns { width: 100%; }.study-header-bar { align-items: stretch; flex-direction: column; }.study-search-box { width: 100%; max-width: none; }.study-toolbar { align-items: stretch; flex-direction: column; }.toolbar-left-group, .toolbar-right-group { justify-content: flex-start; }.study-tool-btn { flex: 1 1 auto; justify-content: center; }.study-files-grid { grid-template-columns: 1fr; }.study-files-grid.is-list .study-file-card { grid-template-columns: auto minmax(0, 1fr); }.study-files-grid.is-list .study-file-meta { grid-column: 2; }.category-tabs-wrapper { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--space-1); } }
+
+/* 所有遗留弹窗、编辑器与邮件界面接入同一套工作区令牌。 */
+.study-zone-container .modal-overlay {
+  background: rgb(20 25 23 / 46%);
+  backdrop-filter: blur(2px);
+}
+.study-zone-container .modal-content {
+  width: min(500px, calc(100% - 32px));
+  max-height: min(80vh, 680px);
+  padding: var(--space-5);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.study-zone-container .modal-content h3 { margin: 0 0 var(--space-4); color: var(--text); }
+.study-zone-container .modal-form-group { margin-bottom: var(--space-4); }
+.study-zone-container .modal-form-group label { color: var(--text); }
+.study-zone-container .modal-form-group input,
+.study-zone-container .modal-form-group select,
+.study-zone-container .compose-row input,
+.study-zone-container .compose-row textarea {
+  box-sizing: border-box;
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+.study-zone-container .modal-form-group input:focus,
+.study-zone-container .modal-form-group select:focus,
+.study-zone-container .compose-row input:focus,
+.study-zone-container .compose-row textarea:focus,
+.study-zone-container button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent), transparent 68%);
+  outline-offset: 2px;
+  border-color: var(--accent);
+  box-shadow: none;
+}
+.study-zone-container .modal-actions { gap: var(--space-2); margin-top: var(--space-5); }
+.study-zone-container .btn-primary,
+.study-zone-container .btn-secondary,
+.study-zone-container .btn-danger,
+.study-zone-container .modal-close-btn,
+.study-zone-container .back-btn,
+.study-zone-container .viewer-nav-btns button,
+.study-zone-container .email-detail-nav button,
+.study-zone-container .btn-small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: none;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.study-zone-container .btn-primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+.study-zone-container .btn-danger { border-color: var(--danger); background: var(--danger); color: #fff; }
+.study-zone-container .btn-primary:hover:not(:disabled) { background: var(--accent-strong); transform: none; }
+.study-zone-container .btn-danger:hover:not(:disabled) { filter: brightness(.94); }
+.study-zone-container .btn-secondary:hover:not(:disabled),
+.study-zone-container .modal-close-btn:hover,
+.study-zone-container .back-btn:hover,
+.study-zone-container .viewer-nav-btns button:hover:not(:disabled),
+.study-zone-container .email-detail-nav button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.study-zone-container .choice-buttons { gap: var(--space-3); margin: var(--space-4) 0; }
+.study-zone-container .choice-card {
+  gap: var(--space-3);
+  min-height: 130px;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+.study-zone-container .choice-card:hover { transform: none; border-color: var(--accent); background: var(--accent-soft); box-shadow: none; }
+.study-zone-container .choice-icon { color: var(--accent); }
+.study-zone-container .download-tree-view,
+.study-zone-container .internal-selector-embedded {
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+}
+.study-zone-container .tree-root,
+.study-zone-container .tree-category-header,
+.study-zone-container .tree-file-row,
+.study-zone-container .selector-file-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.study-zone-container .tree-root:hover,
+.study-zone-container .tree-category-header:hover,
+.study-zone-container .tree-file-row:hover,
+.study-zone-container .selector-file-row:hover { background: var(--accent-soft); }
+.study-zone-container .tree-toggle-icon { color: var(--muted); transition: transform .15s ease; }
+.study-zone-container .tree-toggle-icon.expanded { transform: rotate(0deg); }
+.study-zone-container .tree-toggle-icon:not(.expanded) { transform: rotate(-90deg); }
+.study-zone-container .tree-icon,
+.study-zone-container .tree-file-icon,
+.study-zone-container .selected-check { color: var(--accent); }
+.study-zone-container .fullscreen-modal { background: var(--bg); color: var(--text); }
+.study-zone-container .fullscreen-header {
+  min-height: 64px;
+  padding: var(--space-3) var(--space-5);
+  border-color: var(--border);
+  background: var(--surface);
+}
+.study-zone-container .fullscreen-header h3,
+.study-zone-container .viewer-filename { color: var(--text); }
+.study-zone-container .md-toolbar { gap: var(--space-2); padding: var(--space-2) var(--space-5); border-color: var(--border); background: var(--surface); }
+.study-zone-container .md-toolbar button { min-height: 32px; padding: 0 var(--space-2); border-color: var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--text); box-shadow: none; }
+.study-zone-container .md-toolbar button:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.study-zone-container .md-input,
+.study-zone-container .md-preview { padding: var(--space-5); background: var(--surface); color: var(--text); }
+.study-zone-container .md-input { border-color: var(--border); }
+.study-zone-container .preview-unsupported .big-file-icon { color: var(--accent); }
+.study-zone-container .email-compose-form,
+.study-zone-container .inbox-content,
+.study-zone-container .notification-content { padding: var(--space-5); }
+.study-zone-container .compose-row label,
+.study-zone-container .email-meta-info,
+.study-zone-container .email-body-text { color: var(--text); }
+.study-zone-container .add-att-btn,
+.study-zone-container .attachment-tag-item,
+.study-zone-container .filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+.study-zone-container .add-att-btn:hover,
+.study-zone-container .filter-tab:hover { border-color: var(--accent); color: var(--accent); }
+.study-zone-container .filter-tab.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+.study-zone-container .email-row {
+  width: 100%;
+  border: 1px solid transparent;
+  border-bottom-color: var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.study-zone-container .email-row:hover,
+.study-zone-container .email-row.unread { background: var(--accent-soft); }
+.study-zone-container .email-row:hover { border-color: var(--border); }
+.study-zone-container .email-sender-name,
+.study-zone-container .email-subject-line { color: var(--text); }
+.study-zone-container .email-subject-line,
+.study-zone-container .email-time { color: var(--muted); }
+.study-zone-container .has-attachment-icon,
+.study-zone-container .att-icon { color: var(--accent); }
+.study-zone-container .unread-indicator { background: var(--accent); }
+.study-zone-container .empty-inbox-msg,
+.study-zone-container .empty-notifications { color: var(--muted); }
+.study-zone-container .empty-notifications .empty-icon { color: var(--accent); }
+.study-zone-container .notification-item { border-color: var(--border); border-radius: var(--radius); background: var(--surface); }
+.study-zone-container .notification-indicator.success { background: var(--accent-soft); color: var(--accent); }
+.study-zone-container .notification-indicator.failed { background: color-mix(in srgb, var(--danger), transparent 88%); color: var(--danger); }
+.study-zone-container .notification-delete { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
+.study-zone-container .notification-delete:hover { background: color-mix(in srgb, var(--danger), transparent 88%); color: var(--danger); }
+.study-zone-container button:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 760px) {
+  .study-zone-container .fullscreen-header,
+  .study-zone-container .email-compose-form,
+  .study-zone-container .inbox-content,
+  .study-zone-container .notification-content { padding: var(--space-3); }
+  .study-zone-container .fullscreen-header { align-items: center; }
+  .study-zone-container .md-toolbar { padding: var(--space-2) var(--space-3); }
+  .study-zone-container .md-editor-body { grid-template-columns: 1fr; overflow: auto; }
+  .study-zone-container .md-input { min-height: 45vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  .study-zone-container .md-preview { min-height: 45vh; }
+  .study-zone-container .email-row { align-items: flex-start; gap: var(--space-2); padding: var(--space-3); }
 }
 </style>
