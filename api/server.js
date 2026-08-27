@@ -367,45 +367,29 @@ const upload = multer({
 // 注册 API
 app.post('/api/register', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
 
     if (!email || !password) {
       return res.status(400).json({ error: '邮箱、密码都是必填项' });
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: '请输入有效的邮箱地址' });
+    if (password.length < 6) return res.status(400).json({ error: '密码长度至少为 6 位' });
 
-    const username = '用户' + Math.floor(Math.random() * 1000);
-    
-    const checkEmailQuery = 'SELECT * FROM users WHERE email = ?';
-    db.query(checkEmailQuery, [email], async (err, results) => {
-      if (err) return res.status(500).json({ error: '数据库查询失败' });
-      if (results.length > 0) return res.status(400).json({ error: '该邮箱已被注册' });
-      
-      const checkUsernameQuery = 'SELECT * FROM users WHERE username = ?';
-      db.query(checkUsernameQuery, [username], async (err, results) => {
-        if (err) return res.status(500).json({ error: '数据库查询失败' });
-        if (results.length > 0) return res.status(400).json({ error: '该用户名已被使用' });
-        
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-        
-        const insertQuery = `INSERT INTO users (username, email, password) VALUES (?, ?, ?)`;
+    const [existingUsers] = await db.promise().query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existingUsers.length > 0) return res.status(400).json({ error: '该邮箱已被注册' });
 
-        db.query(insertQuery, [username, email, hashedPassword], (err, results) => {
-          if (err) return res.status(500).json({ error: '用户注册失败' });
-          
-          const userId = results.insertId;
-          // 为新用户创建默认分类
-          const defaultCategories = ['数学', '物理', '天文', 'web/app', '嵌入式', 'AI', '其它'];
-          defaultCategories.forEach((cat, index) => {
-            const catQuery = 'INSERT INTO learning_categories (user_id, name, sort_order, is_default) VALUES (?, ?, ?, TRUE)';
-            db.query(catQuery, [userId, cat, index]);
-          });
-          
-          res.status(201).json({ message: '用户注册成功', userId: userId });
-        });
-      });
-    });
+    const username = `用户${Date.now()}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [result] = await db.promise().query('INSERT INTO users (username, email, password) VALUES (?, ?, ?)', [username, email, hashedPassword]);
+    const defaultCategories = ['数学', '物理', '天文', 'web/app', '嵌入式', 'AI', '其它'];
+    await Promise.all(defaultCategories.map((category, index) => db.promise().query(
+      'INSERT INTO learning_categories (user_id, name, sort_order, is_default) VALUES (?, ?, ?, TRUE)',
+      [result.insertId, category, index]
+    )));
+    res.status(201).json({ message: '用户注册成功', userId: result.insertId });
   } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '该邮箱已被注册' });
     console.error('注册错误:', error);
     res.status(500).json({ error: '服务器内部错误' });
   }
