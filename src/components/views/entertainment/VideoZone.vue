@@ -2,18 +2,17 @@
   <div :class="themeClass" class="video-zone">
     <!-- 头部 -->
     <div class="zone-header">
-      <button class="back-btn" @click="goBack">
-        <span>←</span> 返回
+      <button class="back-btn" type="button" @click="goBack">
+        <AppIcon name="arrow-left" :size="17" />
+        返回媒体库
       </button>
     </div>
 
     <!-- 描述区域 -->
     <div class="zone-description">
-      <h3>🎬 视频专区</h3>
-      <p>本专区为个人视频专区，以常见的缩略图为封面的视频进行展示</p>
-      <p>悬停图片封面可直接小屏播放视频</p>
-      <p>点击封面可跳转内嵌视频播放器进行播放，播放器中有调速、快进、全屏、指定视频播放等功能</p>
-      <p>本页面视频均可播放和下载，请放心食用</p>
+      <div class="zone-eyebrow"><AppIcon name="video" :size="18" /> 媒体库</div>
+      <h3>视频</h3>
+      <p>集中管理个人视频。悬停卡片可预览，打开后可播放、调速、下载和查看属性。</p>
     </div>
 
     <!-- 操作栏 -->
@@ -21,31 +20,34 @@
       <span class="selection-status">{{ selectionText }}</span>
       <div class="action-btns">
         <template v-if="!isFiltering">
-          <button class="filter-btn" @click="startFilter">筛选视频</button>
-          <button class="upload-btn" @click="showUpload = true">上传视频</button>
+          <button class="filter-btn" type="button" @click="startFilter">选择多个</button>
+          <button class="upload-btn" type="button" @click="showUpload = true"><AppIcon name="upload" :size="17" />上传视频</button>
         </template>
         <template v-else>
-          <button class="action-btn delete-btn" :disabled="selectedVideos.length === 0" @click="confirmDelete">
+          <button class="action-btn delete-btn" type="button" :disabled="selectedVideos.length === 0" @click="confirmDelete">
             批量删除
           </button>
-          <button class="action-btn cancel-btn" @click="cancelFilter">取消筛选</button>
+          <button class="action-btn cancel-btn" type="button" @click="cancelFilter">取消</button>
         </template>
       </div>
     </div>
 
     <!-- 视频展示区域 -->
     <div class="videos-grid">
-      <div 
+      <button
         v-for="video in videos" 
         :key="video.id"
+        type="button"
         class="video-card"
         :class="{ 'selectable': isFiltering, 'selected': selectedVideos.includes(video.id) }"
+        :aria-label="isFiltering ? `选择视频：${video.title}` : `播放视频：${video.title}`"
+        :aria-pressed="isFiltering ? selectedVideos.includes(video.id) : undefined"
         @click="handleVideoClick(video)"
         @mouseenter="hoverVideo = video.id"
         @mouseleave="hoverVideo = null"
       >
         <div v-if="isFiltering" class="selection-indicator">
-          <span v-if="selectedVideos.includes(video.id)">✓</span>
+          <AppIcon v-if="selectedVideos.includes(video.id)" name="check" :size="17" />
         </div>
         
         <div class="video-thumbnail">
@@ -66,33 +68,35 @@
             <span class="format-badge">{{ video.file_type }}</span>
             <span class="duration-badge" v-if="video.duration">{{ video.duration }}</span>
           </div>
-          <div class="play-icon" v-if="!isFiltering && !isPlayingPreview(video)">▶</div>
+          <div class="play-icon" v-if="!isFiltering && !isPlayingPreview(video)"><AppIcon name="play" :size="24" /></div>
         </div>
         
         <div class="video-info">
           <span class="video-title">{{ video.title }}</span>
         </div>
-      </div>
+      </button>
     </div>
 
     <!-- 空状态 -->
-    <div v-if="videos.length === 0" class="empty-state">
+    <div v-if="videos.length === 0" class="empty-state" role="status">
+      <AppIcon name="video" :size="28" />
       <span>暂无视频，点击上传按钮添加视频</span>
     </div>
 
     <!-- 视频播放器 -->
-    <div v-if="playingVideo" class="video-player-fullscreen">
+    <div v-if="playingVideo" class="video-player-fullscreen" role="dialog" aria-modal="true" aria-label="视频播放器">
       <div class="player-header">
-        <button class="back-btn" @click="closePlayer">
-          <span>←</span> 返回
+        <button class="back-btn" type="button" @click="closePlayer">
+          <AppIcon name="arrow-left" :size="17" />
+          返回视频库
         </button>
         <span class="player-title">{{ playingVideo.title }}</span>
         <div class="player-options">
-          <button class="options-btn" @click="showOptions = !showOptions">⋮</button>
+          <button class="options-btn" type="button" aria-label="更多视频操作" :aria-expanded="showOptions" @click="showOptions = !showOptions"><AppIcon name="more" :size="20" /></button>
           <div v-if="showOptions" class="options-menu">
-            <button @click="showVideoProperties">属性</button>
-            <button @click="openVideoEditor">视频剪辑</button>
-            <button @click="downloadVideo">下载视频</button>
+            <button type="button" @click="showVideoProperties">属性</button>
+            <button type="button" @click="openVideoEditor">视频剪辑</button>
+            <button type="button" @click="downloadVideo">下载视频</button>
           </div>
         </div>
       </div>
@@ -109,7 +113,7 @@
           ></video>
           
           <div class="custom-controls">
-            <button @click="togglePlay">{{ isPlaying ? '⏸' : '▶' }}</button>
+            <button type="button" :aria-label="isPlaying ? '暂停视频' : '播放视频'" @click="togglePlay"><AppIcon :name="isPlaying ? 'pause' : 'play'" :size="19" /></button>
             <input 
               type="range" 
               v-model="currentTime" 
@@ -124,17 +128,19 @@
               <option value="1.5">1.5x</option>
               <option value="2">2x</option>
             </select>
-            <button @click="toggleFullscreen">⛶</button>
+            <button type="button" aria-label="全屏播放" @click="toggleFullscreen"><AppIcon name="maximize" :size="19" /></button>
           </div>
         </div>
         
         <div class="playlist-sidebar">
           <h4>播放列表</h4>
           <div class="playlist-items">
-            <div 
+            <button
               v-for="v in videos" 
               :key="v.id"
+              type="button"
               :class="['playlist-item', { active: playingVideo && playingVideo.id === v.id }]"
+              :aria-label="`播放：${v.title}`"
               @click="playVideo(v)"
               @mouseenter="showVideoDuration = v.id"
             >
@@ -143,7 +149,7 @@
                 <span class="playlist-title">{{ v.title }}</span>
                 <span v-if="showVideoDuration === v.id" class="playlist-duration">{{ v.duration || '0:00' }}</span>
               </div>
-            </div>
+            </button>
           </div>
         </div>
       </div>
@@ -151,7 +157,7 @@
 
     <!-- 视频属性弹窗 -->
     <div v-if="showProperties" class="modal-overlay" @click.self="showProperties = false">
-      <div class="properties-modal">
+      <div class="properties-modal" role="dialog" aria-modal="true" aria-label="视频属性">
         <h3>视频属性</h3>
         <div class="property-item">
           <label>标签：</label>
@@ -177,16 +183,16 @@
           <label>上传时间：</label>
           <span>{{ formatDate(currentVideoProperties.created_at) }}</span>
         </div>
-        <button @click="showProperties = false" class="btn-close">关闭</button>
+        <button type="button" @click="showProperties = false" class="btn-close">关闭</button>
       </div>
     </div>
 
     <!-- 视频剪辑器 - 完全重构 -->
-    <div v-if="showEditor" class="video-editor-fullscreen">
+    <div v-if="showEditor" class="video-editor-fullscreen" role="dialog" aria-modal="true" aria-label="视频剪辑工作室">
       <div class="editor-header">
-        <button class="back-btn" @click="closeEditor">← 返回</button>
+        <button class="back-btn" type="button" @click="closeEditor"><AppIcon name="arrow-left" :size="17" />返回播放器</button>
         <h3>视频剪辑工作室</h3>
-        <button class="save-btn" :disabled="processingVideo" @click="showSaveOptions = true">
+        <button class="save-btn" type="button" :disabled="processingVideo" @click="showSaveOptions = true">
           {{ processingVideo ? '处理中...' : '导出视频' }}
         </button>
       </div>
@@ -236,7 +242,7 @@
                   <input type="number" v-model.number="clipEnd" step="0.1" :min="clipStart" :max="videoDuration" />
                 </div>
               </div>
-              <button @click="previewClip" class="btn-preview">▶ 预览剪辑</button>
+              <button type="button" @click="previewClip" class="btn-preview"><AppIcon name="play" :size="16" />预览剪辑</button>
             </div>
           </div>
         </div>
@@ -245,14 +251,14 @@
         <div class="editor-tools-panel">
           <!-- 基础剪辑 -->
           <div class="tool-section">
-            <h4>✂️ 基础剪辑</h4>
+            <h4><AppIcon name="scissors" :size="17" />基础剪辑</h4>
             <div class="tool-buttons">
-              <button @click="splitClip" class="tool-btn">
-                <span class="icon">✂️</span>
+              <button type="button" @click="splitClip" class="tool-btn">
+                <AppIcon name="scissors" :size="18" />
                 <span>分割</span>
               </button>
-              <button @click="trimVideo" class="tool-btn">
-                <span class="icon">📐</span>
+              <button type="button" @click="trimVideo" class="tool-btn">
+                <AppIcon name="crop" :size="18" />
                 <span>裁剪</span>
               </button>
             </div>
@@ -260,7 +266,7 @@
           
           <!-- 画面调节 -->
           <div class="tool-section">
-            <h4>🎨 画面调节</h4>
+            <h4><AppIcon name="sliders" :size="17" />画面调节</h4>
             
             <div class="adjust-item">
               <label>亮度</label>
@@ -292,12 +298,12 @@
               <span>{{ videoAdjustments.hue }}°</span>
             </div>
             
-            <button @click="resetAdjustments" class="btn-reset">重置画面</button>
+            <button type="button" @click="resetAdjustments" class="btn-reset">重置画面</button>
           </div>
           
           <!-- 滤镜效果 -->
           <div class="tool-section">
-            <h4>🎬 滤镜效果</h4>
+            <h4><AppIcon name="video" :size="17" />滤镜效果</h4>
             <div class="filter-grid">
               <button 
                 v-for="filter in videoFilters" 
@@ -313,7 +319,7 @@
           
           <!-- 水印功能 -->
           <div class="tool-section">
-            <h4>💧 水印</h4>
+            <h4><AppIcon name="droplet" :size="17" />水印</h4>
             <div class="watermark-controls">
               <label class="checkbox-label">
                 <input type="checkbox" v-model="watermark.enabled" />
@@ -354,7 +360,7 @@
           
           <!-- 打码功能 -->
           <div class="tool-section">
-            <h4>🟪 打码/马赛克</h4>
+            <h4><AppIcon name="grid" :size="17" />打码/马赛克</h4>
             <div class="mosaic-controls">
               <label class="checkbox-label">
                 <input type="checkbox" v-model="mosaic.enabled" />
@@ -392,22 +398,22 @@
           
           <!-- 旋转与翻转 -->
           <div class="tool-section">
-            <h4>🔄 旋转与翻转</h4>
+            <h4><AppIcon name="rotate-cw" :size="17" />旋转与翻转</h4>
             <div class="transform-buttons">
-              <button @click="rotateVideo(-90)" class="tool-btn">
-                <span class="icon">↺</span>
+              <button type="button" @click="rotateVideo(-90)" class="tool-btn">
+                <AppIcon name="rotate-ccw" :size="18" />
                 <span>左旋90°</span>
               </button>
-              <button @click="rotateVideo(90)" class="tool-btn">
-                <span class="icon">↻</span>
+              <button type="button" @click="rotateVideo(90)" class="tool-btn">
+                <AppIcon name="rotate-cw" :size="18" />
                 <span>右旋90°</span>
               </button>
-              <button @click="flipVideo('horizontal')" class="tool-btn">
-                <span class="icon">↔️</span>
+              <button type="button" @click="flipVideo('horizontal')" class="tool-btn">
+                <AppIcon name="flip-horizontal" :size="18" />
                 <span>水平翻转</span>
               </button>
-              <button @click="flipVideo('vertical')" class="tool-btn">
-                <span class="icon">↕️</span>
+              <button type="button" @click="flipVideo('vertical')" class="tool-btn">
+                <AppIcon name="flip-vertical" :size="18" />
                 <span>垂直翻转</span>
               </button>
             </div>
@@ -415,7 +421,7 @@
           
           <!-- 倍速与音量 -->
           <div class="tool-section">
-            <h4>🔊 速度与音量</h4>
+            <h4><AppIcon name="volume" :size="17" />速度与音量</h4>
             <div class="adjust-item">
               <label>播放速度</label>
               <input type="range" v-model.number="videoAdjustments.speed" min="0.25" max="4" step="0.25" />
@@ -433,7 +439,7 @@
 
     <!-- 保存选项弹窗 -->
     <div v-if="showSaveOptions" class="modal-overlay" @click.self="showSaveOptions = false">
-      <div class="save-options-modal">
+      <div class="save-options-modal" role="dialog" aria-modal="true" aria-label="导出视频选项">
         <h3>导出视频</h3>
         <div class="export-options">
           <div class="option-group">
@@ -454,44 +460,44 @@
           </div>
         </div>
         <div class="save-mode-buttons">
-          <button class="replace-btn" @click="saveWithReplace">
-            <span>💾</span>
+          <button class="replace-btn" type="button" @click="saveWithReplace">
+            <AppIcon name="archive" :size="22" />
             <div><strong>覆盖原视频</strong><small>替换原始文件</small></div>
           </button>
-          <button class="new-btn" @click="saveAsNew">
-            <span>📝</span>
+          <button class="new-btn" type="button" @click="saveAsNew">
+            <AppIcon name="file" :size="22" />
             <div><strong>保存为新视频</strong><small>创建副本文件</small></div>
           </button>
         </div>
-        <button @click="showSaveOptions = false" class="btn-cancel-export">取消</button>
+        <button type="button" @click="showSaveOptions = false" class="btn-cancel-export">取消</button>
       </div>
     </div>
 
     <!-- 删除确认弹窗 -->
     <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
-      <div class="delete-modal">
+      <div class="delete-modal" role="dialog" aria-modal="true" aria-label="确认删除视频">
         <h3>确认删除</h3>
         <p>是否要删除这 {{ selectedVideos.length }} 个视频？</p>
         <div class="actions">
-          <button class="confirm-btn" @click="executeDelete">确定</button>
-          <button @click="showDeleteConfirm = false">取消</button>
+          <button class="confirm-btn" type="button" @click="executeDelete">确定删除</button>
+          <button type="button" @click="showDeleteConfirm = false">取消</button>
         </div>
       </div>
     </div>
 
     <!-- 上传弹窗 - 完全重构样式 -->
     <div v-if="showUpload" class="modal-overlay" @click.self="showUpload = false">
-      <div class="upload-modal upload-modal-redesign">
+      <div class="upload-modal upload-modal-redesign" role="dialog" aria-modal="true" aria-label="上传视频">
         <div class="upload-modal-header">
-          <h3>📤 上传视频</h3>
-          <button class="close-icon" @click="showUpload = false">×</button>
+          <h3><AppIcon name="upload" :size="20" />上传视频</h3>
+          <button class="close-icon" type="button" aria-label="关闭上传窗口" @click="showUpload = false"><AppIcon name="close" :size="18" /></button>
         </div>
         
         <div class="upload-modal-body">
           <!-- 视频标题 -->
           <div class="form-row">
             <label class="form-label">
-              <span class="label-icon">🏷️</span>
+              <AppIcon name="tag" :size="16" />
               视频标题
               <span class="optional">（可选）</span>
             </label>
@@ -508,7 +514,7 @@
           <!-- 文件选择 -->
           <div class="form-row">
             <label class="form-label">
-              <span class="label-icon">📁</span>
+              <AppIcon name="folder" :size="16" />
               选择文件
               <span class="required">*</span>
             </label>
@@ -516,22 +522,22 @@
               <input 
                 type="file" 
                 ref="fileInput"
-                accept="video//*" 
+                accept="video/*"
                 @change="handleFileSelect"
                 class="hidden-input"
               />
               <div v-if="!uploadForm.file" class="upload-placeholder">
-                <div class="upload-icon">📹</div>
+                <div class="upload-icon"><AppIcon name="video" :size="30" /></div>
                 <p class="upload-text">点击或拖拽视频文件到此处</p>
                 <p class="upload-subtext">支持 MP4, AVI, MOV, MKV 等格式</p>
               </div>
               <div v-else class="file-selected">
-                <div class="file-icon">✅</div>
+                <div class="file-icon"><AppIcon name="check" :size="23" /></div>
                 <div class="file-info">
                   <p class="file-name">{{ uploadForm.file.name }}</p>
                   <p class="file-size">{{ formatFileSize(uploadForm.file.size) }}</p>
                 </div>
-                <button class="remove-file" @click.stop="removeSelectedFile">×</button>
+                <button class="remove-file" type="button" aria-label="移除已选文件" @click.stop="removeSelectedFile"><AppIcon name="close" :size="16" /></button>
               </div>
             </div>
           </div>
@@ -546,7 +552,7 @@
         </div>
         
         <div class="upload-modal-footer">
-          <button class="btn-secondary" @click="showUpload = false">取消</button>
+          <button class="btn-secondary" type="button" @click="showUpload = false">取消</button>
           <button 
             class="btn-primary upload-submit-btn" 
             :disabled="!uploadForm.file || uploading"
@@ -566,9 +572,11 @@
 
 <script>
 import axios from '@/services/http'
+import AppIcon from '@/components/AppIcon.vue'
 
 export default {
   name: 'VideoZone',
+  components: { AppIcon },
   data() {
     return {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
@@ -740,11 +748,22 @@ export default {
     }
     this.loadVideos()
     this.setupThemeListener()
+    document.addEventListener('keydown', this.handleEscape)
   },
   beforeUnmount() {
     if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler)
+    document.removeEventListener('keydown', this.handleEscape)
   },
   methods: {
+    handleEscape(event) {
+      if (event.key !== 'Escape') return
+      if (this.showSaveOptions) { this.showSaveOptions = false; return }
+      if (this.showProperties) { this.showProperties = false; return }
+      if (this.showDeleteConfirm) { this.showDeleteConfirm = false; return }
+      if (this.showUpload) { this.showUpload = false; return }
+      if (this.showEditor) { this.closeEditor(); return }
+      if (this.playingVideo) this.closePlayer()
+    },
     setupThemeListener() {
       this.themeHandler = (e) => {
         this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
@@ -2569,5 +2588,248 @@ export default {
   .videos-grid {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   }
+}
+
+/* 统一媒体库视觉：保留视频流、预览与编辑状态，只覆盖旧的渐变和玻璃样式。 */
+.video-zone,
+.video-zone.light-mode,
+.video-zone.dark-mode {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+}
+.video-zone button { font: inherit; }
+.video-zone button:focus-visible,
+.video-zone input:focus-visible,
+.video-zone select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent), transparent 68%);
+  outline-offset: 2px;
+}
+.video-zone .zone-header { margin: 0 0 var(--space-3); }
+.video-zone .back-btn,
+.video-zone .filter-btn,
+.video-zone .upload-btn,
+.video-zone .action-btn,
+.video-zone .custom-controls button,
+.video-zone .options-btn,
+.video-zone .tool-btn,
+.video-zone .btn-preview,
+.video-zone .btn-reset,
+.video-zone .btn-close,
+.video-zone .btn-cancel-export,
+.video-zone .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.video-zone .back-btn:hover,
+.video-zone .filter-btn:hover,
+.video-zone .action-btn:hover:not(:disabled),
+.video-zone .custom-controls button:hover,
+.video-zone .options-btn:hover,
+.video-zone .tool-btn:hover,
+.video-zone .btn-preview:hover,
+.video-zone .btn-reset:hover,
+.video-zone .btn-close:hover,
+.video-zone .btn-cancel-export:hover,
+.video-zone .btn-secondary:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  transform: none;
+  box-shadow: none;
+}
+.video-zone .upload-btn,
+.video-zone .save-btn,
+.video-zone .upload-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+  font: inherit;
+  font-weight: 650;
+}
+.video-zone .upload-btn:hover:not(:disabled),
+.video-zone .save-btn:hover:not(:disabled),
+.video-zone .upload-submit-btn:hover:not(:disabled) { background: var(--accent-strong); box-shadow: none; transform: none; }
+.video-zone .delete-btn,
+.video-zone .confirm-btn { border-color: var(--danger); background: var(--danger); color: #fff; }
+.video-zone .delete-btn:hover:not(:disabled),
+.video-zone .confirm-btn:hover { background: color-mix(in srgb, var(--danger), #000 16%); color: #fff; }
+.video-zone .zone-description {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+.video-zone .zone-eyebrow,
+.video-zone .zone-description h3,
+.video-zone .tool-section h4,
+.video-zone .upload-modal-header h3 { display: flex; align-items: center; gap: var(--space-2); }
+.video-zone .zone-eyebrow { margin: 0 0 var(--space-2); color: var(--accent); font-size: .82rem; font-weight: 700; letter-spacing: .05em; }
+.video-zone .zone-description h3 { margin: 0 0 var(--space-2); color: var(--text); font-size: 1.45rem; }
+.video-zone .zone-description p { max-width: 68ch; margin: 0; color: var(--muted); line-height: 1.75; }
+.video-zone .action-bar {
+  min-height: auto;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.video-zone .selection-status { color: var(--muted); font-size: .9rem; }
+.video-zone .videos-grid { gap: var(--space-3); }
+.video-zone .video-card {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease;
+}
+.video-zone .video-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: none; }
+.video-zone .video-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+.video-zone .video-thumbnail { aspect-ratio: 16 / 9; background: var(--bg); }
+.video-zone .video-thumbnail img,
+.video-zone .preview-video { width: 100%; height: 100%; object-fit: cover; }
+.video-zone .selection-indicator {
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-raised);
+  color: var(--accent);
+}
+.video-zone .video-card.selected .selection-indicator { border-color: var(--accent); background: var(--accent); color: #fff; }
+.video-zone .play-icon { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid rgb(255 255 255 / 38%); border-radius: 50%; background: rgb(20 25 23 / 48%); color: #fff; }
+.video-zone .video-info { padding: var(--space-3); }
+.video-zone .video-title { overflow: hidden; display: block; color: var(--text); font-size: .92rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.video-zone .empty-state {
+  display: grid;
+  place-items: center;
+  gap: var(--space-2);
+  min-height: 180px;
+  padding: var(--space-5);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  text-align: center;
+}
+.video-zone .video-player-fullscreen,
+.video-zone .video-editor-fullscreen { z-index: 1000; background: var(--bg); color: var(--text); }
+.video-zone .player-header,
+.video-zone .editor-header { padding: var(--space-3) var(--space-4); border-color: var(--border); background: var(--surface); box-shadow: none; }
+.video-zone .player-title,
+.video-zone .editor-header h3 { color: var(--text); }
+.video-zone .player-body { gap: 0; background: var(--bg); }
+.video-zone .main-player { background: var(--bg); }
+.video-zone .custom-controls { padding: var(--space-3); border-top: 1px solid var(--border); background: var(--surface); }
+.video-zone .playlist-sidebar { border-color: var(--border); background: var(--surface); }
+.video-zone .playlist-sidebar h4 { margin: 0; padding: var(--space-3); border-bottom: 1px solid var(--border); color: var(--text); }
+.video-zone .playlist-item {
+  display: flex;
+  width: 100%;
+  padding: var(--space-2);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.video-zone .playlist-item:hover,
+.video-zone .playlist-item.active { background: var(--accent-soft); color: var(--accent); }
+.video-zone .options-menu { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); box-shadow: var(--shadow); }
+.video-zone .options-menu button { color: var(--text); }
+.video-zone .options-menu button:hover { background: var(--accent-soft); color: var(--accent); }
+.video-zone .editor-body { background: var(--bg); }
+.video-zone .editor-tools-panel { border-color: var(--border); background: var(--surface); }
+.video-zone .tool-section { padding: var(--space-4); border-color: var(--border); }
+.video-zone .tool-section h4 { margin: 0 0 var(--space-3); color: var(--text); font-size: .95rem; }
+.video-zone .tool-btn { min-height: 58px; padding: var(--space-2); background: var(--surface-raised); }
+.video-zone .filter-btn.active,
+.video-zone .pos-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.video-zone .filter-btn,
+.video-zone .pos-btn { border-color: var(--border); background: var(--surface-raised); color: var(--text); box-shadow: none; }
+.video-zone .editor-timeline,
+.video-zone .editor-preview { border-color: var(--border); background: var(--surface); box-shadow: none; }
+.video-zone .timeline-track { background: var(--bg); }
+.video-zone .clip-range { background: var(--accent); }
+.video-zone .modal-overlay { z-index: 1100; background: rgb(20 25 23 / 48%); backdrop-filter: blur(2px); }
+.video-zone .properties-modal,
+.video-zone .save-options-modal,
+.video-zone .delete-modal,
+.video-zone .upload-modal {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.video-zone .properties-modal h3,
+.video-zone .save-options-modal h3,
+.video-zone .delete-modal h3 { color: var(--text); }
+.video-zone .upload-modal-header { padding: var(--space-4); border-bottom: 1px solid var(--border); background: transparent; }
+.video-zone .upload-modal-header h3 { margin: 0; color: var(--text); }
+.video-zone .close-icon,
+.video-zone .remove-file { display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.video-zone .close-icon:hover,
+.video-zone .remove-file:hover { color: var(--text); }
+.video-zone .form-label { display: flex; align-items: center; gap: 6px; color: var(--text); }
+.video-zone .form-input,
+.video-zone .file-upload-area,
+.video-zone .option-group select,
+.video-zone .tool-section input,
+.video-zone .tool-section select { border-color: var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }
+.video-zone .file-upload-area:hover { border-color: var(--accent); background: var(--accent-soft); }
+.video-zone .upload-modal-footer { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); background: transparent; }
+.video-zone .toast { padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow); }
+.video-zone .toast.success { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.video-zone .toast.error { border-color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 92%); color: var(--danger); }
+@media (max-width: 760px) {
+  .video-zone .zone-description { padding: var(--space-4); }
+  .video-zone .action-bar { align-items: stretch; flex-direction: column; gap: var(--space-3); }
+  .video-zone .action-btns { width: 100%; }
+  .video-zone .action-btns > button { flex: 1; }
+  .video-zone .videos-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .video-zone .player-header,
+  .video-zone .editor-header { gap: var(--space-2); padding: var(--space-3); }
+  .video-zone .player-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .video-zone .properties-modal,
+  .video-zone .save-options-modal,
+  .video-zone .delete-modal,
+  .video-zone .upload-modal { width: min(100% - 24px, 560px); }
 }
 </style>

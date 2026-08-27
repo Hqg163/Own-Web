@@ -40,6 +40,12 @@
     <path v-else-if="name === 'play'" d="m9 5 10 7-10 7z" />
     <path v-else-if="name === 'pause'" d="M8 5v14M16 5v14" />
     <path v-else-if="name === 'more'" d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3" />
+    <path v-else-if="name === 'maximize'" d="M8 3H3v5m13-5h5v5M8 21H3v-5m18 0v5h-5" />
+    <path v-else-if="name === 'sliders'" d="M4 6h16M8 6v5m-4 7h16m-5-5v5M4 12h16m-9-5v5" />
+    <path v-else-if="name === 'volume'" d="M4 10h4l5-4v12l-5-4H4zM17 9a4 4 0 0 1 0 6m2.5-8.5a7 7 0 0 1 0 11" />
+    <path v-else-if="name === 'tag'" d="M20 13 13 20 4 11V4h7zM8 8h.01" />
+    <path v-else-if="name === 'scissors'" d="M6.5 6.5 18 18M18 6 6.5 17.5M7 9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Zm0 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" />
+    <path v-else-if="name === 'droplet'" d="M12 3s6 6.2 6 11a6 6 0 0 1-12 0c0-4.8 6-11 6-11Z" />
     <path v-else-if="name === 'chevron-right'" d="m9 18 6-6-6-6" />
     <path v-else d="M4 6h16M4 12h16M4 18h10" />
   </svg>
