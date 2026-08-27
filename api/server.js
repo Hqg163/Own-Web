@@ -571,20 +571,42 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   try {
     const { categoryId, customName } = req.body;
     const userId = req.authUserId;
+    const removeTemporaryUpload = () => {
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+    };
     
     if (!req.file) {
       return res.status(400).json({ error: '请选择要上传的文件' });
     }
+
+    if (!categoryId) {
+      removeTemporaryUpload();
+      return res.status(400).json({ error: '请选择有效分类' });
+    }
     
-    // 检查是否同名
-    const checkQuery = 'SELECT id FROM learning_files WHERE user_id = ? AND category_id = ? AND original_name = ?';
-    db.query(checkQuery, [userId, categoryId, req.file.originalname], (err, results) => {
+    // 分类 ID 来自客户端，但归属只能以当前会话用户为准。
+    const categoryQuery = 'SELECT id FROM learning_categories WHERE id = ? AND user_id = ? LIMIT 1';
+    db.query(categoryQuery, [categoryId, userId], (categoryErr, categories) => {
+      if (categoryErr) {
+        removeTemporaryUpload();
+        return res.status(500).json({ error: '验证文件分类失败' });
+      }
+      if (categories.length === 0) {
+        removeTemporaryUpload();
+        return res.status(403).json({ error: '无权向此分类上传文件' });
+      }
+
+      // 检查是否同名
+      const checkQuery = 'SELECT id FROM learning_files WHERE user_id = ? AND category_id = ? AND original_name = ?';
+      db.query(checkQuery, [userId, categoryId, req.file.originalname], (err, results) => {
       if (err) {
-        fs.unlinkSync(req.file.path);
+        removeTemporaryUpload();
         return res.status(500).json({ error: '检查文件名失败' });
       }
       if (results.length > 0) {
-        fs.unlinkSync(req.file.path);
+        removeTemporaryUpload();
         return res.status(400).json({ error: '该分类下已存在同名文件' });
       }
       
@@ -623,10 +645,11 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
         isMarkdown
       ], (err, result) => {
         if (err) {
-          fs.unlinkSync(req.file.path);
+          removeTemporaryUpload();
           return res.status(500).json({ error: '保存文件信息失败' });
         }
         res.status(201).json({ message: '上传成功', fileId: result.insertId });
+      });
       });
     });
   } catch (error) {
@@ -639,38 +662,45 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 app.post('/api/upload-markdown', (req, res) => {
   const { categoryId, title, content } = req.body;
   const userId = req.authUserId;
-  
-  // 创建markdown文件
-  const categoryDir = path.join(__dirname, 'uploads', userId.toString(), 'markdown');
-  fs.mkdirSync(categoryDir, { recursive: true });
-  
-  const filename = `md-${Date.now()}-${Math.round(Math.random() * 1E9)}.md`;
-  const filePath = path.join(categoryDir, filename);
-  
-  fs.writeFile(filePath, content, (err) => {
-    if (err) return res.status(500).json({ error: '保存Markdown文件失败' });
+
+  if (!categoryId || typeof title !== 'string' || !title.trim() || typeof content !== 'string') {
+    return res.status(400).json({ error: '请提供有效的分类、标题和 Markdown 内容' });
+  }
+
+  const categoryQuery = 'SELECT id FROM learning_categories WHERE id = ? AND user_id = ? LIMIT 1';
+  db.query(categoryQuery, [categoryId, userId], (categoryErr, categories) => {
+    if (categoryErr) return res.status(500).json({ error: '验证文件分类失败' });
+    if (categories.length === 0) return res.status(403).json({ error: '无权向此分类创建 Markdown 文件' });
+
+    // 仅在分类归属得到验证后创建物理文件。
+    const categoryDir = path.join(__dirname, 'uploads', userId.toString(), 'markdown');
+    fs.mkdirSync(categoryDir, { recursive: true });
+    const filename = `md-${Date.now()}-${Math.round(Math.random() * 1E9)}.md`;
+    const filePath = path.join(categoryDir, filename);
     
-    const insertQuery = `
-      INSERT INTO learning_files (user_id, category_id, filename, original_name, file_type, file_size, file_path, is_markdown, markdown_content) 
-      VALUES (?, ?, ?, ?, '.md', ?, ?, TRUE, ?)
-    `;
-    
-    const relativePath = filePath.replace(__dirname, '').replace(/\\/g, '/');
-    
-    db.query(insertQuery, [
-      userId, 
-      categoryId, 
-      filename, 
-      title + '.md',
-      Buffer.byteLength(content, 'utf8'),
-      relativePath,
-      content
-    ], (err, result) => {
-      if (err) {
-        fs.unlinkSync(filePath);
-        return res.status(500).json({ error: '保存文件信息失败' });
-      }
-      res.status(201).json({ message: '发布成功', fileId: result.insertId });
+    fs.writeFile(filePath, content, (err) => {
+      if (err) return res.status(500).json({ error: '保存Markdown文件失败' });
+      const insertQuery = `
+        INSERT INTO learning_files (user_id, category_id, filename, original_name, file_type, file_size, file_path, is_markdown, markdown_content)
+        VALUES (?, ?, ?, ?, '.md', ?, ?, TRUE, ?)
+      `;
+      const relativePath = filePath.replace(__dirname, '').replace(/\\/g, '/');
+
+      db.query(insertQuery, [
+        userId,
+        categoryId,
+        filename,
+        title.trim() + '.md',
+        Buffer.byteLength(content, 'utf8'),
+        relativePath,
+        content
+      ], (insertErr, result) => {
+        if (insertErr) {
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          return res.status(500).json({ error: '保存文件信息失败' });
+        }
+        res.status(201).json({ message: '发布成功', fileId: result.insertId });
+      });
     });
   });
 });
