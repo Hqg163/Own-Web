@@ -51,6 +51,27 @@ function safePathSegment(value, fallback = 'unknown') {
   return segment || fallback;
 }
 
+function normalizeMediaBatchIds(value, maximum = 100) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > maximum) return null;
+  const ids = [...new Set(value.map((item) => Number(item)))];
+  return ids.length > 0 && ids.every((id) => Number.isSafeInteger(id) && id > 0) ? ids : null;
+}
+
+function removeStoredMediaFiles(records, label) {
+  let cleanupFailed = false;
+  for (const record of records) {
+    const fullPath = resolveStoredFile(record.file_path);
+    if (!fullPath || !fs.existsSync(fullPath)) continue;
+    try {
+      fs.unlinkSync(fullPath);
+    } catch (error) {
+      cleanupFailed = true;
+      console.error(`[media] Failed to remove ${label} file after database deletion`, error);
+    }
+  }
+  return cleanupFailed;
+}
+
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -1361,17 +1382,15 @@ app.post('/api/entertainment/images', imageUpload.single('image'), (req, res) =>
 
 // 批量更新图片风格
 app.put('/api/entertainment/images/batch-style', (req, res) => {
-  console.log('=== 收到批量归类请求 ===');  // 添加这行
-  console.log('请求体:', req.body);  // 添加这行
-
-  const { imageIds, style } = req.body;
+  const { style } = req.body;
+  const imageIds = normalizeMediaBatchIds(req.body.imageIds);
   const userId = req.authUserId;
   
-  if (!imageIds || imageIds.length === 0) {
-    return res.status(400).json({ error: '未选择图片' });
+  if (!imageIds) {
+    return res.status(400).json({ error: '图片选择无效，最多可同时处理 100 张图片' });
   }
   
-  if (!style) {
+  if (typeof style !== 'string' || !style.trim() || style.trim().length > 50) {
     return res.status(400).json({ error: '风格不能为空' });
   }
   
@@ -1385,18 +1404,14 @@ app.put('/api/entertainment/images/batch-style', (req, res) => {
   `;
   
   // 参数顺序：style, id1, id2, id3..., userId
-  const params = [style, ...imageIds, userId];
-  
-  console.log('批量归类SQL:', updateQuery);
-  console.log('参数:', params);
+  const params = [style.trim(), ...imageIds, userId];
   
   db.query(updateQuery, params, (err, result) => {
     if (err) {
       console.error('批量归类失败:', err);
-      return res.status(500).json({ error: '批量归类失败: ' + err.message });
+      return res.status(500).json({ error: '批量归类失败' });
     }
-    
-    console.log('归类成功，影响行数:', result.affectedRows);
+    if (result.affectedRows === 0) return res.status(404).json({ error: '图片不存在或无权操作' });
     res.status(200).json({ 
       message: '归类成功', 
       affectedRows: result.affectedRows 
@@ -1416,39 +1431,34 @@ app.put('/api/entertainment/images/:imageId', (req, res) => {
     WHERE id = ? AND user_id = ?
   `;
   
-  db.query(updateQuery, [title, style, description, imageId, userId], (err) => {
+  db.query(updateQuery, [title, style, description, imageId, userId], (err, result) => {
     if (err) return res.status(500).json({ error: '更新失败' });
+    if (result.affectedRows === 0) return res.status(404).json({ error: '图片不存在或无权操作' });
     res.status(200).json({ message: '更新成功' });
   });
 });
 
 // 批量删除图片
 app.delete('/api/entertainment/images', (req, res) => {
-  const { imageIds } = req.body;
+  const imageIds = normalizeMediaBatchIds(req.body.imageIds);
   const userId = req.authUserId;
   
-  if (!imageIds || imageIds.length === 0) {
-    return res.status(400).json({ error: '未选择要删除的图片' });
+  if (!imageIds) {
+    return res.status(400).json({ error: '图片选择无效，最多可同时删除 100 张图片' });
   }
   
   // 获取文件路径
   const query = 'SELECT * FROM entertainment_images WHERE id IN (?) AND user_id = ?';
   db.query(query, [imageIds, userId], (err, images) => {
     if (err) return res.status(500).json({ error: '查询失败' });
+    if (images.length === 0) return res.status(404).json({ error: '图片不存在或无权操作' });
     
-    // 删除物理文件
-    images.forEach(img => {
-      const fullPath = resolveStoredFile(img.file_path);
-      if (fs.existsSync(fullPath)) {
-        fs.unlinkSync(fullPath);
-      }
-    });
-    
-    // 删除数据库记录
+    // First remove owned records. A database failure must never delete the physical file.
     const deleteQuery = 'DELETE FROM entertainment_images WHERE id IN (?) AND user_id = ?';
-    db.query(deleteQuery, [imageIds, userId], (err) => {
+    db.query(deleteQuery, [imageIds, userId], (err, result) => {
       if (err) return res.status(500).json({ error: '删除失败' });
-      res.status(200).json({ message: '删除成功', count: imageIds.length });
+      const cleanupFailed = removeStoredMediaFiles(images, 'image');
+      res.status(200).json({ message: cleanupFailed ? '删除成功，部分文件等待清理' : '删除成功', count: result.affectedRows, cleanupFailed });
     });
   });
 });
@@ -1631,28 +1641,23 @@ app.post('/api/entertainment/videos', videoUpload.single('video'), async (req, r
 
 // 批量删除视频
 app.delete('/api/entertainment/videos', (req, res) => {
-  const { videoIds } = req.body;
+  const videoIds = normalizeMediaBatchIds(req.body.videoIds);
   const userId = req.authUserId;
   
-  if (!videoIds || videoIds.length === 0) {
-    return res.status(400).json({ error: '未选择要删除的视频' });
+  if (!videoIds) {
+    return res.status(400).json({ error: '视频选择无效，最多可同时删除 100 个视频' });
   }
   
   const query = 'SELECT * FROM entertainment_videos WHERE id IN (?) AND user_id = ?';
   db.query(query, [videoIds, userId], (err, videos) => {
     if (err) return res.status(500).json({ error: '查询失败' });
-    
-    videos.forEach(video => {
-      const fullPath = resolveStoredFile(video.file_path);
-      if (fs.existsSync(fullPath)) {
-        fs.unlinkSync(fullPath);
-      }
-    });
+    if (videos.length === 0) return res.status(404).json({ error: '视频不存在或无权操作' });
     
     const deleteQuery = 'DELETE FROM entertainment_videos WHERE id IN (?) AND user_id = ?';
-    db.query(deleteQuery, [videoIds, userId], (err) => {
+    db.query(deleteQuery, [videoIds, userId], (err, result) => {
       if (err) return res.status(500).json({ error: '删除失败' });
-      res.status(200).json({ message: '删除成功', count: videoIds.length });
+      const cleanupFailed = removeStoredMediaFiles(videos, 'video');
+      res.status(200).json({ message: cleanupFailed ? '删除成功，部分文件等待清理' : '删除成功', count: result.affectedRows, cleanupFailed });
     });
   });
 });
@@ -1844,28 +1849,23 @@ app.post('/api/entertainment/music', musicUpload.single('music'), async (req, re
 
 // 批量删除音乐
 app.delete('/api/entertainment/music', (req, res) => {
-  const { musicIds } = req.body;
+  const musicIds = normalizeMediaBatchIds(req.body.musicIds);
   const userId = req.authUserId;
   
-  if (!musicIds || musicIds.length === 0) {
-    return res.status(400).json({ error: '未选择要删除的歌曲' });
+  if (!musicIds) {
+    return res.status(400).json({ error: '歌曲选择无效，最多可同时删除 100 首歌曲' });
   }
   
   const query = 'SELECT * FROM entertainment_music WHERE id IN (?) AND user_id = ?';
   db.query(query, [musicIds, userId], (err, musics) => {
     if (err) return res.status(500).json({ error: '查询失败' });
-    
-    musics.forEach(music => {
-      const fullPath = resolveStoredFile(music.file_path);
-      if (fs.existsSync(fullPath)) {
-        fs.unlinkSync(fullPath);
-      }
-    });
+    if (musics.length === 0) return res.status(404).json({ error: '音乐不存在或无权操作' });
     
     const deleteQuery = 'DELETE FROM entertainment_music WHERE id IN (?) AND user_id = ?';
-    db.query(deleteQuery, [musicIds, userId], (err) => {
+    db.query(deleteQuery, [musicIds, userId], (err, result) => {
       if (err) return res.status(500).json({ error: '删除失败' });
-      res.status(200).json({ message: '删除成功', count: musicIds.length });
+      const cleanupFailed = removeStoredMediaFiles(musics, 'music');
+      res.status(200).json({ message: cleanupFailed ? '删除成功，部分文件等待清理' : '删除成功', count: result.affectedRows, cleanupFailed });
     });
   });
 });
@@ -1898,8 +1898,9 @@ app.put('/api/entertainment/music/:musicId/lyrics', (req, res) => {
   const userId = req.authUserId;
   
   const updateQuery = 'UPDATE entertainment_music SET lyrics = ? WHERE id = ? AND user_id = ?';
-  db.query(updateQuery, [lyrics, musicId, userId], (err) => {
+  db.query(updateQuery, [lyrics, musicId, userId], (err, result) => {
     if (err) return res.status(500).json({ error: '更新歌词失败' });
+    if (result.affectedRows === 0) return res.status(404).json({ error: '音乐不存在或无权操作' });
     res.status(200).json({ message: '更新成功' });
   });
 });
@@ -1923,13 +1924,14 @@ app.post('/api/entertainment/music/:musicId/play', (req, res) => {
     const updateQuery = `
       UPDATE entertainment_music 
       SET play_count = COALESCE(play_count, 0) + 1 
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `;
     
-    db.query(updateQuery, [musicId], (err) => {
+    db.query(updateQuery, [musicId, userId], (err, result) => {
       if (err) {
         return res.status(500).json({ error: '更新播放次数失败' });
       }
+      if (result.affectedRows === 0) return res.status(404).json({ error: '音乐不存在或无权操作' });
       res.status(200).json({ message: '播放次数已更新' });
     });
   });

@@ -8,7 +8,8 @@
     "start": "node server.js",
     "check": "node --check server.js && node --check blog.js && node --check migrations.js",
     "test:blog-access": "node scripts/blog-access-smoke.js",
-    "test:study-access": "node scripts/study-access-smoke.js"
+    "test:study-access": "node scripts/study-access-smoke.js",
+    "test:media-access": "node scripts/media-access-smoke.js"
   },
   "keywords": [],
   "author": "",
