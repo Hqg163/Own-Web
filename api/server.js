@@ -1365,8 +1365,19 @@ app.post('/api/entertainment/images', imageUpload.single('image'), (req, res) =>
   }
 });
 
+const canvasImageUpload = multer({
+  storage: imageStorage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: function (_req, file, cb) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowed = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+    if (allowed[ext] && allowed[ext] === file.mimetype) return cb(null, true);
+    cb(new Error('编辑后的图片仅支持 JPEG、PNG 或 WebP 格式'));
+  }
+});
+
 // 从浏览器 Canvas 生成一个新的私有图片。原图记录与文件始终保留。
-app.post('/api/entertainment/images/:imageId/derivatives', editedImageUpload.single('image'), (req, res) => {
+app.post('/api/entertainment/images/:imageId/derivatives', canvasImageUpload.single('image'), (req, res) => {
   const imageId = Number(req.params.imageId);
   const userId = req.authUserId;
   if (!Number.isInteger(imageId) || imageId < 1) {
@@ -1416,7 +1427,7 @@ app.post('/api/entertainment/images/:imageId/derivatives', editedImageUpload.sin
 });
 
 // 替换保留同一数据库记录：先安全落盘新文件，数据库成功更新后再清理旧文件。
-app.put('/api/entertainment/images/:imageId/file', editedImageUpload.single('image'), (req, res) => {
+app.put('/api/entertainment/images/:imageId/file', canvasImageUpload.single('image'), (req, res) => {
   const imageId = Number(req.params.imageId);
   const userId = req.authUserId;
   if (!Number.isInteger(imageId) || imageId < 1) {
@@ -1526,21 +1537,6 @@ app.put('/api/entertainment/images/:imageId', (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: '图片不存在或无权操作' });
     res.status(200).json({ message: '更新成功' });
   });
-});
-
-// 编辑器导出的文件只接受无动画、可安全重新编码的格式。原始 GIF/BMP
-// 仍可在媒体库中查看和下载，但不会被静默压扁为单帧图片。
-const editedImageUpload = multer({
-  storage: imageStorage,
-  limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: function (_req, file, cb) {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const allowed = {
-      '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'
-    };
-    if (allowed[ext] && allowed[ext] === file.mimetype) return cb(null, true);
-    cb(new Error('编辑后的图片仅支持 JPEG、PNG 或 WebP 格式'));
-  }
 });
 
 function removeUploadedImage(file) {

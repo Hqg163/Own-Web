@@ -125,6 +125,18 @@ async function run() {
   const publicPost = await expectStatus(baseUrl, `/api/public/posts/${posts.public.slug}`, 200);
   assert.equal('share_token' in publicPost.post, false, '公开 DTO 不得包含 share_token');
   assert.equal('author_id' in publicPost.post, false, '公开 DTO 不得包含 author_id');
+  const publicListing = await expectStatus(baseUrl, '/api/public/posts?feed=discover', 200);
+  assert.deepEqual(publicListing.items.map((item) => item.id), [posts.public.id], '公开发现流只能包含已发布公开文章');
+  assert.equal('content_markdown' in publicListing.items[0], false, '文章列表不得返回完整正文');
+  await expectStatus(baseUrl, '/api/public/posts?feed=following', 401);
+  const followingListing = await expectStatus(baseUrl, '/api/public/posts?feed=following', 200, { headers: auth(follower) });
+  assert.deepEqual(followingListing.items.map((item) => item.id), [posts.public.id], '关注流只能包含已关注作者的公开文章');
+  const creatorsForAuthor = await expectStatus(baseUrl, '/api/public/creators', 200, { headers: auth(author) });
+  assert.equal(creatorsForAuthor.items.some((item) => item.id === author.id), false, '创作者推荐不得包含当前用户');
+  await expectStatus(baseUrl, '/api/posts', 400, {
+    method: 'POST', headers: { ...auth(author), 'content-type': 'application/json' },
+    body: JSON.stringify({ title: '非法块', contentBlocks: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '危险链接', marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }] }] }] } })
+  });
   await expectStatus(baseUrl, `/api/posts/${posts.private.id}/comments`, 401);
   await expectStatus(baseUrl, `/api/posts/${posts.private.id}/comments`, 200, { headers: auth(author) });
   await expectStatus(baseUrl, `/api/posts/${posts.private.id}/comments`, 403, { headers: auth(stranger) });

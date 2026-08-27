@@ -85,6 +85,16 @@ function createOwnedFile(kind, extension) {
   return { fullPath, relativePath: `/uploads/entertainment/${kind}/${owner.id}/${filename}` };
 }
 
+function editedPngForm(confirmReplace) {
+  // A tiny valid 1×1 PNG, so the edited-image endpoint exercises real MIME
+  // and decoder validation rather than only route authorization.
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLZywAAAABJRU5ErkJggg==', 'base64');
+  const form = new FormData();
+  form.append('image', new Blob([png], { type: 'image/png' }), 'canvas-output.png');
+  if (confirmReplace) form.append('confirmReplace', 'true');
+  return form;
+}
+
 async function insertMedia() {
   const imageFile = createOwnedFile('images', '.png');
   const videoFile = createOwnedFile('videos', '.mp4');
@@ -159,6 +169,24 @@ async function run() {
     method: 'PUT', headers: { ...auth(owner), 'content-type': 'application/json' }, body: JSON.stringify({ imageIds: [image.id], style: '资料' })
   });
   assert.equal(styleResult.affectedRows, 1, '批量归类应返回实际影响行数');
+  await expectStatus(`/api/entertainment/images/${image.id}/derivatives`, 404, {
+    method: 'POST', headers: auth(other), body: editedPngForm(false)
+  });
+  const derivative = await expectStatus(`/api/entertainment/images/${image.id}/derivatives`, 201, {
+    method: 'POST', headers: auth(owner), body: editedPngForm(false)
+  });
+  assert.notEqual(derivative.image.id, image.id, '生成新图片必须创建独立媒体记录');
+  const [[savedDerivative]] = await query('SELECT file_path FROM entertainment_images WHERE id=?', [derivative.image.id]);
+  files.push(path.join(apiRoot, savedDerivative.file_path.replace(/^[/\\]+/, '')));
+  await expectStatus(`/api/entertainment/images/${image.id}/file`, 400, {
+    method: 'PUT', headers: auth(owner), body: editedPngForm(false)
+  });
+  const replaced = await expectStatus(`/api/entertainment/images/${image.id}/file`, 200, {
+    method: 'PUT', headers: auth(owner), body: editedPngForm(true)
+  });
+  assert.equal(replaced.image.id, image.id, '替换原图必须保留同一媒体记录');
+  const [[replacedFile]] = await query('SELECT file_path FROM entertainment_images WHERE id=?', [image.id]);
+  files.push(path.join(apiRoot, replacedFile.file_path.replace(/^[/\\]+/, '')));
   await expectStatus(`/api/entertainment/music/${music.id}/lyrics`, 404, {
     method: 'PUT', headers: { ...auth(other), 'content-type': 'application/json' }, body: JSON.stringify({ lyrics: '[00:00] 越权' })
   });

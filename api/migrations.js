@@ -112,6 +112,19 @@ async function runMigrations(db) {
     await addColumn(db, 'entertainment_music', 'lyrics_offset_ms', 'INT NOT NULL DEFAULT 0');
     await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260828_media_editor_v1']);
   }
+
+  const [blocksDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260828_blocks_editor_v1']);
+  if (!blocksDone.length) {
+    await addColumn(db, 'posts', 'content_format', "ENUM('markdown','blocks') NOT NULL DEFAULT 'markdown'");
+    await addColumn(db, 'posts', 'content_blocks', 'JSON NULL');
+    await addColumn(db, 'post_revisions', 'content_format', "ENUM('markdown','blocks') NOT NULL DEFAULT 'markdown'");
+    await addColumn(db, 'post_revisions', 'content_blocks', 'JSON NULL');
+    await addColumn(db, 'post_media', 'media_kind', "ENUM('image','audio','video','file') NOT NULL DEFAULT 'image'");
+    await addColumn(db, 'post_media', 'label', 'VARCHAR(255) NULL');
+    await addColumn(db, 'post_media', 'caption', 'VARCHAR(500) NULL');
+    await addColumn(db, 'post_media', 'metadata', 'JSON NULL');
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260828_blocks_editor_v1']);
+  }
 }
 
 function createShareToken() { return crypto.randomBytes(32).toString('hex'); }
