@@ -46,6 +46,15 @@
     <path v-else-if="name === 'tag'" d="M20 13 13 20 4 11V4h7zM8 8h.01" />
     <path v-else-if="name === 'scissors'" d="M6.5 6.5 18 18M18 6 6.5 17.5M7 9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Zm0 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" />
     <path v-else-if="name === 'droplet'" d="M12 3s6 6.2 6 11a6 6 0 0 1-12 0c0-4.8 6-11 6-11Z" />
+    <path v-else-if="name === 'skip-back'" d="M19 20 9 12l10-8zM5 5v14" />
+    <path v-else-if="name === 'skip-forward'" d="m5 4 10 8L5 20zM19 5v14" />
+    <path v-else-if="name === 'shuffle'" d="M16 3h5v5M4 20 9 15m4-4 8-8M16 21h5v-5M4 4l5 5m4 4 8 8" />
+    <path v-else-if="name === 'repeat'" d="M17 2l4 4-4 4M3 11V7a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-1v4a3 3 0 0 1-3 3H3" />
+    <path v-else-if="name === 'repeat-1'" d="M17 2l4 4-4 4M3 11V7a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-1v4a3 3 0 0 1-3 3H3M12 9v6m-2-4 2-2 2 2" />
+    <path v-else-if="name === 'volume-x'" d="M4 10h4l5-4v12l-5-4H4zM17 10l4 4m0-4-4 4" />
+    <path v-else-if="name === 'list'" d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" stroke-width="2.6" />
+    <path v-else-if="name === 'panel-right'" d="M4 4h16v16H4zM14 4v16M7 8h4M7 12h4" />
+    <path v-else-if="name === 'keyboard'" d="M4 6h16v12H4zM7 10h.01M10 10h.01M13 10h.01M16 10h.01M7 14h6m3 0h.01" stroke-width="2.4" />
     <path v-else-if="name === 'chevron-right'" d="m9 18 6-6-6-6" />
     <path v-else d="M4 6h16M4 12h16M4 18h10" />
   </svg>

@@ -2,18 +2,17 @@
   <div :class="themeClass" class="music-zone">
     <!-- 头部 -->
     <div class="zone-header">
-      <button class="back-btn" @click="goBack">
-        <span>←</span> 返回
+      <button class="back-btn" type="button" @click="goBack">
+        <AppIcon name="arrow-left" :size="17" />
+        返回媒体库
       </button>
     </div>
 
     <!-- 描述区域 -->
     <div class="zone-description">
-      <h3>🎵 音乐专区</h3>
-      <p>本专区为个人音乐专区，以常见的缩略图为封面的歌曲进行展示</p>
-      <p>悬停歌曲所在位置会显示歌曲几大功能符号，包括开始/暂停、更多、显示歌词等</p>
-      <p>点击歌曲缩略图封面可跳转全屏歌曲模式，该模式下歌曲占据整个页面、上下轮播歌词</p>
-      <p>本页面音乐均可收听和下载，请放心食用</p>
+      <div class="zone-eyebrow"><AppIcon name="music" :size="18" /> 媒体库</div>
+      <h3>音乐</h3>
+      <p>管理个人曲目、歌词和播放队列。支持下载、全屏阅读歌词以及顺序、随机、单曲循环播放。</p>
     </div>
 
     <!-- 操作栏 -->
@@ -23,14 +22,14 @@
       </div>
       <div class="action-btns">
         <template v-if="!isFiltering">
-          <button class="filter-btn" @click="startFilter">筛选歌曲</button>
-          <button class="upload-btn" @click="showUpload = true">上传歌曲</button>
+          <button class="filter-btn" type="button" @click="startFilter">选择多个</button>
+          <button class="upload-btn" type="button" @click="showUpload = true"><AppIcon name="upload" :size="17" />上传歌曲</button>
         </template>
         <template v-else>
-          <button class="action-btn delete-btn" :disabled="selectedMusic.length === 0" @click="confirmDelete">
+          <button class="action-btn delete-btn" type="button" :disabled="selectedMusic.length === 0" @click="confirmDelete">
             批量删除
           </button>
-          <button class="action-btn cancel-btn" @click="cancelFilter">取消筛选</button>
+          <button class="action-btn cancel-btn" type="button" @click="cancelFilter">取消</button>
         </template>
       </div>
     </div>
@@ -50,7 +49,7 @@
           @click="handleMusicClick(music)"
         >
           <div v-if="isFiltering" class="row-selection-indicator">
-            <span v-if="selectedMusic.includes(music.id)">✓</span>
+            <AppIcon v-if="selectedMusic.includes(music.id)" name="check" :size="17" />
           </div>
           
           <span class="row-number" v-if="!isFiltering">{{ index + 1 }}</span>
@@ -61,8 +60,8 @@
               <div class="disc-animation" v-if="currentMusic && currentMusic.id === music.id && isPlaying">
                 <div class="disc"></div>
               </div>
-              <span v-else-if="currentMusic && currentMusic.id === music.id && !isPlaying">⏸</span>
-              <span v-else>▶</span>
+              <AppIcon v-else-if="currentMusic && currentMusic.id === music.id && !isPlaying" name="pause" :size="21" />
+              <AppIcon v-else name="play" :size="21" />
             </div>
             <div class="playing-waves" v-if="currentMusic && currentMusic.id === music.id && isPlaying">
               <span></span><span></span><span></span>
@@ -77,24 +76,25 @@
           </div>
           
           <div class="music-tools" v-if="!isFiltering">
-            <button 
+            <button
+              type="button"
               class="tool-btn play-pause-btn" 
               @click.stop="togglePlayMusic(music)"
-              :title="isPlaying && currentMusic && currentMusic.id === music.id ? '暂停' : '播放'"
+              :aria-label="isPlaying && currentMusic && currentMusic.id === music.id ? '暂停' : '播放'"
             >
-              {{ isPlaying && currentMusic && currentMusic.id === music.id ? '⏸' : '▶' }}
+              <AppIcon :name="isPlaying && currentMusic && currentMusic.id === music.id ? 'pause' : 'play'" :size="18" />
             </button>
-            <button class="tool-btn more-btn" @click.stop="showMusicInfo(music)" title="歌曲更多信息">⋮⋮⋮</button>
+            <button class="tool-btn more-btn" type="button" @click.stop="showMusicInfo(music)" aria-label="歌曲更多信息"><AppIcon name="more" :size="18" /></button>
             <button 
               class="tool-btn lyrics-btn" 
               @click.stop="toggleLyricsSidebar(music)"
               :class="{ active: showLyricsSidebar && currentMusic && currentMusic.id === music.id }"
-              title="侧边栏显示歌词"
+              aria-label="显示歌词侧栏"
             >
-              ⤢
+              <AppIcon name="panel-right" :size="18" />
             </button>
-            <button class="tool-btn download-btn" @click.stop="downloadMusic(music)" title="下载歌曲">⬇</button>
-            <button class="tool-btn delete-tool" @click.stop="deleteSingleMusic(music)" title="删除">🗑</button>
+            <button class="tool-btn download-btn" type="button" @click.stop="downloadMusic(music)" aria-label="下载歌曲"><AppIcon name="download" :size="18" /></button>
+            <button class="tool-btn delete-tool" type="button" @click.stop="deleteSingleMusic(music)" aria-label="删除歌曲"><AppIcon name="trash" :size="18" /></button>
           </div>
           
           <div class="music-meta">
@@ -104,9 +104,9 @@
         </div>
         
         <div v-if="musicList.length === 0" class="empty-music-list">
-          <div class="empty-icon">🎵</div>
+          <div class="empty-icon"><AppIcon name="music" :size="30" /></div>
           <p>暂无歌曲，点击上传按钮添加音乐</p>
-          <button class="upload-empty-btn" @click="showUpload = true">立即上传</button>
+          <button class="upload-empty-btn" type="button" @click="showUpload = true"><AppIcon name="upload" :size="17" />立即上传</button>
         </div>
       </div>
 
@@ -120,7 +120,7 @@
               <span>{{ currentMusic ? currentMusic.artist : '' }}</span>
             </div>
           </div>
-          <button class="close-lyrics-btn" @click="showLyricsSidebar = false">✕</button>
+          <button class="close-lyrics-btn" type="button" aria-label="关闭歌词侧栏" @click="showLyricsSidebar = false"><AppIcon name="close" :size="18" /></button>
         </div>
         
         <div class="lyrics-scroll-wrapper" ref="lyricsWrapper" @scroll="onLyricsScroll">
@@ -157,7 +157,7 @@
           <button @click="adjustLyricsOffset(-0.5)" title="歌词提前0.5秒">−0.5s</button>
           <span>歌词偏移: {{ lyricsOffset.toFixed(1) }}s</span>
           <button @click="adjustLyricsOffset(0.5)" title="歌词延后0.5秒">+0.5s</button>
-          <button @click="resetLyricsOffset" title="重置">↺</button>
+          <button type="button" @click="resetLyricsOffset" aria-label="重置歌词偏移"><AppIcon name="rotate-ccw" :size="16" /></button>
         </div>
       </div>
     </div>
@@ -187,23 +187,23 @@
           </div>
           
           <div class="mini-controls">
-            <button class="mode-btn-mini" @click="togglePlayMode" :title="playModeTitle">
-              {{ playModeIcon }}
+            <button class="mode-btn-mini" type="button" @click="togglePlayMode" :aria-label="playModeTitle">
+              <AppIcon :name="playModeIcon" :size="18" />
             </button>
-            <button @click="prevMusic" :disabled="!canGoPrev" class="nav-btn">⏮</button>
-            <button class="main-play-btn" @click="togglePlay">
-              {{ isPlaying ? '⏸' : '▶' }}
+            <button type="button" @click="prevMusic" :disabled="!canGoPrev" class="nav-btn" aria-label="上一首"><AppIcon name="skip-back" :size="18" /></button>
+            <button class="main-play-btn" type="button" @click="togglePlay" :aria-label="isPlaying ? '暂停' : '播放'">
+              <AppIcon :name="isPlaying ? 'pause' : 'play'" :size="20" />
             </button>
-            <button @click="nextMusic" :disabled="!canGoNext" class="nav-btn">⏭</button>
-            <button class="playlist-btn-mini" @click="toggleMiniPlaylist" title="播放列表">☰</button>
+            <button type="button" @click="nextMusic" :disabled="!canGoNext" class="nav-btn" aria-label="下一首"><AppIcon name="skip-forward" :size="18" /></button>
+            <button class="playlist-btn-mini" type="button" @click="toggleMiniPlaylist" aria-label="播放列表"><AppIcon name="list" :size="18" /></button>
           </div>
           
           <div class="mini-extra">
             <div class="volume-control">
-              <button @click="toggleMute">{{ isMuted ? '🔇' : volume > 50 ? '🔊' : volume > 0 ? '🔉' : '🔇' }}</button>
+              <button type="button" @click="toggleMute" :aria-label="isMuted ? '取消静音' : '静音'"><AppIcon :name="isMuted || volume === 0 ? 'volume-x' : 'volume'" :size="18" /></button>
               <input type="range" v-model="volume" min="0" max="100" @input="changeVolume" class="volume-slider" />
             </div>
-            <button class="fullscreen-btn" @click="openFullscreenPlayer" title="全屏模式">⛶</button>
+            <button class="fullscreen-btn" type="button" @click="openFullscreenPlayer" aria-label="全屏模式"><AppIcon name="maximize" :size="18" /></button>
           </div>
         </div>
         
@@ -227,7 +227,7 @@
 
     <!-- 全屏播放器 -->
     <transition name="fade">
-      <div v-if="fullscreenPlayer" class="fullscreen-music-player">
+      <div v-if="fullscreenPlayer" class="fullscreen-music-player" role="dialog" aria-modal="true" aria-label="全屏音乐播放器">
         <div class="fs-background" :style="fsBackgroundStyle"></div>
         <div class="fs-background-overlay"></div>
         
@@ -236,15 +236,16 @@
         </div>
         
         <div class="fs-header">
-          <button class="back-btn" @click="closeFullscreenPlayer">
-            <span>←</span> 返回
+          <button class="back-btn" type="button" @click="closeFullscreenPlayer">
+            <AppIcon name="arrow-left" :size="17" />
+            返回音乐库
           </button>
           <div class="fs-header-center">
             <span class="fs-mode-badge">{{ playModeTitle }}</span>
             <span class="fs-title">{{ isPlaying ? '正在播放' : '已暂停' }}</span>
           </div>
           <div class="fs-volume-control">
-            <button @click="toggleMute">{{ isMuted ? '🔇' : '🔊' }}</button>
+            <button type="button" @click="toggleMute" :aria-label="isMuted ? '取消静音' : '静音'"><AppIcon :name="isMuted ? 'volume-x' : 'volume'" :size="18" /></button>
             <input type="range" v-model="volume" min="0" max="100" @input="changeVolume" />
           </div>
         </div>
@@ -281,7 +282,7 @@
                 </div>
                 
                 <div v-if="parsedLyrics.length === 0" class="fs-no-lyrics">
-                  <div class="no-lyrics-icon">🎵</div>
+                  <div class="no-lyrics-icon"><AppIcon name="music" :size="30" /></div>
                   <p>暂无歌词</p>
                   <button class="add-lyrics-btn-large" @click="showAddLyrics = true">添加歌词</button>
                 </div>
@@ -295,8 +296,8 @@
           </div>
           
           <div class="fs-playlist-section" :class="{ collapsed: !showFsPlaylist }">
-            <button class="playlist-toggle-btn" @click="showFsPlaylist = !showFsPlaylist">
-              {{ showFsPlaylist ? '→' : '←' }}
+            <button class="playlist-toggle-btn" type="button" @click="showFsPlaylist = !showFsPlaylist" :aria-label="showFsPlaylist ? '收起播放列表' : '展开播放列表'">
+              <AppIcon :name="showFsPlaylist ? 'arrow-right' : 'arrow-left'" :size="17" />
             </button>
             <div v-if="showFsPlaylist" class="fs-playlist-content">
               <h4>播放列表 ({{ musicList.length }})</h4>
@@ -345,21 +346,20 @@
           </div>
           
           <div class="fs-buttons">
-            <button class="mode-btn" @click="togglePlayMode" :title="playModeTitle">
-              <span class="mode-icon">{{ playModeIcon }}</span>
+            <button class="mode-btn" type="button" @click="togglePlayMode" :aria-label="playModeTitle">
+              <AppIcon class="mode-icon" :name="playModeIcon" :size="18" />
               <span class="mode-text">{{ playModeTitle }}</span>
             </button>
             
             <div class="main-controls">
-              <button @click="prevMusic" :disabled="!canGoPrev" class="nav-btn large">
-                <span>⏮</span>
+              <button type="button" @click="prevMusic" :disabled="!canGoPrev" class="nav-btn large" aria-label="上一首">
+                <AppIcon name="skip-back" :size="23" />
               </button>
-              <button class="fs-play-btn" @click="togglePlay" :class="{ playing: isPlaying }">
-                <span v-if="!isPlaying">▶</span>
-                <span v-else>⏸</span>
+              <button class="fs-play-btn" type="button" @click="togglePlay" :class="{ playing: isPlaying }" :aria-label="isPlaying ? '暂停' : '播放'">
+                <AppIcon :name="isPlaying ? 'pause' : 'play'" :size="25" />
               </button>
-              <button @click="nextMusic" :disabled="!canGoNext" class="nav-btn large">
-                <span>⏭</span>
+              <button type="button" @click="nextMusic" :disabled="!canGoNext" class="nav-btn large" aria-label="下一首">
+                <AppIcon name="skip-forward" :size="23" />
               </button>
             </div>
             
@@ -370,8 +370,8 @@
               >
                 词
               </button>
-              <button class="playlist-toggle-fs" @click="showFsPlaylist = !showFsPlaylist">
-                ☰
+              <button class="playlist-toggle-fs" type="button" @click="showFsPlaylist = !showFsPlaylist" aria-label="播放列表">
+                <AppIcon name="list" :size="18" />
               </button>
             </div>
           </div>
@@ -381,7 +381,7 @@
 
     <!-- 歌曲信息弹窗 -->
     <div v-if="showInfoModal" class="modal-overlay info-overlay" @click.self="showInfoModal = false">
-      <div class="info-modal modern">
+      <div class="info-modal modern" role="dialog" aria-modal="true" aria-label="歌曲信息">
         <div class="info-header">
           <img :src="getMusicCover(infoModalData)" />
           <div class="info-header-text">
@@ -428,7 +428,7 @@
 
     <!-- 添加歌词弹窗 -->
     <div v-if="showAddLyrics" class="modal-overlay" @click.self="showAddLyrics = false">
-      <div class="lyrics-input-modal">
+      <div class="lyrics-input-modal" role="dialog" aria-modal="true" aria-label="添加歌词">
         <h3>添加歌词</h3>
         <p class="hint">支持LRC格式：[mm:ss.xx]歌词内容</p>
         <textarea v-model="newLyricsText" placeholder="在此粘贴歌词..." rows="10"></textarea>
@@ -441,8 +441,8 @@
 
     <!-- 删除确认弹窗 -->
     <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
-      <div class="delete-modal modern">
-        <div class="delete-icon">🗑</div>
+      <div class="delete-modal modern" role="dialog" aria-modal="true" aria-label="确认删除歌曲">
+        <div class="delete-icon"><AppIcon name="trash" :size="28" /></div>
         <h3>确认删除</h3>
         <p>是否要删除这 <strong>{{ selectedMusic.length }}</strong> 首歌曲？</p>
         <p class="delete-warning">删除后无法恢复</p>
@@ -455,7 +455,7 @@
 
     <!-- 上传弹窗 -->
     <div v-if="showUpload" class="modal-overlay" @click.self="closeUpload">
-      <div class="upload-modal modern">
+      <div class="upload-modal modern" role="dialog" aria-modal="true" aria-label="上传歌曲">
         <h3>上传歌曲</h3>
         <div class="upload-steps">
           <div :class="['step', { active: uploadStep === 1, done: uploadStep > 1 }]">1.填写信息</div>
@@ -496,7 +496,7 @@
                @drop.prevent="handleFileDrop">
             <input type="file" ref="fileInput" accept="audio/*" @change="handleFileSelect" hidden />
             <div class="drop-content" @click="$refs.fileInput.click()">
-              <div class="upload-icon">📁</div>
+              <div class="upload-icon"><AppIcon name="folder" :size="30" /></div>
               <p v-if="!uploadForm.file">点击或拖拽文件到此处</p>
               <p v-else class="selected-file">{{ uploadForm.file.name }}</p>
               <span class="file-hint">支持 MP3, FLAC, WAV, AAC 等格式</span>
@@ -522,7 +522,7 @@
         
         <div v-if="uploadStep === 3" class="step-content center">
           <div class="upload-success">
-            <div class="success-icon">✓</div>
+            <div class="success-icon"><AppIcon name="check" :size="28" /></div>
             <h4>上传成功！</h4>
             <p>{{ uploadForm.title }} - {{ uploadForm.artist }}</p>
           </div>
@@ -557,7 +557,7 @@
     
     <!-- 快捷键提示 -->
     <div v-if="showShortcuts" class="shortcuts-overlay" @click="showShortcuts = false">
-      <div class="shortcuts-modal">
+      <div class="shortcuts-modal" role="dialog" aria-modal="true" aria-label="键盘快捷键">
         <h3>键盘快捷键</h3>
         <div class="shortcut-list">
           <div><kbd>Space</kbd> 播放/暂停</div>
@@ -574,15 +574,17 @@
       </div>
     </div>
     
-    <button class="shortcuts-hint-btn" @click="showShortcuts = true" title="快捷键">?</button>
+    <button class="shortcuts-hint-btn" type="button" @click="showShortcuts = true" aria-label="键盘快捷键"><AppIcon name="keyboard" :size="18" /></button>
   </div>
 </template>
 
 <script>
 import axios from '@/services/http'
+import AppIcon from '@/components/AppIcon.vue'
 
 export default {
   name: 'MusicZone',
+  components: { AppIcon },
   data() {
     return {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
@@ -649,7 +651,7 @@ export default {
       return `（已选择 ${this.selectedMusic.length} 首歌曲）`
     },
     playModeIcon() {
-      const icons = { 'sequence': '🔁', 'random': '🔀', 'single': '🔂' }
+      const icons = { 'sequence': 'repeat', 'random': 'shuffle', 'single': 'repeat-1' }
       return icons[this.playMode]
     },
     playModeTitle() {
@@ -711,6 +713,7 @@ export default {
     this.removeKeyboardShortcuts()
     if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler)
     if (this.$refs.audioPlayer) this.$refs.audioPlayer.pause()
+    document.body.style.overflow = ''
   },
   methods: {
     setupThemeListener() {
@@ -738,7 +741,8 @@ export default {
     },
     
     handleKeyDown(e) {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      const target = e.target
+      if (target?.closest?.('input, textarea, select, [contenteditable="true"]')) return
       
       switch(e.code) {
         case 'Space':
@@ -773,9 +777,12 @@ export default {
           if (this.currentMusic) this.toggleLyricsSidebar(this.currentMusic)
           break
         case 'Escape':
+          if (this.showShortcuts) { this.showShortcuts = false; break }
+          if (this.showAddLyrics) { this.showAddLyrics = false; break }
+          if (this.showDeleteConfirm) { this.showDeleteConfirm = false; break }
+          if (this.showInfoModal) { this.showInfoModal = false; break }
+          if (this.showUpload) { this.closeUpload(); break }
           if (this.fullscreenPlayer) this.closeFullscreenPlayer()
-          if (this.showUpload) this.closeUpload()
-          if (this.showInfoModal) this.showInfoModal = false
           break
       }
     },
@@ -792,8 +799,7 @@ export default {
     getMusicCover(music) {
       if (!music) return ''
       if (music.cover_path) return music.cover_path
-      const colors = this.generateColorsFromString(music.title + music.artist)
-      return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23${colors[0]}'/%3E%3Cstop offset='100%25' stop-color='%23${colors[1]}'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='300' height='300' fill='url(%23g)'/%3E%3Ccircle cx='150' cy='150' r='80' fill='rgba(255,255,255,0.1)'/%3E%3Ccircle cx='150' cy='150' r='40' fill='rgba(255,255,255,0.2)'/%3E%3Ccircle cx='150' cy='150' r='15' fill='rgba(255,255,255,0.3)'/%3E%3C/svg%3E`
+      return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'%3E%3Crect width='300' height='300' fill='%23e7e8e4'/%3E%3Ccircle cx='150' cy='150' r='89' fill='none' stroke='%234d6177' stroke-width='5'/%3E%3Ccircle cx='150' cy='150' r='28' fill='%234d6177'/%3E%3Cpath d='M137 113v75l55-16' fill='none' stroke='%234d6177' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"
     },
     
     generateColorsFromString(str) {
@@ -4258,5 +4264,293 @@ input:focus-visible {
   .music-zone {
     padding-bottom: 20px;
   }
+}
+
+/* 统一媒体库视觉：不改队列、歌词、上传状态或音频行为，仅收敛旧的渐变和拟物效果。 */
+.music-zone,
+.music-zone.light-mode,
+.music-zone.dark-mode {
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: var(--surface-raised);
+  --border-color: var(--border);
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
+  --text-tertiary: var(--subtle);
+  --accent-color: var(--accent);
+  --accent-light: var(--accent-soft);
+  --accent-gradient: var(--accent);
+  --danger-color: var(--danger);
+  --success-color: var(--accent);
+  min-height: 0;
+  padding: 0 0 104px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+}
+.music-zone button { font: inherit; }
+.music-zone button:focus-visible,
+.music-zone input:focus-visible,
+.music-zone textarea:focus-visible,
+.music-zone select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent), transparent 68%);
+  outline-offset: 2px;
+}
+.music-zone .zone-header { margin: 0 0 var(--space-3); }
+.music-zone .back-btn,
+.music-zone .filter-btn,
+.music-zone .action-btn,
+.music-zone .upload-empty-btn,
+.music-zone .primary-btn,
+.music-zone .secondary-btn,
+.music-zone .info-actions > button,
+.music-zone .lyrics-input-modal .actions > button,
+.music-zone .delete-modal .actions > button,
+.music-zone .shortcuts-modal > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.music-zone .back-btn:hover,
+.music-zone .filter-btn:hover,
+.music-zone .action-btn:hover:not(:disabled),
+.music-zone .upload-empty-btn:hover,
+.music-zone .secondary-btn:hover,
+.music-zone .info-actions > button:hover,
+.music-zone .lyrics-input-modal .actions > button:hover,
+.music-zone .delete-modal .actions > button:hover,
+.music-zone .shortcuts-modal > button:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); box-shadow: none; transform: none; }
+.music-zone .upload-btn,
+.music-zone .primary-btn,
+.music-zone .upload-empty-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+  cursor: pointer;
+  font-weight: 650;
+}
+.music-zone .upload-btn:hover:not(:disabled),
+.music-zone .primary-btn:hover:not(:disabled),
+.music-zone .upload-empty-btn:hover:not(:disabled) { background: var(--accent-strong); color: #fff; box-shadow: none; transform: none; }
+.music-zone .delete-btn,
+.music-zone .danger-btn { border-color: var(--danger); background: var(--danger); color: #fff; }
+.music-zone .delete-btn:hover:not(:disabled),
+.music-zone .danger-btn:hover { background: color-mix(in srgb, var(--danger), #000 16%); color: #fff; box-shadow: none; }
+.music-zone .zone-description {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+.music-zone .zone-eyebrow,
+.music-zone .zone-description h3 { display: flex; align-items: center; gap: var(--space-2); }
+.music-zone .zone-eyebrow { margin: 0 0 var(--space-2); color: var(--accent); font-size: .82rem; font-weight: 700; letter-spacing: .05em; }
+.music-zone .zone-description h3 { margin: 0 0 var(--space-2); color: var(--text); font-size: 1.45rem; }
+.music-zone .zone-description p { max-width: 68ch; margin: 0; color: var(--muted); line-height: 1.75; }
+.music-zone .action-bar {
+  min-height: auto;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.music-zone .list-header h4 { margin: 0; color: var(--text); font-size: .95rem; }
+.music-zone .selection-indicator-text { color: var(--muted); font-size: .85rem; font-weight: 400; }
+.music-zone .music-list-container { gap: var(--space-4); }
+.music-zone .music-list { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
+.music-zone .music-row {
+  min-height: 72px;
+  padding: var(--space-2) var(--space-3);
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+  transition: background .15s ease, color .15s ease;
+}
+.music-zone .music-row:hover { background: var(--surface-raised); box-shadow: none; transform: none; }
+.music-zone .music-row.playing,
+.music-zone .music-row.selected { background: var(--accent-soft); }
+.music-zone .music-row.playing .music-name,
+.music-zone .music-row.paused .music-name { color: var(--accent); }
+.music-zone .row-selection-indicator { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface-raised); color: var(--accent); }
+.music-zone .music-row.selected .row-selection-indicator { border-color: var(--accent); background: var(--accent); color: #fff; }
+.music-zone .music-cover { width: 48px; height: 48px; border-radius: var(--radius-sm); background: var(--bg); box-shadow: none; }
+.music-zone .music-cover img { transition: transform .15s ease; }
+.music-zone .music-row:hover .music-cover img { transform: none; }
+.music-zone .play-overlay { display: grid; place-items: center; background: rgb(20 25 23 / 46%); color: #fff; }
+.music-zone .disc-animation { display: none; }
+.music-zone .playing-waves { display: none; }
+.music-zone .music-name { color: var(--text); font-weight: 650; }
+.music-zone .music-artist,
+.music-zone .music-separator,
+.music-zone .music-album,
+.music-zone .music-duration { color: var(--muted); }
+.music-zone .music-quality { border: 1px solid var(--border); background: transparent; color: var(--muted); }
+.music-zone .music-tools { gap: 4px; }
+.music-zone .tool-btn,
+.music-zone .close-lyrics-btn,
+.music-zone .lyrics-controls button,
+.music-zone .mini-controls button,
+.music-zone .mini-extra button,
+.music-zone .fs-header button,
+.music-zone .fs-buttons button,
+.music-zone .playlist-toggle-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  cursor: pointer;
+}
+.music-zone .tool-btn:hover,
+.music-zone .close-lyrics-btn:hover,
+.music-zone .lyrics-controls button:hover,
+.music-zone .mini-controls button:hover:not(:disabled),
+.music-zone .mini-extra button:hover,
+.music-zone .fs-header button:hover,
+.music-zone .fs-buttons button:hover:not(:disabled),
+.music-zone .playlist-toggle-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); box-shadow: none; transform: none; }
+.music-zone .delete-tool:hover { border-color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 90%); color: var(--danger); }
+.music-zone .empty-music-list { min-height: 220px; background: transparent; color: var(--muted); }
+.music-zone .empty-icon { display: grid; place-items: center; color: var(--accent); }
+.music-zone .lyrics-sidebar { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
+.music-zone .lyrics-header,
+.music-zone .lyrics-controls { border-color: var(--border); background: transparent; }
+.music-zone .lyrics-header h5 { color: var(--text); }
+.music-zone .lyrics-header span,
+.music-zone .lyrics-line { color: var(--muted); }
+.music-zone .lyrics-line.active { color: var(--accent); }
+.music-zone .mini-player {
+  z-index: 30;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 -6px 18px rgb(29 37 34 / 8%);
+}
+.music-zone .mini-player.is-playing { border-top-color: var(--accent); }
+.music-zone .mini-content { max-width: 1200px; margin: 0 auto; }
+.music-zone .mini-cover-wrapper,
+.music-zone .mini-cover-wrapper img { border-radius: 6px; }
+.music-zone .mini-cover-wrapper img.rotating { animation: none; }
+.music-zone .mini-visualizer { display: none; }
+.music-zone .mini-title { color: var(--text); }
+.music-zone .mini-artist { color: var(--muted); }
+.music-zone .progress-fill { background: var(--accent); }
+.music-zone .progress-buffer { background: var(--border); }
+.music-zone .mini-playlist { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); box-shadow: var(--shadow); }
+.music-zone .mini-playlist-item { color: var(--text); }
+.music-zone .mini-playlist-item:hover,
+.music-zone .mini-playlist-item.active { background: var(--accent-soft); color: var(--accent); }
+.music-zone .fullscreen-music-player { z-index: 1000; background: var(--bg); color: var(--text); }
+.music-zone .fs-background { opacity: .06; filter: grayscale(1) blur(18px); }
+.music-zone .fs-background-overlay { background: var(--bg); opacity: .94; }
+.music-zone .particles,
+.music-zone .album-glow { display: none; }
+.music-zone .fs-header,
+.music-zone .fs-controls { border-color: var(--border); background: var(--surface); box-shadow: none; }
+.music-zone .fs-title,
+.music-zone .fs-song-info h3,
+.music-zone .fs-playlist-content h4 { color: var(--text); }
+.music-zone .fs-mode-badge { border-color: var(--border); background: var(--accent-soft); color: var(--accent); }
+.music-zone .album-disc { border-color: var(--border); box-shadow: none; }
+.music-zone .album-disc img { filter: grayscale(.15); }
+.music-zone .fs-lyric-line { color: var(--muted); }
+.music-zone .fs-lyric-line.active { color: var(--accent); }
+.music-zone .fs-playlist-section,
+.music-zone .fs-playlist-content { border-color: var(--border); background: var(--surface); }
+.music-zone .fs-playlist-item { color: var(--text); }
+.music-zone .fs-playlist-item:hover,
+.music-zone .fs-playlist-item.active { background: var(--accent-soft); color: var(--accent); }
+.music-zone .fs-play-btn { border-color: var(--accent); background: var(--accent); color: #fff; }
+.music-zone .fs-play-btn:hover { background: var(--accent-strong); color: #fff; }
+.music-zone .mode-btn { width: auto !important; padding: 0 var(--space-2) !important; }
+.music-zone .mode-icon { display: block; }
+.music-zone .modal-overlay,
+.music-zone .shortcuts-overlay { z-index: 1100; background: rgb(20 25 23 / 48%); backdrop-filter: blur(2px); }
+.music-zone .info-modal.modern,
+.music-zone .lyrics-input-modal,
+.music-zone .delete-modal.modern,
+.music-zone .upload-modal.modern,
+.music-zone .shortcuts-modal {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.music-zone .info-header,
+.music-zone .info-row,
+.music-zone .upload-steps,
+.music-zone .file-info { border-color: var(--border); }
+.music-zone .info-row label,
+.music-zone .hint,
+.music-zone .file-hint,
+.music-zone .info-item,
+.music-zone .shortcuts-modal { color: var(--muted); }
+.music-zone .info-header h3,
+.music-zone .lyrics-input-modal h3,
+.music-zone .delete-modal h3,
+.music-zone .upload-modal h3,
+.music-zone .shortcuts-modal h3 { color: var(--text); }
+.music-zone .lyrics-input-modal textarea,
+.music-zone .form-group input,
+.music-zone .file-drop-zone { border-color: var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }
+.music-zone .file-drop-zone:hover,
+.music-zone .file-drop-zone.dragging { border-color: var(--accent); background: var(--accent-soft); }
+.music-zone .upload-icon,
+.music-zone .success-icon,
+.music-zone .delete-icon { display: grid; place-items: center; color: var(--accent); }
+.music-zone .delete-icon { color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 90%); }
+.music-zone .step { border-color: var(--border); background: var(--surface-raised); color: var(--muted); }
+.music-zone .step.active,
+.music-zone .step.done { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.music-zone .toast { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow); }
+.music-zone .toast.success { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.music-zone .toast.error { border-color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 92%); color: var(--danger); }
+.music-zone .shortcuts-hint-btn { display: grid; place-items: center; border: 1px solid var(--border); background: var(--surface-raised); color: var(--accent); box-shadow: var(--shadow); }
+.music-zone .shortcuts-hint-btn:hover { border-color: var(--accent); background: var(--accent-soft); transform: none; }
+@media (max-width: 760px) {
+  .music-zone { padding-bottom: 132px; }
+  .music-zone .zone-description { padding: var(--space-4); }
+  .music-zone .action-bar { align-items: stretch; flex-direction: column; gap: var(--space-3); }
+  .music-zone .action-btns { width: 100%; }
+  .music-zone .action-btns > button { flex: 1; }
+  .music-zone .music-row { grid-template-columns: auto 48px minmax(0, 1fr) auto; }
+  .music-zone .music-tools { grid-column: 2 / -1; justify-content: flex-end; opacity: 1; }
+  .music-zone .music-meta { display: none; }
+  .music-zone .mini-content { padding: var(--space-2) var(--space-3); }
+  .music-zone .mini-extra { display: none; }
+  .music-zone .fullscreen-music-player { overflow: auto; }
+  .music-zone .fs-body { grid-template-columns: 1fr; padding: var(--space-4); }
+  .music-zone .fs-playlist-section { display: none; }
+  .music-zone .info-modal.modern,
+  .music-zone .lyrics-input-modal,
+  .music-zone .delete-modal.modern,
+  .music-zone .upload-modal.modern,
+  .music-zone .shortcuts-modal { width: min(100% - 24px, 560px); }
 }
 </style>
