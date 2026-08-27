@@ -7,11 +7,12 @@
     <form @submit.prevent="savePersonalInfo" class="info-form">
       <!-- 用户名 -->
       <div class="form-group">
-        <label class="form-label">
+        <label class="form-label" for="profile-username">
           用户名
           <span class="required">*</span>
         </label>
         <input 
+          id="profile-username"
           type="text" 
           v-model="userInfo.username"
           :disabled="!isEditing"
@@ -22,23 +23,25 @@
       
       <!-- 邮箱 -->
       <div class="form-group">
-        <label class="form-label">
+        <label class="form-label" for="profile-email">
           账号（邮箱）
           <span class="required">*</span>
         </label>
         <input 
+          id="profile-email"
           type="email" 
           v-model="userInfo.email"
-          :disabled="!isEditing"
-          :class="{ 'editable': isEditing }"
+          readonly
+          aria-describedby="profile-email-help"
           required
         />
+        <small id="profile-email-help" class="field-hint">邮箱目前不可在站内修改。</small>
       </div>
       
       <!-- 密码 -->
       <div class="form-group password-group">
         <div class="password-header">
-          <label class="form-label">
+          <label class="form-label" for="profile-password">
             密码
             <span class="required">*</span>
           </label>
@@ -52,7 +55,8 @@
         </div>
         
         <div class="password-input-wrapper">
-          <input 
+          <input
+            id="profile-password"
             :type="passwordVisible ? 'text' : 'password'"
             v-model="userInfo.password"
             :disabled="!isEditingPassword"
@@ -64,16 +68,10 @@
             v-if="isEditingPassword"
             type="button" 
             class="eye-icon-btn"
+            :aria-label="passwordVisible ? '隐藏新密码' : '显示新密码'"
             @click="passwordVisible = !passwordVisible"
           >
-            <svg v-if="!passwordVisible" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-              <line x1="1" y1="1" x2="23" y2="23"></line>
-            </svg>
-            <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
+            <AppIcon :name="passwordVisible ? 'eye-off' : 'eye'" :size="18" />
           </button>
         </div>
 
@@ -94,11 +92,19 @@
 
       <!-- 生日选择器 -->
       <div class="form-group date-form-group" ref="dateFormGroup">
-        <label class="form-label">生日</label>
+        <label id="profile-birthday-label" class="form-label">生日</label>
         <div 
+          id="profile-birthday"
+          role="button"
+          :tabindex="isEditing ? 0 : -1"
+          :aria-disabled="!isEditing"
+          aria-labelledby="profile-birthday-label"
           class="date-display" 
           :class="{ 'editable': isEditing, 'disabled': !isEditing, 'active': showDatePicker }"
           @click="isEditing && toggleDatePicker()"
+          @keydown.enter.prevent="isEditing && toggleDatePicker()"
+          @keydown.space.prevent="isEditing && toggleDatePicker()"
+          @keydown.esc.prevent="closeDatePicker"
         >
           <span :class="{ 'placeholder': !userInfo.birthday }">
             {{ displayBirthday }}
@@ -109,12 +115,12 @@
             :disabled="!isEditing"
             @click.stop="isEditing && toggleDatePicker()"
           >
-            📅
+            <AppIcon name="calendar" :size="18" />
           </button>
         </div>
         
         <transition name="datepicker-pop">
-          <div v-if="showDatePicker" class="datepicker-dropdown" v-click-outside="closeDatePicker">
+          <div v-if="showDatePicker" ref="datePicker" class="datepicker-dropdown" role="dialog" aria-label="选择生日" tabindex="-1" @keydown.esc.prevent="closeDatePicker" v-click-outside="closeDatePicker">
             <div class="datepicker-header">
               <div class="header-label">选择日期</div>
               <div class="header-date">{{ fullFormattedDate }}</div>
@@ -185,8 +191,9 @@
       
       <!-- 爱好 -->
       <div class="form-group">
-        <label class="form-label">爱好</label>
+        <label class="form-label" for="profile-hobbies">爱好</label>
         <input 
+          id="profile-hobbies"
           type="text" 
           v-model="userInfo.hobbies"
           :disabled="!isEditing"
@@ -197,8 +204,9 @@
       
       <!-- 职业 -->
       <div class="form-group">
-        <label class="form-label">职业</label>
+        <label class="form-label" for="profile-occupation">职业</label>
         <select 
+          id="profile-occupation"
           v-model="userInfo.occupation"
           :disabled="!isEditing"
           :class="{ 'editable': isEditing }"
@@ -214,8 +222,9 @@
       
       <!-- 备注 -->
       <div class="form-group">
-        <label class="form-label">备注</label>
+        <label class="form-label" for="profile-notes">备注</label>
         <textarea 
+          id="profile-notes"
           v-model="userInfo.notes"
           :disabled="!isEditing"
           :class="{ 'editable': isEditing }"
@@ -245,21 +254,43 @@
         </button>
       </div>
       
-      <div v-if="saveStatus" class="save-status" :class="saveStatus.type">
-        <span class="status-icon">{{ saveStatus.icon }}</span>
+      <div v-if="saveStatus" class="save-status" :class="saveStatus.type" role="status">
+        <AppIcon class="status-icon" :name="statusIcon" :size="18" />
         <span class="status-message">{{ saveStatus.message }}</span>
       </div>
     </form>
 
+    <section class="blog-profile-panel" aria-labelledby="blog-profile-title">
+      <div class="blog-profile-heading">
+        <div><p class="panel-eyebrow">公开资料</p><h3 id="blog-profile-title">个人博客主页</h3><p>这些资料仅用于公开个人主页；将主页设为私密后，访客无法访问。</p></div>
+        <a v-if="blogProfile.blogSlug && blogProfile.profileVisibility === 'public'" class="profile-preview-link" :href="`/u/${blogProfile.blogSlug}`" target="_blank" rel="noreferrer">预览主页<AppIcon name="external-link" :size="16" /></a>
+      </div>
+      <p v-if="blogMessage" class="blog-message" :class="blogMessage.type" role="status">{{ blogMessage.text }}</p>
+      <div class="avatar-editor">
+        <img v-if="avatarUrl" :src="avatarUrl" alt="当前头像" @error="avatarUrl = ''" />
+        <span v-else class="avatar-fallback" aria-hidden="true">{{ (userInfo.username || '用').slice(0, 1) }}</span>
+        <div><strong>头像</strong><p>支持 PNG、JPEG、WebP 或 GIF，最大 5MB。</p><label class="avatar-upload-button" for="profile-avatar"><AppIcon name="upload" :size="16" />{{ avatarUploading ? '上传中…' : '更新头像' }}</label><input id="profile-avatar" type="file" accept="image/png,image/jpeg,image/webp,image/gif" :disabled="avatarUploading" @change="uploadAvatar" /></div>
+      </div>
+      <div class="blog-form-grid">
+        <div class="form-group"><label class="form-label" for="personal-blog-title">博客标题</label><input id="personal-blog-title" v-model.trim="blogProfile.blogTitle" maxlength="120" placeholder="例如：我的写作空间" /></div>
+        <div class="form-group"><label class="form-label" for="personal-blog-slug">公开主页标识</label><div class="personal-slug"><span>/u/</span><input id="personal-blog-slug" v-model.trim="blogProfile.blogSlug" maxlength="50" pattern="[a-z0-9-]+" /></div><small class="field-hint">3–50 位小写字母、数字或连字符。</small></div>
+        <div class="form-group blog-wide"><label class="form-label" for="personal-blog-bio">简介</label><textarea id="personal-blog-bio" v-model="blogProfile.bio" maxlength="1000" rows="4" placeholder="介绍你自己或正在创作的内容。"></textarea></div>
+        <div class="form-group"><label class="form-label" for="personal-profile-visibility">主页可见性</label><select id="personal-profile-visibility" v-model="blogProfile.profileVisibility"><option value="public">公开</option><option value="private">私密</option></select></div>
+      </div>
+      <fieldset class="social-links"><legend>社交链接（可选）</legend><div class="blog-form-grid"><div class="form-group"><label class="form-label" for="personal-social-website">个人网站</label><input id="personal-social-website" v-model.trim="blogProfile.socialLinks.website" type="url" placeholder="https://example.com" /></div><div class="form-group"><label class="form-label" for="personal-social-github">GitHub</label><input id="personal-social-github" v-model.trim="blogProfile.socialLinks.github" type="url" placeholder="https://github.com/username" /></div><div class="form-group blog-wide"><label class="form-label" for="personal-social-other">其他链接</label><input id="personal-social-other" v-model.trim="blogProfile.socialLinks.other" type="url" placeholder="https://…" /></div></div></fieldset>
+      <button type="button" class="save-blog-profile" :disabled="blogSaving" @click="saveBlogProfile">{{ blogSaving ? '保存中…' : '保存博客资料' }}</button>
+    </section>
+
     <!-- 身份验证弹窗 -->
     <transition name="modal">
       <div v-if="showVerifyModal" class="verify-modal-overlay" @click.self="cancelVerify">
-        <div class="verify-modal">
-          <h3>验证身份</h3>
+        <div class="verify-modal" role="dialog" aria-modal="true" aria-labelledby="verify-password-title" tabindex="-1" @keydown.esc.prevent="cancelVerify">
+          <h3 id="verify-password-title">验证身份</h3>
           <p class="verify-desc">请输入当前密码以确认身份</p>
           
           <div class="verify-input-wrapper">
             <input 
+              id="verify-current-password"
               :type="verifyPasswordVisible ? 'text' : 'password'"
               v-model="verifyPassword"
               placeholder="请输入当前密码"
@@ -269,16 +300,10 @@
             <button 
               type="button" 
               class="eye-icon-btn verify-eye-btn"
+              :aria-label="verifyPasswordVisible ? '隐藏当前密码' : '显示当前密码'"
               @click="verifyPasswordVisible = !verifyPasswordVisible"
             >
-              <svg v-if="!verifyPasswordVisible" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                <line x1="1" y1="1" x2="23" y2="23"></line>
-              </svg>
-              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
+              <AppIcon :name="verifyPasswordVisible ? 'eye-off' : 'eye'" :size="18" />
             </button>
           </div>
           
@@ -294,6 +319,7 @@
 
 <script>
 import axios from '@/services/http'
+import AppIcon from '@/components/AppIcon.vue'
 
 const clickOutside = {
   mounted(el, binding) {
@@ -313,6 +339,7 @@ const ITEM_HEIGHT = 36
 
 export default {
   name: 'PersonalInfo',
+  components: { AppIcon },
   directives: { 'click-outside': clickOutside },
   data() {
     return {
@@ -342,6 +369,17 @@ export default {
         hobbies: '',
         occupation: '',
         notes: ''
+      },
+      avatarUrl: '',
+      avatarUploading: false,
+      blogSaving: false,
+      blogMessage: null,
+      blogProfile: {
+        blogTitle: '',
+        blogSlug: '',
+        bio: '',
+        profileVisibility: 'public',
+        socialLinks: { website: '', github: '', other: '' }
       },
       originalUserInfo: {},
       themeHandler: null
@@ -380,6 +418,11 @@ export default {
       const date = new Date(this.scrollSelectedYear, this.scrollSelectedMonth - 1, this.scrollSelectedDay)
       const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
       return weekdays[date.getDay()]
+    },
+    statusIcon() {
+      if (this.saveStatus?.type === 'success') return 'check'
+      if (this.saveStatus?.type === 'error') return 'close'
+      return 'info'
     }
   },
   watch: {
@@ -418,9 +461,11 @@ export default {
     this.loadUserInfo()
     // 关键修改：添加主题监听器
     this.setupThemeListener()
+    document.addEventListener('keydown', this.handleEscape)
   },
   beforeUnmount() {
     if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler)
+    document.removeEventListener('keydown', this.handleEscape)
   },
   methods: {
     // 关键修改：添加主题监听方法
@@ -430,12 +475,22 @@ export default {
       }
       window.addEventListener('theme-changed', this.themeHandler)
     },
+    handleEscape(event) {
+      if (event.key !== 'Escape') return
+      if (this.showVerifyModal) {
+        this.cancelVerify()
+        return
+      }
+      if (this.showDatePicker) this.closeDatePicker()
+    },
     async loadUserInfo() {
       try {
         const response = await axios.get('/api/me')
         this.userInfo = response.data.user
         this.userInfo.password = '********'
         this.originalUserInfo = { ...this.userInfo }
+        this.avatarUrl = response.data.user.avatar_url || ''
+        this.loadBlogProfile()
       } catch (error) {
         console.error('加载用户信息失败:', error)
         if (error.response?.status === 401) this.$router.push('/login')
@@ -495,14 +550,69 @@ export default {
       }
     },
     showSaveStatus(type, message) {
-      const icons = { success: '✅', error: '❌', warning: '⚠️' }
-      this.saveStatus = { type, icon: icons[type], message }
+      this.saveStatus = { type, message }
       setTimeout(() => this.saveStatus = null, 3000)
+    },
+    normalizeSocialLinks(value) {
+      let links = value
+      if (typeof links === 'string') {
+        try { links = JSON.parse(links) } catch (_) { links = {} }
+      }
+      return { website: String(links?.website || ''), github: String(links?.github || ''), other: String(links?.other || '') }
+    },
+    async loadBlogProfile() {
+      try {
+        const response = await axios.get('/api/me/blog-profile')
+        const profile = response.data.profile || {}
+        this.blogProfile = {
+          blogTitle: profile.blog_title || '',
+          blogSlug: profile.blog_slug || '',
+          bio: profile.bio || '',
+          profileVisibility: profile.profile_visibility || 'public',
+          socialLinks: this.normalizeSocialLinks(profile.social_links)
+        }
+        this.avatarUrl = profile.avatar_url || this.avatarUrl
+      } catch (error) {
+        this.blogMessage = { type: 'error', text: '无法载入博客资料。' }
+      }
+    },
+    async uploadAvatar(event) {
+      const file = event.target?.files?.[0]
+      if (!file) return
+      if (file.size > 5 * 1024 * 1024) { this.blogMessage = { type: 'error', text: '头像不能超过 5MB。' }; return }
+      this.avatarUploading = true
+      this.blogMessage = null
+      try {
+        const form = new FormData()
+        form.set('avatar', file)
+        const response = await axios.post('/api/me/avatar', form)
+        this.avatarUrl = response.data.avatarUrl || ''
+        window.dispatchEvent(new CustomEvent('profile-avatar-updated', { detail: { avatarUrl: this.avatarUrl } }))
+        this.blogMessage = { type: 'success', text: '头像已更新。' }
+      } catch (error) {
+        this.blogMessage = { type: 'error', text: error.response?.data?.error?.message || '头像上传失败。' }
+      } finally {
+        this.avatarUploading = false
+        event.target.value = ''
+      }
+    },
+    async saveBlogProfile() {
+      this.blogSaving = true
+      this.blogMessage = null
+      try {
+        await axios.put('/api/me/blog-profile', this.blogProfile)
+        this.blogMessage = { type: 'success', text: '博客资料已保存。' }
+      } catch (error) {
+        this.blogMessage = { type: 'error', text: error.response?.data?.error?.message || '保存失败，请检查主页标识和链接。' }
+      } finally {
+        this.blogSaving = false
+      }
     },
     
     // 日期选择器方法
     toggleDatePicker() {
       this.showDatePicker = !this.showDatePicker
+      if (this.showDatePicker) this.$nextTick(() => this.$refs.datePicker?.focus())
     },
     closeDatePicker() {
       this.showDatePicker = false
@@ -595,6 +705,7 @@ export default {
       this.verifyPassword = ''
       this.verifyPasswordVisible = false
       this.showVerifyModal = true
+      this.$nextTick(() => document.getElementById('verify-current-password')?.focus())
     },
     cancelVerify() {
       this.showVerifyModal = false
@@ -616,7 +727,8 @@ export default {
         this.showSaveStatus('success', '密码修改成功，请重新登录')
         this.isEditingPassword = false
         this.userInfo.password = '********'
-        setTimeout(() => {
+        setTimeout(async () => {
+          await axios.post('/api/logout').catch(() => {})
           localStorage.removeItem('isLoggedIn')
           localStorage.removeItem('userId')
           localStorage.removeItem('userEmail')
@@ -1454,4 +1566,42 @@ export default {
     padding: 15px;
   }
 }
+
+/* 个人资料沿用工作台令牌；旧日期和密码流程保留，只统一呈现。 */
+.info-content,
+.info-content.light-mode,
+.info-content.dark-mode {
+  --input-border: var(--border);
+  --input-bg: var(--surface-raised);
+  --input-disabled-bg: var(--surface-raised);
+  --input-editable-bg: var(--surface-raised);
+  --input-editable-border: var(--accent);
+  --input-focus-border: var(--accent);
+  --input-focus-shadow: color-mix(in srgb, var(--accent), transparent 70%);
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
+  --text-disabled: var(--subtle);
+  --text-muted: var(--muted);
+  --title-border: var(--border);
+  --actions-border: var(--border);
+  --btn-primary-bg: var(--accent);
+  --btn-primary-hover: var(--accent-strong);
+  --btn-secondary-bg: var(--surface-raised);
+  --btn-secondary-text: var(--text);
+  --btn-secondary-border: var(--border);
+  --btn-secondary-hover: var(--accent-soft);
+  --content-bg: var(--surface);
+  --content-border: var(--border);
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+}
+.info-content .content-title { margin: 0 0 var(--space-5); padding: 0; border: 0; color: var(--text); font-size: 1.55rem; letter-spacing: -.025em; }
+.info-content .info-form,
+.blog-profile-panel { box-sizing: border-box; width: 100%; margin: 0; padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
+.info-content .info-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.info-content .form-group { min-width: 0; margin: 0; }.info-content .password-group, .info-content .date-form-group, .info-content .form-actions, .info-content .save-status { grid-column: 1 / -1; }
+.info-content .form-label { margin: 0 0 6px; color: var(--text); font-size: .9rem; font-weight: 650; }.info-content .field-hint { display: block; margin-top: 5px; color: var(--muted); font-size: .78rem; }.info-content .info-form input, .info-content .info-form select, .info-content .info-form textarea, .blog-profile-panel input, .blog-profile-panel select, .blog-profile-panel textarea { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); font: inherit; }.info-content .info-form input:disabled, .info-content .info-form input[readonly] { opacity: 1; background: var(--bg); color: var(--muted); cursor: default; }.info-content .info-form input:focus, .info-content .info-form select:focus, .info-content .info-form textarea:focus, .blog-profile-panel input:focus, .blog-profile-panel select:focus, .blog-profile-panel textarea:focus { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent), transparent 70%); outline-offset: 1px; box-shadow: none; }.info-content .date-display { min-height: 42px; border-color: var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }.info-content .calendar-icon { display: grid; place-items: center; background: transparent; color: var(--accent); }.info-content .datepicker-dropdown { border-color: var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }.info-content .datepicker-header, .info-content .datepicker-footer { border-color: var(--border); background: var(--surface-raised); }.info-content .wheel-scroll { background: var(--surface-raised); }.info-content .wheel-item { color: var(--muted); }.info-content .wheel-item.active { color: var(--accent); }.info-content .btn-modify, .save-blog-profile, .info-content .btn-verify-confirm { border-color: var(--accent); background: var(--accent); color: #fff; box-shadow: none; }.info-content .btn-modify:hover:not(:disabled), .save-blog-profile:hover:not(:disabled), .info-content .btn-verify-confirm:hover { background: var(--accent-strong); transform: none; box-shadow: none; }.info-content .btn-cancel, .info-content .btn-complete-password, .info-content .password-toggle, .info-content .btn-verify-cancel { border-color: var(--border); background: var(--surface-raised); color: var(--text); box-shadow: none; }.info-content .btn-cancel:hover:not(:disabled), .info-content .btn-complete-password:hover, .info-content .password-toggle:hover, .info-content .btn-verify-cancel:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.info-content .form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin: 0; padding: var(--space-4) 0 0; border-top: 1px solid var(--border); }.info-content .save-status { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }.info-content .save-status.success { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.info-content .save-status.error { border-color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 92%); color: var(--danger); }.info-content .verify-modal-overlay { background: rgb(20 25 23 / 48%); backdrop-filter: blur(2px); }.info-content .verify-modal { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: var(--shadow); }.info-content .verify-modal h3 { color: var(--text); }
+.blog-profile-panel { display: grid; gap: var(--space-5); margin-top: var(--space-5); }.blog-profile-heading { display: flex; justify-content: space-between; gap: var(--space-4); }.panel-eyebrow { margin: 0 0 var(--space-1); color: var(--accent); font-size: .8rem; font-weight: 750; letter-spacing: .07em; }.blog-profile-heading h3 { margin: 0; color: var(--text); font-size: 1.1rem; }.blog-profile-heading p:last-child { max-width: 58ch; margin: var(--space-2) 0 0; color: var(--muted); font-size: .9rem; line-height: 1.65; }.profile-preview-link { display: inline-flex; align-items: center; align-self: start; gap: 6px; color: var(--accent); font-size: .9rem; white-space: nowrap; text-underline-offset: 3px; }.blog-message { margin: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }.blog-message.success { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.blog-message.error { border-color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 92%); color: var(--danger); }.avatar-editor { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); }.avatar-editor img, .avatar-fallback { display: grid; flex: none; width: 58px; height: 58px; place-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 1.15rem; font-weight: 750; object-fit: cover; }.avatar-editor strong { color: var(--text); }.avatar-editor p { margin: 4px 0 var(--space-2); color: var(--muted); font-size: .82rem; }.avatar-editor input[type='file'] { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }.avatar-upload-button, .save-blog-profile { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 36px; padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); cursor: pointer; font-size: .88rem; font-weight: 650; }.avatar-upload-button:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.blog-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }.blog-wide { grid-column: 1 / -1; }.personal-slug { display: flex; align-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); }.personal-slug span { padding-left: 11px; color: var(--muted); }.personal-slug input { border: 0; outline: 0; }.personal-slug:focus-within { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent), transparent 70%); outline-offset: 1px; }.social-links { margin: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-sm); }.social-links legend { padding: 0 var(--space-1); color: var(--text); font-size: .9rem; font-weight: 650; }.save-blog-profile { justify-self: end; border-color: var(--accent); background: var(--accent); color: #fff; }.info-content button:focus-visible, .blog-profile-panel input:focus-visible, .blog-profile-panel select:focus-visible, .blog-profile-panel textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent), transparent 68%); outline-offset: 2px; }
+@media (max-width: 720px) { .info-content .info-form, .blog-form-grid { grid-template-columns: 1fr; }.info-content .form-group, .blog-wide { grid-column: auto; }.blog-profile-heading { align-items: flex-start; flex-direction: column; }.profile-preview-link { align-self: auto; }.info-content .info-form, .blog-profile-panel { padding: var(--space-4); }.avatar-editor { align-items: flex-start; }.info-content .form-actions { justify-content: stretch; }.info-content .form-actions button { flex: 1; } }
 </style>

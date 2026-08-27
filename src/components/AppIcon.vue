@@ -55,6 +55,12 @@
     <path v-else-if="name === 'list'" d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" stroke-width="2.6" />
     <path v-else-if="name === 'panel-right'" d="M4 4h16v16H4zM14 4v16M7 8h4M7 12h4" />
     <path v-else-if="name === 'keyboard'" d="M4 6h16v12H4zM7 10h.01M10 10h.01M13 10h.01M16 10h.01M7 14h6m3 0h.01" stroke-width="2.4" />
+    <path v-else-if="name === 'eye'" d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Zm9.5 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+    <path v-else-if="name === 'eye-off'" d="m3 3 18 18M10.6 6.3A10.5 10.5 0 0 1 12 6c6.1 0 9.5 6 9.5 6a18 18 0 0 1-3.1 4M6.1 6.4A18.7 18.7 0 0 0 2.5 12S5.9 18 12 18a10 10 0 0 0 2.6-.4M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    <path v-else-if="name === 'calendar'" d="M5 5h14v15H5zM8 3v4m8-4v4M5 10h14" />
+    <path v-else-if="name === 'external-link'" d="M14 4h6v6m0-6-9 9M18 13v6H4V5h6" />
+    <path v-else-if="name === 'shield'" d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6zM9 12l2 2 4-4" />
+    <path v-else-if="name === 'info'" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-10v5m0-8h.01" />
     <path v-else-if="name === 'chevron-right'" d="m9 18 6-6-6-6" />
     <path v-else d="M4 6h16M4 12h16M4 18h10" />
   </svg>
