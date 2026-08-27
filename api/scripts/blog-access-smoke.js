@@ -117,6 +117,10 @@ async function run() {
   await expectStatus(baseUrl, `/api/public/avatars/${author.id}`, 404);
   await expectStatus(baseUrl, `/api/public/avatars/${author.id}`, 200, { headers: auth(author) });
   await query("UPDATE users SET profile_visibility='public' WHERE id=?", [author.id]);
+  await expectStatus(baseUrl, '/api/me/blog-profile', 400, { method: 'PUT', headers: { ...auth(author), 'content-type': 'application/json' }, body: JSON.stringify({ blogSlug: author.blogSlug, socialLinks: { website: 'javascript:alert(1)' } }) });
+  const savedProfile = await expectStatus(baseUrl, '/api/me/blog-profile', 200, { method: 'PUT', headers: { ...auth(author), 'content-type': 'application/json' }, body: JSON.stringify({ blogTitle: '访问审计主页', blogSlug: author.blogSlug, socialLinks: { website: 'https://example.com/profile', github: 'https://github.com/example' }, profileVisibility: 'public' }) });
+  const savedLinks = typeof savedProfile.profile.social_links === 'string' ? JSON.parse(savedProfile.profile.social_links) : savedProfile.profile.social_links;
+  assert.equal(savedLinks.website, 'https://example.com/profile', '社交链接应由服务端规范化后保存');
   await expectStatus(baseUrl, `/api/public/posts/${posts.public.slug}`, 200);
   const publicPost = await expectStatus(baseUrl, `/api/public/posts/${posts.public.slug}`, 200);
   assert.equal('share_token' in publicPost.post, false, '公开 DTO 不得包含 share_token');
