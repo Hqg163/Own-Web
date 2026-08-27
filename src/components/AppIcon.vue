@@ -32,6 +32,14 @@
     <path v-else-if="name === 'arrow-right'" d="M5 12h14m-6-6 6 6-6 6" />
     <path v-else-if="name === 'chevron-down'" d="m6 9 6 6 6-6" />
     <path v-else-if="name === 'paperclip'" d="m8.5 12.5 6.7-6.7a3.5 3.5 0 0 1 5 5l-8.1 8.1a5 5 0 0 1-7.1-7.1l7.4-7.4" />
+    <path v-else-if="name === 'rotate-cw'" d="M20 11a8 8 0 1 0 2 5m-2-5V5m0 6h-6" />
+    <path v-else-if="name === 'rotate-ccw'" d="M4 13a8 8 0 1 0-2-5m2 5v6m0-6h6" />
+    <path v-else-if="name === 'flip-horizontal'" d="M12 4v16M4 7l6 5-6 5zM20 7l-6 5 6 5z" />
+    <path v-else-if="name === 'flip-vertical'" d="M4 12h16M7 4l5 6 5-6M7 20l5-6 5 6" />
+    <path v-else-if="name === 'crop'" d="M6 3v12a3 3 0 0 0 3 3h12M18 21V9a3 3 0 0 0-3-3H3" />
+    <path v-else-if="name === 'play'" d="m9 5 10 7-10 7z" />
+    <path v-else-if="name === 'pause'" d="M8 5v14M16 5v14" />
+    <path v-else-if="name === 'more'" d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3" />
     <path v-else-if="name === 'chevron-right'" d="m9 18 6-6-6-6" />
     <path v-else d="M4 6h16M4 12h16M4 18h10" />
   </svg>

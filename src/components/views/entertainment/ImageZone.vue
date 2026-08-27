@@ -2,18 +2,16 @@
   <div :class="themeClass" class="image-zone">
     <!-- 头部 -->
     <div class="zone-header">
-      <button class="back-btn" @click="goBack">
-        <span>←</span> 返回
+      <button class="back-btn" type="button" @click="goBack">
+        <AppIcon name="arrow-left" :size="17" /> 返回媒体库
       </button>
     </div>
 
     <!-- 描述区域 -->
     <div class="zone-description">
-      <h3>📷 图片专区</h3>
-      <p>本专区为个人图片专区，主要展示个人收藏的各类图片</p>
-      <p>所展示的内容为图片的缩略图，悬停图片可查看图片的文字描述</p>
-      <p>点击图片可跳转图片大图进行查看，还能对图片进行各类基本图像处理包括滤镜、裁剪、缩放等</p>
-      <p>本页面图片均可预览和下载，请放心食用</p>
+      <p class="eyebrow">Media library</p>
+      <h2>图片</h2>
+      <p>查看、下载、整理和预览你的私有图片资源。Canvas 编辑器保留为本地预览工具。</p>
     </div>
 
     <!-- 操作栏 -->
@@ -21,32 +19,35 @@
       <span class="selection-status">{{ selectionText }}</span>
       <div class="action-btns">
         <template v-if="!isFiltering">
-          <button class="filter-btn" @click="startFilter">筛选图片</button>
-          <button class="upload-btn" @click="showUpload = true">上传图片</button>
+          <button class="filter-btn" type="button" @click="startFilter">选择多项</button>
+          <button class="upload-btn" type="button" @click="showUpload = true"><AppIcon name="upload" :size="16" />上传图片</button>
         </template>
         <template v-else>
-          <button class="action-btn categorize-btn" :disabled="selectedImages.length === 0" @click="showCategorize = true">
+          <button class="action-btn categorize-btn" type="button" :disabled="selectedImages.length === 0" @click="showCategorize = true">
             批量归类
           </button>
-          <button class="action-btn delete-btn" :disabled="selectedImages.length === 0" @click="confirmDelete">
+          <button class="action-btn delete-btn" type="button" :disabled="selectedImages.length === 0" @click="confirmDelete">
             批量删除
           </button>
-          <button class="action-btn cancel-btn" @click="cancelFilter">取消筛选</button>
+          <button class="action-btn cancel-btn" type="button" @click="cancelFilter">取消</button>
         </template>
       </div>
     </div>
 
     <!-- 图片展示区域 -->
     <div class="images-grid">
-      <div 
+      <button
         v-for="image in filteredImages" 
         :key="image.id"
         class="image-card"
+        type="button"
         :class="{ 'selectable': isFiltering, 'selected': selectedImages.includes(image.id) }"
+        :aria-pressed="isFiltering ? selectedImages.includes(image.id) : undefined"
+        :aria-label="isFiltering ? `选择图片 ${image.title}` : `查看图片 ${image.title}`"
         @click="handleImageClick(image)"
       >
         <div v-if="isFiltering" class="selection-indicator">
-          <span v-if="selectedImages.includes(image.id)">✓</span>
+          <AppIcon v-if="selectedImages.includes(image.id)" name="check" :size="15" />
         </div>
         
         <div class="image-wrapper">
@@ -63,19 +64,19 @@
           <span class="image-title">{{ image.title }}</span>
           <span class="image-style" :class="'style-' + (image.style || '普通')">{{ image.style || '普通' }}</span>
         </div>
-      </div>
+      </button>
     </div>
 
     <!-- 空状态 -->
     <div v-if="images.length === 0" class="empty-state">
-      <span>暂无图片，点击上传按钮添加图片</span>
+      <AppIcon name="image" :size="28" /><span>还没有图片。上传后可以在此处预览、整理与下载。</span>
     </div>
 
     <!-- 图片预览/编辑页 -->
     <div v-if="viewingImage" class="fullscreen-viewer">
       <div class="viewer-header">
-        <button class="back-btn" @click="closeViewer">
-          <span>←</span> 返回
+        <button class="back-btn" type="button" @click="closeViewer">
+          <AppIcon name="arrow-left" :size="17" /> 返回
         </button>
         <span class="viewer-title">{{ viewingImage.title }}</span>
       </div>
@@ -83,7 +84,7 @@
       <div class="viewer-body">
         <div class="viewer-left">
           <div class="image-nav">
-            <button :disabled="!hasPrev" @click="prevImage">←</button>
+            <button type="button" :disabled="!hasPrev" aria-label="上一张图片" @click="prevImage"><AppIcon name="arrow-left" :size="17" /></button>
           </div>
           
           <div class="main-image-container">
@@ -96,12 +97,12 @@
           </div>
           
           <div class="image-nav">
-            <button :disabled="!hasNext" @click="nextImage">→</button>
+            <button type="button" :disabled="!hasNext" aria-label="下一张图片" @click="nextImage"><AppIcon name="arrow-right" :size="17" /></button>
           </div>
           
           <div class="viewer-actions">
-            <button @click="downloadImage">📥 下载此图片</button>
-            <button @click="openEditor">✏️ 编辑此图片</button>
+            <button type="button" @click="downloadImage"><AppIcon name="download" :size="16" />下载图片</button>
+            <button type="button" @click="openEditor"><AppIcon name="pen" :size="16" />编辑预览</button>
           </div>
         </div>
         
@@ -151,9 +152,9 @@
     <!-- 图片编辑器弹窗 -->
     <div v-if="showEditor" class="editor-modal">
       <div class="editor-header">
-        <button class="back-btn" @click="closeEditor">← 返回</button>
+        <button class="back-btn" type="button" @click="closeEditor"><AppIcon name="arrow-left" :size="17" /> 返回</button>
         <h3>图片编辑</h3>
-        <button class="save-btn" @click="saveEditedImage">保存</button>
+        <button class="save-btn" type="button" @click="saveEditedImage">保存选项</button>
       </div>
       
       <div class="editor-body">
@@ -186,17 +187,17 @@
           
           <div class="tool-section">
             <h4>变换</h4>
-            <button @click="rotateImage(90)">↻ 顺时针90°</button>
-            <button @click="rotateImage(-90)">↺ 逆时针90°</button>
-            <button @click="flipImage('horizontal')">↔ 水平翻转</button>
-            <button @click="flipImage('vertical')">↕ 垂直翻转</button>
+            <button type="button" @click="rotateImage(90)"><AppIcon name="rotate-cw" :size="16" />顺时针 90°</button>
+            <button type="button" @click="rotateImage(-90)"><AppIcon name="rotate-ccw" :size="16" />逆时针 90°</button>
+            <button type="button" @click="flipImage('horizontal')"><AppIcon name="flip-horizontal" :size="16" />水平翻转</button>
+            <button type="button" @click="flipImage('vertical')"><AppIcon name="flip-vertical" :size="16" />垂直翻转</button>
           </div>
           
           <div class="tool-section">
             <h4>裁剪</h4>
-            <button @click="startCrop">开始裁剪</button>
-            <button v-if="isCropping" @click="applyCrop">应用裁剪</button>
-            <button v-if="isCropping" @click="cancelCrop">取消裁剪</button>
+            <button type="button" @click="startCrop"><AppIcon name="crop" :size="16" />开始裁剪</button>
+            <button v-if="isCropping" type="button" @click="applyCrop">应用裁剪</button>
+            <button v-if="isCropping" type="button" @click="cancelCrop">取消裁剪</button>
           </div>
         </div>
       </div>
@@ -297,9 +298,11 @@
 
 <script>
 import axios from '@/services/http'
+import AppIcon from '@/components/AppIcon.vue'
 
 export default {
   name: 'ImageZone',
+  components: { AppIcon },
   data() {
     return {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
@@ -384,9 +387,11 @@ export default {
     }
     this.loadImages()
     this.setupThemeListener()
+    document.addEventListener('keydown', this.handleEscape)
   },
   beforeUnmount() {
     if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler)
+    document.removeEventListener('keydown', this.handleEscape)
   },
   methods: {
     setupThemeListener() {
@@ -394,6 +399,16 @@ export default {
         this.themeClass = e.detail.theme === 'dark' ? 'dark-mode' : 'light-mode'
       }
       window.addEventListener('theme-changed', this.themeHandler)
+    },
+    handleEscape(event) {
+      if (event.key !== 'Escape') return
+      if (this.showSaveOptions) this.showSaveOptions = false
+      else if (this.showNewNameInput) this.showNewNameInput = false
+      else if (this.showCategorize) this.showCategorize = false
+      else if (this.showDeleteConfirm) this.showDeleteConfirm = false
+      else if (this.showUpload) this.showUpload = false
+      else if (this.showEditor) this.closeEditor()
+      else if (this.viewingImage) this.closeViewer()
     },
     
     async loadImages() {
@@ -1422,5 +1437,129 @@ export default {
   .editor-body {
     flex-direction: column;
   }
+}
+
+/* 图片资源库覆盖层：保留 Canvas 状态机，仅统一视觉与可访问交互。 */
+.image-zone { min-height: 0; padding: 0; background: transparent; color: var(--text); }
+.image-zone.light-mode,
+.image-zone.dark-mode { background: transparent; color: var(--text); }
+.image-zone .zone-header { margin: 0 0 var(--space-3); padding: 0; border: 0; }
+.image-zone .back-btn,
+.image-zone .filter-btn,
+.image-zone .upload-btn,
+.image-zone .action-btn,
+.image-zone .viewer-actions button,
+.image-zone .edit-actions button,
+.image-zone .editor-header button,
+.image-zone .tool-section button,
+.image-zone .actions button,
+.image-zone .options button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: none;
+  font: inherit;
+  font-size: .88rem;
+  font-weight: 650;
+}
+.image-zone .back-btn:hover:not(:disabled),
+.image-zone .filter-btn:hover:not(:disabled),
+.image-zone .action-btn:hover:not(:disabled),
+.image-zone .viewer-actions button:hover:not(:disabled),
+.image-zone .tool-section button:hover:not(:disabled),
+.image-zone .actions button:hover:not(:disabled),
+.image-zone .options button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); transform: none; }
+.image-zone .upload-btn,
+.image-zone .save-btn,
+.image-zone .edit-btn,
+.image-zone .new-btn { border-color: var(--accent); background: var(--accent); color: #fff; }
+.image-zone .upload-btn:hover:not(:disabled),
+.image-zone .save-btn:hover:not(:disabled),
+.image-zone .edit-btn:hover:not(:disabled),
+.image-zone .new-btn:hover:not(:disabled) { background: var(--accent-strong); color: #fff; transform: none; box-shadow: none; }
+.image-zone .delete-btn,
+.image-zone .confirm-btn,
+.image-zone .replace-btn { border-color: var(--danger); background: var(--danger); color: #fff; }
+.image-zone button:focus-visible,
+.image-zone input:focus-visible,
+.image-zone textarea:focus-visible,
+.image-zone select:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent), transparent 68%); outline-offset: 2px; }
+.zone-description { max-width: 68ch; margin: 0 0 var(--space-4); padding: 0; border: 0; background: transparent; }
+.zone-description h2 { margin: var(--space-1) 0; color: var(--text); font-size: 1.6rem; letter-spacing: -.025em; }
+.zone-description p:last-child { margin: 0; color: var(--muted); }
+.action-bar { min-height: auto; margin-bottom: var(--space-4); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.selection-status { color: var(--muted); font-size: .86rem; }
+.action-btns { gap: var(--space-2); }
+.images-grid { gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.image-card { position: relative; min-width: 0; padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: none; text-align: left; cursor: pointer; }
+.image-card:hover { transform: none; border-color: var(--accent); box-shadow: var(--shadow); }
+.image-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+.image-card .image-wrapper { aspect-ratio: 4 / 3; border-radius: 0; background: var(--bg); }
+.image-card .image-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+.image-card .image-overlay { background: linear-gradient(to top, rgb(0 0 0 / 48%), transparent); }
+.image-card .hover-description { display: none; }
+.image-card .image-info { min-height: 52px; padding: var(--space-2) var(--space-3); background: var(--surface); }
+.image-card .image-title { overflow: hidden; color: var(--text); font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
+.image-card .image-style { border: 1px solid var(--border); background: var(--surface-raised); color: var(--muted); }
+.selection-indicator { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--accent); border-radius: 50%; background: var(--accent); color: #fff; }
+.empty-state { display: flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 180px; padding: var(--space-4); border: 1px dashed var(--border); border-radius: var(--radius); background: transparent; color: var(--muted); }
+.fullscreen-viewer,
+.editor-modal { background: var(--bg); color: var(--text); }
+.viewer-header,
+.editor-header { min-height: 64px; padding: var(--space-3) var(--space-5); border-color: var(--border); background: var(--surface); }
+.viewer-title,
+.editor-header h3 { color: var(--text); }
+.viewer-body { background: var(--bg); }
+.viewer-left,
+.viewer-right { background: var(--surface); border-color: var(--border); }
+.main-image-container { border-color: var(--border); background: var(--bg); }
+.image-nav button { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }
+.info-section h4,
+.info-item label { color: var(--text); }
+.info-item input,
+.info-item textarea,
+.info-item select,
+.image-zone .categorize-modal input,
+.image-zone .name-input-modal input,
+.image-zone .upload-modal input,
+.image-zone .upload-modal select { box-sizing: border-box; border-color: var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }
+.editor-tools { border-color: var(--border); background: var(--surface); }
+.tool-section { padding: var(--space-3); border-color: var(--border); background: transparent; }
+.tool-section h4,
+.tool-section label { color: var(--text); }
+.modal-overlay { background: rgb(20 25 23 / 46%); backdrop-filter: blur(2px); }
+.save-options-modal,
+.name-input-modal,
+.categorize-modal,
+.delete-modal,
+.upload-modal { width: min(460px, calc(100% - 32px)); padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.save-options-modal h3,
+.name-input-modal h3,
+.categorize-modal h3,
+.delete-modal h3,
+.upload-modal h3 { margin: 0 0 var(--space-3); color: var(--text); }
+.categorize-modal p,
+.delete-modal p,
+.save-options-modal p { color: var(--muted); }
+.toast { top: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow); }
+.toast.success { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.toast.error { border-color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 92%); color: var(--danger); }
+@media (max-width: 760px) {
+  .action-bar { align-items: stretch; flex-direction: column; gap: var(--space-2); }
+  .action-btns { justify-content: flex-start; flex-wrap: wrap; }
+  .images-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .viewer-header,
+  .editor-header { padding: var(--space-3); }
+  .viewer-body,
+  .editor-body { overflow: auto; }
+  .viewer-right { border-left: 0; border-top: 1px solid var(--border); }
+  .editor-tools { min-width: 0; }
 }
 </style>
