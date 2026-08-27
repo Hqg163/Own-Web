@@ -36,14 +36,16 @@ import AppIcon from '@/components/AppIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 
 type TaxonomyItem={name:string;slug:string}
-type Post={id:number;title:string;username:string;blog_slug:string;avatar_url?:string|null;avatar_path?:string|null;published_at?:string|null;reading_minutes?:number;cover_image?:string|null;excerpt?:string|null;content_markdown?:string|null;like_count:number;bookmark_count?:number;categories?:TaxonomyItem[];tags?:TaxonomyItem[];viewer_liked?:boolean;viewer_bookmarked?:boolean}
+type Post={id:number;title:string;username:string;blog_slug:string;avatar_url?:string|null;avatar_path?:string|null;published_at?:string|null;reading_minutes?:number;cover_image?:string|null;excerpt?:string|null;content_markdown?:string|null;content_html?:string|null;content_format?:'markdown'|'blocks';like_count:number;bookmark_count?:number;categories?:TaxonomyItem[];tags?:TaxonomyItem[];viewer_liked?:boolean;viewer_bookmarked?:boolean}
 type Comment={id:number;parent_id?:number|null;author_id?:number|null;username:string;content:string;created_at:string;deleted_at?:string|null}
 
 const route=useRoute(), post=ref<Post>(), comments=ref<Comment[]>([]), loading=ref(true), commentsLoading=ref(false), error=ref(''), commentText=ref(''), replyTo=ref<number|null>(null), canComment=ref(false), actionMessage=ref(''), actionError=ref(false), commentError=ref(''), commentPending=ref(false), pendingDeleteId=ref<number|null>(null), liked=ref(false), bookmarked=ref(false), reported=ref(false)
 const actionPending=ref({like:false,bookmark:false,report:false})
 const loggedIn=localStorage.getItem('isLoggedIn')==='true'
 const currentUserId=Number(JSON.parse(localStorage.getItem('userInfo')||'{}').id)||0
-const html=computed(()=>DOMPurify.sanitize(String(marked.parse(post.value?.content_markdown||''))))
+const html=computed(()=>post.value?.content_format==='blocks'
+  ? DOMPurify.sanitize(post.value.content_html||'')
+  : DOMPurify.sanitize(String(marked.parse(post.value?.content_markdown||''))))
 const requiresLogin=computed(()=>error.value.includes('登录'))
 const loginTarget=computed(()=>({path:'/login',query:{redirect:route.fullPath}}))
 const rootComments=computed(()=>comments.value.filter(comment=>!comment.parent_id))

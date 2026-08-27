@@ -137,6 +137,15 @@ async function run() {
     method: 'POST', headers: { ...auth(author), 'content-type': 'application/json' },
     body: JSON.stringify({ title: '非法块', contentBlocks: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '危险链接', marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }] }] }] } })
   });
+  const blockDoc = { type: 'doc', content: [
+    { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '结构化内容' }] },
+    { type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: '列名' }] }] }] }] }
+  ] };
+  const newBlockPost = await expectStatus(baseUrl, '/api/posts', 201, { method: 'POST', headers: { ...auth(author), 'content-type': 'application/json' }, body: JSON.stringify({ title: '块编辑审计', contentBlocks: blockDoc }) });
+  await expectStatus(baseUrl, `/api/posts/${newBlockPost.post.id}`, 200, { headers: auth(author) }).then((body) => {
+    assert.equal(body.post.content_format, 'blocks', '块文章应保存内容格式');
+    assert.match(body.post.content_html, /<table>/, '块文章应生成安全的表格 HTML');
+  });
   await expectStatus(baseUrl, `/api/posts/${posts.private.id}/comments`, 401);
   await expectStatus(baseUrl, `/api/posts/${posts.private.id}/comments`, 200, { headers: auth(author) });
   await expectStatus(baseUrl, `/api/posts/${posts.private.id}/comments`, 403, { headers: auth(stranger) });
