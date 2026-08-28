@@ -1,6 +1,6 @@
 # Own-Web 全站第二轮审计与交付报告
 
-> 复核日期：2026-08-29。实现、集中质量门禁和真实作者站点发布已经完成；独立匿名/第二账号阅读因当前环境没有第二会话而明确保持 Not Verified。本报告不把测试数据库或代码存在写成第二账号证据。
+> 复核日期：2026-08-29。Branch：`codex/community-blog-v1`。Start HEAD：`a245cf542e47acfd7241d926c97a03ad36aef8b7`。End HEAD 以包含本报告的最后一个 commit 为准（可由 `git log -1 --format=%H` 复现）。实现、集中质量门禁和真实作者站点发布已经完成；独立匿名/第二账号阅读因当前环境没有第二会话而明确保持 Not Verified。本报告不把测试数据库或代码存在写成第二账号证据。
 
 ## A. Architecture Summary
 
@@ -195,7 +195,7 @@ Playwright 的 20 个视觉用例包含 overflow/bounds 检查，E2E 覆盖键�
 | `dfcc6bb` | `test(e2e): cover second-pass interaction regressions` | draft/menu/music E2E、视觉 baselines、安全 unit |
 | `9f418fd` | `feat(blog): publish persistent showcase fixtures` | 文章源文件、研究/素材 manifest；真实文章由 UI 发布并保留 |
 | `c21cfcf` | `ci: add reproducible quality gates` | PR/push 静态与集成门禁、nightly/dispatch 视觉性能任务 |
-| 待生成 | `docs(audit): correct second-pass verification results` | 最终审计证据、真实 URL、限制和 remaining issues |
+| 当前报告 commit（由 `git log -1 --format=%H` 取得） | `docs(audit): correct second-pass verification results` | 最终审计证据、真实 URL、限制和 remaining issues |
 
 最终报告提交 hash 由 `git log -1 --format=%H` 取得；它是包含本文件的最后一个 `docs(audit)` 提交，避免在提交自身内容中伪造自引用 hash。
 
