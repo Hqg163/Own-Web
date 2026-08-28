@@ -3,7 +3,7 @@
   <!-- 关键修改：添加 themeClass 到根元素 -->
   <div :class="themeClass" class="info-content">
     <h2 class="content-title">个人信息</h2>
-      
+
     <form @submit.prevent="savePersonalInfo" class="info-form">
       <!-- 用户名 -->
       <div class="form-group">
@@ -11,25 +11,25 @@
           用户名
           <span class="required">*</span>
         </label>
-        <input 
+        <input
           id="profile-username"
-          type="text" 
+          type="text"
           v-model="userInfo.username"
           :disabled="!isEditing"
           :class="{ 'editable': isEditing }"
           required
         />
       </div>
-      
+
       <!-- 邮箱 -->
       <div class="form-group">
         <label class="form-label" for="profile-email">
           账号（邮箱）
           <span class="required">*</span>
         </label>
-        <input 
+        <input
           id="profile-email"
-          type="email" 
+          type="email"
           v-model="userInfo.email"
           readonly
           aria-describedby="profile-email-help"
@@ -37,7 +37,7 @@
         />
         <small id="profile-email-help" class="field-hint">邮箱目前不可在站内修改。</small>
       </div>
-      
+
       <!-- 密码 -->
       <div class="form-group password-group">
         <div class="password-header">
@@ -45,15 +45,15 @@
             密码
             <span class="required">*</span>
           </label>
-          <button 
-            type="button" 
+          <button
+            type="button"
             class="password-toggle"
             @click="togglePasswordEdit"
           >
             {{ isEditingPassword ? '取消修改' : '修改密码' }}
           </button>
         </div>
-        
+
         <div class="password-input-wrapper">
           <input
             id="profile-password"
@@ -64,9 +64,9 @@
             placeholder="********"
             required
           />
-          <button 
+          <button
             v-if="isEditingPassword"
-            type="button" 
+            type="button"
             class="eye-icon-btn"
             :aria-label="passwordVisible ? '隐藏新密码' : '显示新密码'"
             @click="passwordVisible = !passwordVisible"
@@ -78,10 +78,10 @@
         <div v-if="isEditingPassword" class="password-hint">
           密码修改后需要重新登录
         </div>
-        
+
         <div v-if="isEditingPassword" class="password-actions">
-          <button 
-            type="button" 
+          <button
+            type="button"
             class="btn-complete-password"
             @click="preparePasswordChange"
           >
@@ -93,13 +93,13 @@
       <!-- 生日选择器 -->
       <div class="form-group date-form-group" ref="dateFormGroup">
         <label id="profile-birthday-label" class="form-label">生日</label>
-        <div 
+        <div
           id="profile-birthday"
           role="button"
           :tabindex="isEditing ? 0 : -1"
           :aria-disabled="!isEditing"
           aria-labelledby="profile-birthday-label"
-          class="date-display" 
+          class="date-display"
           :class="{ 'editable': isEditing, 'disabled': !isEditing, 'active': showDatePicker }"
           @click="isEditing && toggleDatePicker()"
           @keydown.enter.prevent="isEditing && toggleDatePicker()"
@@ -109,8 +109,8 @@
           <span :class="{ 'placeholder': !userInfo.birthday }">
             {{ displayBirthday }}
           </span>
-          <button 
-            type="button" 
+          <button
+            type="button"
             class="calendar-icon"
             :disabled="!isEditing"
             @click.stop="isEditing && toggleDatePicker()"
@@ -118,7 +118,7 @@
             <AppIcon name="calendar" :size="18" />
           </button>
         </div>
-        
+
         <transition name="datepicker-pop">
           <div v-if="showDatePicker" ref="datePicker" class="datepicker-dropdown" role="dialog" aria-label="选择生日" tabindex="-1" @keydown.esc.prevent="closeDatePicker" v-click-outside="closeDatePicker">
             <div class="datepicker-header">
@@ -126,14 +126,14 @@
               <div class="header-date">{{ fullFormattedDate }}</div>
               <div class="header-weekday">{{ selectedWeekday }}</div>
             </div>
-            
+
             <div class="datepicker-body">
               <div class="wheel-container">
                 <div class="wheel-column">
                   <div class="wheel-title">年</div>
                   <div class="wheel-scroll" ref="yearScroll" @scroll.passive="handleYearScroll">
-                    <div 
-                      v-for="(year, index) in yearList" 
+                    <div
+                      v-for="(year, index) in yearList"
                       :key="year"
                       :class="['wheel-item', { active: scrollSelectedYear === year }]"
                     >
@@ -141,12 +141,12 @@
                     </div>
                   </div>
                 </div>
-                
+
                 <div class="wheel-column">
                   <div class="wheel-title">月</div>
                   <div class="wheel-scroll" ref="monthScroll" @scroll.passive="handleMonthScroll">
-                    <div 
-                      v-for="month in 12" 
+                    <div
+                      v-for="month in 12"
                       :key="month"
                       :class="['wheel-item', { active: scrollSelectedMonth === month }]"
                     >
@@ -154,12 +154,12 @@
                     </div>
                   </div>
                 </div>
-                
+
                 <div class="wheel-column">
                   <div class="wheel-title">日</div>
                   <div class="wheel-scroll" ref="dayScroll" @scroll.passive="handleDayScroll">
-                    <div 
-                      v-for="day in daysInMonth" 
+                    <div
+                      v-for="day in daysInMonth"
                       :key="day"
                       :class="['wheel-item', { active: scrollSelectedDay === day }]"
                     >
@@ -167,11 +167,11 @@
                     </div>
                   </div>
                 </div>
-                
+
                 <div class="wheel-highlight"></div>
               </div>
             </div>
-            
+
             <div class="datepicker-footer">
               <button type="button" class="btn-text btn-today" @click="selectToday">
                 今天
@@ -188,24 +188,24 @@
           </div>
         </transition>
       </div>
-      
+
       <!-- 爱好 -->
       <div class="form-group">
         <label class="form-label" for="profile-hobbies">爱好</label>
-        <input 
+        <input
           id="profile-hobbies"
-          type="text" 
+          type="text"
           v-model="userInfo.hobbies"
           :disabled="!isEditing"
           :class="{ 'editable': isEditing }"
           placeholder="请输入您的爱好"
         />
       </div>
-      
+
       <!-- 职业 -->
       <div class="form-group">
         <label class="form-label" for="profile-occupation">职业</label>
-        <select 
+        <select
           id="profile-occupation"
           v-model="userInfo.occupation"
           :disabled="!isEditing"
@@ -219,11 +219,11 @@
           <option value="other">其他</option>
         </select>
       </div>
-      
+
       <!-- 备注 -->
       <div class="form-group">
         <label class="form-label" for="profile-notes">备注</label>
-        <textarea 
+        <textarea
           id="profile-notes"
           v-model="userInfo.notes"
           :disabled="!isEditing"
@@ -232,19 +232,19 @@
           rows="4"
         ></textarea>
       </div>
-      
+
       <!-- 操作按钮 -->
       <div class="form-actions">
-        <button 
-          type="button" 
+        <button
+          type="button"
           class="btn-modify"
           @click="toggleEdit"
           :disabled="isEditingPassword"
         >
           {{ isEditing ? '保存' : '修改' }}
         </button>
-        <button 
-          type="button" 
+        <button
+          type="button"
           class="btn-cancel"
           @click="cancelEdit"
           :disabled="!isEditing && !isEditingPassword"
@@ -253,7 +253,7 @@
           取消
         </button>
       </div>
-      
+
       <div v-if="saveStatus" class="save-status" :class="saveStatus.type" role="status">
         <AppIcon class="status-icon" :name="statusIcon" :size="18" />
         <span class="status-message">{{ saveStatus.message }}</span>
@@ -287,9 +287,9 @@
         <div class="verify-modal" role="dialog" aria-modal="true" aria-labelledby="verify-password-title" tabindex="-1" @keydown.esc.prevent="cancelVerify">
           <h3 id="verify-password-title">验证身份</h3>
           <p class="verify-desc">请输入当前密码以确认身份</p>
-          
+
           <div class="verify-input-wrapper">
-            <input 
+            <input
               id="verify-current-password"
               :type="verifyPasswordVisible ? 'text' : 'password'"
               v-model="verifyPassword"
@@ -297,8 +297,8 @@
               class="verify-input"
               @keyup.enter="confirmPasswordChange"
             />
-            <button 
-              type="button" 
+            <button
+              type="button"
               class="eye-icon-btn verify-eye-btn"
               :aria-label="verifyPasswordVisible ? '隐藏当前密码' : '显示当前密码'"
               @click="verifyPasswordVisible = !verifyPasswordVisible"
@@ -306,7 +306,7 @@
               <AppIcon :name="verifyPasswordVisible ? 'eye-off' : 'eye'" :size="18" />
             </button>
           </div>
-          
+
           <div class="verify-actions">
             <button class="btn-verify-cancel" @click="cancelVerify">取消</button>
             <button class="btn-verify-confirm" @click="confirmPasswordChange">确认</button>
@@ -608,7 +608,7 @@ export default {
         this.blogSaving = false
       }
     },
-    
+
     // 日期选择器方法
     toggleDatePicker() {
       this.showDatePicker = !this.showDatePicker
@@ -690,7 +690,7 @@ export default {
       this.userInfo.birthday = `${this.selectedYear}-${m}-${d}`
       this.closeDatePicker()
     },
-    
+
     // 密码修改
     preparePasswordChange() {
       if (!this.userInfo.password) {
@@ -745,93 +745,7 @@ export default {
 
 <style scoped>
 /* 关键修改：添加 light-mode 和 dark-mode 的 CSS 变量定义 */
-.light-mode {
-  --input-border: #d1d5db;
-  --input-bg: #ffffff;
-  --input-disabled-bg: #f3f4f6;
-  --input-editable-bg: #ffffff;
-  --input-editable-border: #3b82f6;
-  --input-focus-border: #3b82f6;
-  --input-focus-shadow: rgba(59, 130, 246, 0.1);
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
-  --text-disabled: #9ca3af;
-  --text-muted: #6b7280;
-  --title-border: #e5e7eb;
-  --actions-border: #e5e7eb;
-  --btn-primary-bg: #3b82f6;
-  --btn-primary-text: #ffffff;
-  --btn-primary-hover: #2563eb;
-  --btn-secondary-bg: #f3f4f6;
-  --btn-secondary-text: #4b5563;
-  --btn-secondary-border: #d1d5db;
-  --btn-secondary-hover: #e5e7eb;
-  --btn-cancel-bg: #f3f4f6;
-  --btn-cancel-text: #6b7280;
-  --btn-cancel-enabled-bg: #ef4444;
-  --btn-cancel-enabled-text: #ffffff;
-  --btn-cancel-enabled-hover: #dc2626;
-  --option-hover: #f3f4f6;
-  --status-success-bg: #d1fae5;
-  --status-success-text: #065f46;
-  --status-success-border: #a7f3d0;
-  --status-error-bg: #fee2e2;
-  --status-error-text: #991b1b;
-  --status-error-border: #fecaca;
-  --datepicker-bg: #ffffff;
-  --datepicker-border: #e5e7eb;
-  --datepicker-header-bg: #f9fafb;
-  --datepicker-wheel-bg: #f3f4f6;
-  --datepicker-wheel-text: #4b5563;
-  --datepicker-wheel-active: #3b82f6;
-  --datepicker-highlight: rgba(59, 130, 246, 0.1);
-  --content-bg: #ffffff;
-  --content-border: #e5e7eb;
-}
-
-.dark-mode {
-  --input-border: #4b5563;
-  --input-bg: #374151;
-  --input-disabled-bg: #1f2937;
-  --input-editable-bg: #4b5563;
-  --input-editable-border: #60a5fa;
-  --input-focus-border: #60a5fa;
-  --input-focus-shadow: rgba(96, 165, 250, 0.2);
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --text-disabled: #6b7280;
-  --text-muted: #9ca3af;
-  --title-border: #374151;
-  --actions-border: #374151;
-  --btn-primary-bg: #3b82f6;
-  --btn-primary-text: #ffffff;
-  --btn-primary-hover: #2563eb;
-  --btn-secondary-bg: #374151;
-  --btn-secondary-text: #d1d5db;
-  --btn-secondary-border: #4b5563;
-  --btn-secondary-hover: #4b5563;
-  --btn-cancel-bg: #374151;
-  --btn-cancel-text: #9ca3af;
-  --btn-cancel-enabled-bg: #dc2626;
-  --btn-cancel-enabled-text: #ffffff;
-  --btn-cancel-enabled-hover: #b91c1c;
-  --option-hover: #374151;
-  --status-success-bg: #064e3b;
-  --status-success-text: #6ee7b7;
-  --status-success-border: #059669;
-  --status-error-bg: #7f1d1d;
-  --status-error-text: #fca5a5;
-  --status-error-border: #dc2626;
-  --datepicker-bg: #1f2937;
-  --datepicker-border: #374151;
-  --datepicker-header-bg: #111827;
-  --datepicker-wheel-bg: #111827;
-  --datepicker-wheel-text: #d1d5db;
-  --datepicker-wheel-active: #60a5fa;
-  --datepicker-highlight: rgba(96, 165, 250, 0.2);
-  --content-bg: #1f2937;
-  --content-border: #374151;
-}
+.light-mode, .dark-mode { color: var(--text); }
 
 .info-content {
   animation: fadeIn 0.3s ease;
@@ -845,21 +759,21 @@ export default {
 .content-title {
   margin-top: 0;
   margin-bottom: 30px;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 24px;
   padding-bottom: 15px;
-  border-bottom: 2px solid var(--title-border);
+  border-bottom: 2px solid var(--border);
 }
 
 /* ==================== 右侧内容区 ==================== */
 .content-area {
   flex: 1;
   min-width: 0;
-  background: var(--content-bg);
+  background: var(--surface);
   border-radius: 12px;
   padding: 30px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid var(--content-border);
+  border: 1px solid var(--border);
   transition: background-color 0.3s, border-color 0.3s;
   min-height: 600px;
 }
@@ -867,10 +781,10 @@ export default {
 .content-title {
   margin-top: 0;
   margin-bottom: 30px;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 24px;
   padding-bottom: 15px;
-  border-bottom: 2px solid var(--title-border);
+  border-bottom: 2px solid var(--border);
 }
 
 /* ==================== 个人信息表单 ==================== */
@@ -887,7 +801,7 @@ export default {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 15px;
 }
 
@@ -901,35 +815,35 @@ export default {
 .info-form textarea {
   width: 100%;
   padding: 12px 15px;
-  border: 1px solid var(--input-border);
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 15px;
   transition: all 0.3s;
-  background: var(--input-bg);
-  color: var(--text-primary);
+  background: var(--surface-raised);
+  color: var(--text);
 }
 
 .info-form input:disabled,
 .info-form select:disabled,
 .info-form textarea:disabled {
-  background: var(--input-disabled-bg);
-  color: var(--text-disabled);
+  background: var(--bg);
+  color: var(--subtle);
   cursor: not-allowed;
 }
 
 .info-form input.editable:not(:disabled),
 .info-form select.editable:not(:disabled),
 .info-form textarea.editable:not(:disabled) {
-  background: var(--input-editable-bg);
-  border-color: var(--input-editable-border);
+  background: var(--surface-raised);
+  border-color: var(--accent);
 }
 
 .info-form input:focus:not(:disabled),
 .info-form select:focus:not(:disabled),
 .info-form textarea:focus:not(:disabled) {
   outline: none;
-  border-color: var(--input-focus-border);
-  box-shadow: 0 0 0 3px var(--input-focus-shadow);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* 日期选择器样式 */
@@ -940,11 +854,11 @@ export default {
 .date-display {
   width: 100%;
   padding: 12px 15px;
-  border: 1px solid var(--input-border);
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 15px;
-  background: var(--input-bg);
-  color: var(--text-primary);
+  background: var(--surface-raised);
+  color: var(--text);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -954,8 +868,8 @@ export default {
 }
 
 .date-display.disabled {
-  background: var(--input-disabled-bg);
-  color: var(--text-disabled);
+  background: var(--bg);
+  color: var(--subtle);
   cursor: not-allowed;
 }
 
@@ -964,16 +878,16 @@ export default {
 }
 
 .date-display.editable:hover {
-  border-color: var(--input-focus-border);
+  border-color: var(--accent);
 }
 
 .date-display.active {
-  border-color: var(--input-focus-border);
-  box-shadow: 0 0 0 3px var(--input-focus-shadow);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .date-display .placeholder {
-  color: var(--text-secondary);
+  color: var(--muted);
   opacity: 0.6;
 }
 
@@ -1003,8 +917,8 @@ export default {
   top: calc(100% + 8px);
   left: 0;
   width: 320px;
-  background: var(--datepicker-bg);
-  border: 1px solid var(--datepicker-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   z-index: 100;
@@ -1024,15 +938,15 @@ export default {
 }
 
 .datepicker-header {
-  background: var(--datepicker-header-bg);
+  background: var(--surface-raised);
   padding: 16px 20px;
   text-align: center;
-  border-bottom: 1px solid var(--datepicker-border);
+  border-bottom: 1px solid var(--border);
 }
 
 .header-label {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 1px;
   margin-bottom: 4px;
@@ -1041,13 +955,13 @@ export default {
 .header-date {
   font-size: 20px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--text);
   margin-bottom: 2px;
 }
 
 .header-weekday {
   font-size: 14px;
-  color: var(--text-muted);
+  color: var(--muted);
 }
 
 .datepicker-body {
@@ -1059,7 +973,7 @@ export default {
   display: flex;
   height: 180px;
   position: relative;
-  background: var(--datepicker-wheel-bg);
+  background: var(--surface-raised);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -1076,9 +990,9 @@ export default {
   text-align: center;
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--muted);
   padding: 6px 0;
-  border-bottom: 1px solid var(--datepicker-border);
+  border-bottom: 1px solid var(--border);
   background: rgba(128, 128, 128, 0.05);
   flex-shrink: 0;
   height: 28px;
@@ -1109,7 +1023,7 @@ export default {
   align-items: center;
   justify-content: center;
   font-size: 15px;
-  color: var(--datepicker-wheel-text);
+  color: var(--text);
   scroll-snap-align: center;
   scroll-snap-stop: always;
   opacity: 0.5;
@@ -1118,7 +1032,7 @@ export default {
 }
 
 .wheel-item.active {
-  color: var(--datepicker-wheel-active);
+  color: var(--accent);
   font-weight: 700;
   opacity: 1;
   background: transparent;
@@ -1136,8 +1050,8 @@ export default {
   right: 0;
   height: 36px;
   background: transparent;
-  border-top: 2px solid var(--datepicker-wheel-active);
-  border-bottom: 2px solid var(--datepicker-wheel-active);
+  border-top: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
   pointer-events: none;
   z-index: 1;
   opacity: 0.6;
@@ -1149,7 +1063,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-top: 1px solid var(--datepicker-border);
+  border-top: 1px solid var(--border);
   background: rgba(128, 128, 128, 0.03);
 }
 
@@ -1166,35 +1080,35 @@ export default {
   cursor: pointer;
   transition: all 0.3s;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .btn-text:hover {
-  background: var(--option-hover);
-  color: var(--text-primary);
+  background: var(--accent-soft);
+  color: var(--text);
 }
 
 .btn-today {
-  color: var(--btn-primary-bg);
+  color: var(--accent);
   font-weight: 500;
 }
 
 .btn-today:hover {
-  background: var(--datepicker-highlight);
+  background: var(--accent-soft);
 }
 
 .btn-cancel {
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .btn-confirm {
-  background: var(--btn-primary-bg) !important;
+  background: var(--accent) !important;
   color: white !important;
   font-weight: 600;
 }
 
 .btn-confirm:hover {
-  background: var(--btn-primary-hover) !important;
+  background: var(--accent-strong) !important;
   filter: brightness(1.1);
 }
 
@@ -1212,9 +1126,9 @@ export default {
 
 .password-toggle {
   padding: 6px 12px;
-  background: var(--btn-secondary-bg);
-  color: var(--btn-secondary-text);
-  border: 1px solid var(--btn-secondary-border);
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
@@ -1222,7 +1136,7 @@ export default {
 }
 
 .password-toggle:hover:not(:disabled) {
-  background: var(--btn-secondary-hover);
+  background: var(--accent-soft);
 }
 
 .password-input-wrapper {
@@ -1245,7 +1159,7 @@ export default {
   border: none;
   padding: 4px;
   cursor: pointer;
-  color: var(--text-secondary);
+  color: var(--muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1255,13 +1169,13 @@ export default {
 }
 
 .eye-icon-btn:hover {
-  color: var(--text-primary);
+  color: var(--text);
   background: rgba(128, 128, 128, 0.1);
 }
 
 .password-hint {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--muted);
   margin-top: 5px;
 }
 
@@ -1274,7 +1188,7 @@ export default {
 .btn-complete-password {
   padding: 6px 14px;
   font-size: 13px;
-  background: linear-gradient(to right, #3b82f6, #60a5fa);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 6px;
@@ -1296,7 +1210,7 @@ export default {
   gap: 15px;
   margin-top: 30px;
   padding-top: 20px;
-  border-top: 1px solid var(--actions-border);
+  border-top: 1px solid var(--border);
 }
 
 .btn-modify,
@@ -1312,12 +1226,12 @@ export default {
 }
 
 .btn-modify {
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
+  background: var(--accent);
+  color: var(--surface);
 }
 
 .btn-modify:hover:not(:disabled) {
-  background: var(--btn-primary-hover);
+  background: var(--accent-strong);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
@@ -1328,19 +1242,19 @@ export default {
 }
 
 .btn-cancel {
-  background: var(--btn-cancel-bg);
-  color: var(--btn-cancel-text);
+  background: var(--surface-raised);
+  color: var(--muted);
   opacity: 0.6;
 }
 
 .btn-cancel.enabled {
   opacity: 1;
-  background: var(--btn-cancel-enabled-bg);
-  color: var(--btn-cancel-enabled-text);
+  background: var(--danger);
+  color: var(--surface);
 }
 
 .btn-cancel.enabled:hover {
-  background: var(--btn-cancel-enabled-hover);
+  background: var(--danger);
   transform: translateY(-2px);
 }
 
@@ -1359,15 +1273,15 @@ export default {
 }
 
 .save-status.success {
-  background: var(--status-success-bg);
-  color: var(--status-success-text);
-  border: 1px solid var(--status-success-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 
 .save-status.error {
-  background: var(--status-error-bg);
-  color: var(--status-error-text);
-  border: 1px solid var(--status-error-border);
+  background: var(--surface-raised);
+  color: var(--danger);
+  border: 1px solid var(--danger);
 }
 
 .status-icon {
@@ -1390,12 +1304,11 @@ export default {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(4px);
 }
 
 .verify-modal {
-  background: var(--content-bg);
-  border: 1px solid var(--content-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
   width: 90%;
@@ -1418,7 +1331,7 @@ export default {
 .verify-desc {
   margin: 0 0 16px 0;
   font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--muted);
   opacity: 0.8;
 }
 
@@ -1430,11 +1343,11 @@ export default {
 .verify-input {
   width: 100%;
   padding: 10px 40px 10px 12px;
-  border: 1px solid var(--input-border);
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 15px;
-  background: var(--input-bg);
-  color: var(--text-primary);
+  background: var(--surface-raised);
+  color: var(--text);
   transition: all 0.3s;
 }
 
@@ -1466,16 +1379,16 @@ export default {
 }
 
 .btn-verify-cancel {
-  background: var(--btn-secondary-bg);
-  color: var(--text-secondary);
+  background: var(--surface-raised);
+  color: var(--muted);
 }
 
 .btn-verify-cancel:hover {
-  background: var(--btn-secondary-hover);
+  background: var(--accent-soft);
 }
 
 .btn-verify-confirm {
-  background: linear-gradient(to right, #3b82f6, #60a5fa);
+  background: var(--accent);
   color: white;
 }
 
@@ -1501,12 +1414,12 @@ export default {
 }
 
 .placeholder-content h2 {
-  color: var(--text-primary);
+  color: var(--text);
   margin-bottom: 20px;
 }
 
 .placeholder-content p {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 18px;
 }
 
@@ -1548,7 +1461,7 @@ export default {
   .personal-content {
     flex-direction: column;
   }
-  
+
   .options-sidebar {
     flex: none;
     width: 100%;
@@ -1571,27 +1484,27 @@ export default {
 .info-content,
 .info-content.light-mode,
 .info-content.dark-mode {
-  --input-border: var(--border);
-  --input-bg: var(--surface-raised);
-  --input-disabled-bg: var(--surface-raised);
-  --input-editable-bg: var(--surface-raised);
-  --input-editable-border: var(--accent);
-  --input-focus-border: var(--accent);
-  --input-focus-shadow: color-mix(in srgb, var(--accent), transparent 70%);
-  --text-primary: var(--text);
-  --text-secondary: var(--muted);
-  --text-disabled: var(--subtle);
-  --text-muted: var(--muted);
-  --title-border: var(--border);
-  --actions-border: var(--border);
-  --btn-primary-bg: var(--accent);
-  --btn-primary-hover: var(--accent-strong);
-  --btn-secondary-bg: var(--surface-raised);
-  --btn-secondary-text: var(--text);
-  --btn-secondary-border: var(--border);
-  --btn-secondary-hover: var(--accent-soft);
-  --content-bg: var(--surface);
-  --content-border: var(--border);
+  --border: var(--border);
+  --surface-raised: var(--surface-raised);
+  --bg: var(--surface-raised);
+  --surface-raised: var(--surface-raised);
+  --accent: var(--accent);
+  --accent: var(--accent);
+  --accent-soft: color-mix(in srgb, var(--accent), transparent 70%);
+  --text: var(--text);
+  --muted: var(--muted);
+  --subtle: var(--subtle);
+  --muted: var(--muted);
+  --border: var(--border);
+  --border: var(--border);
+  --accent: var(--accent);
+  --accent-strong: var(--accent-strong);
+  --surface-raised: var(--surface-raised);
+  --text: var(--text);
+  --border: var(--border);
+  --accent-soft: var(--accent-soft);
+  --surface: var(--surface);
+  --border: var(--border);
   padding: 0;
   background: transparent;
   color: var(--text);
@@ -1601,7 +1514,7 @@ export default {
 .blog-profile-panel { box-sizing: border-box; width: 100%; margin: 0; padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
 .info-content .info-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
 .info-content .form-group { min-width: 0; margin: 0; }.info-content .password-group, .info-content .date-form-group, .info-content .form-actions, .info-content .save-status { grid-column: 1 / -1; }
-.info-content .form-label { margin: 0 0 6px; color: var(--text); font-size: .9rem; font-weight: 650; }.info-content .field-hint { display: block; margin-top: 5px; color: var(--muted); font-size: .78rem; }.info-content .info-form input, .info-content .info-form select, .info-content .info-form textarea, .blog-profile-panel input, .blog-profile-panel select, .blog-profile-panel textarea { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); font: inherit; }.info-content .info-form input:disabled, .info-content .info-form input[readonly] { opacity: 1; background: var(--bg); color: var(--muted); cursor: default; }.info-content .info-form input:focus, .info-content .info-form select:focus, .info-content .info-form textarea:focus, .blog-profile-panel input:focus, .blog-profile-panel select:focus, .blog-profile-panel textarea:focus { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent), transparent 70%); outline-offset: 1px; box-shadow: none; }.info-content .date-display { min-height: 42px; border-color: var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }.info-content .calendar-icon { display: grid; place-items: center; background: transparent; color: var(--accent); }.info-content .datepicker-dropdown { border-color: var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }.info-content .datepicker-header, .info-content .datepicker-footer { border-color: var(--border); background: var(--surface-raised); }.info-content .wheel-scroll { background: var(--surface-raised); }.info-content .wheel-item { color: var(--muted); }.info-content .wheel-item.active { color: var(--accent); }.info-content .btn-modify, .save-blog-profile, .info-content .btn-verify-confirm { border-color: var(--accent); background: var(--accent); color: #fff; box-shadow: none; }.info-content .btn-modify:hover:not(:disabled), .save-blog-profile:hover:not(:disabled), .info-content .btn-verify-confirm:hover { background: var(--accent-strong); transform: none; box-shadow: none; }.info-content .btn-cancel, .info-content .btn-complete-password, .info-content .password-toggle, .info-content .btn-verify-cancel { border-color: var(--border); background: var(--surface-raised); color: var(--text); box-shadow: none; }.info-content .btn-cancel:hover:not(:disabled), .info-content .btn-complete-password:hover, .info-content .password-toggle:hover, .info-content .btn-verify-cancel:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.info-content .form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin: 0; padding: var(--space-4) 0 0; border-top: 1px solid var(--border); }.info-content .save-status { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }.info-content .save-status.success { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.info-content .save-status.error { border-color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 92%); color: var(--danger); }.info-content .verify-modal-overlay { background: rgb(20 25 23 / 48%); backdrop-filter: blur(2px); }.info-content .verify-modal { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: var(--shadow); }.info-content .verify-modal h3 { color: var(--text); }
+.info-content .form-label { margin: 0 0 6px; color: var(--text); font-size: .9rem; font-weight: 650; }.info-content .field-hint { display: block; margin-top: 5px; color: var(--muted); font-size: .78rem; }.info-content .info-form input, .info-content .info-form select, .info-content .info-form textarea, .blog-profile-panel input, .blog-profile-panel select, .blog-profile-panel textarea { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); font: inherit; }.info-content .info-form input:disabled, .info-content .info-form input[readonly] { opacity: 1; background: var(--bg); color: var(--muted); cursor: default; }.info-content .info-form input:focus, .info-content .info-form select:focus, .info-content .info-form textarea:focus, .blog-profile-panel input:focus, .blog-profile-panel select:focus, .blog-profile-panel textarea:focus { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent), transparent 70%); outline-offset: 1px; box-shadow: none; }.info-content .date-display { min-height: 42px; border-color: var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }.info-content .calendar-icon { display: grid; place-items: center; background: transparent; color: var(--accent); }.info-content .datepicker-dropdown { border-color: var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }.info-content .datepicker-header, .info-content .datepicker-footer { border-color: var(--border); background: var(--surface-raised); }.info-content .wheel-scroll { background: var(--surface-raised); }.info-content .wheel-item { color: var(--muted); }.info-content .wheel-item.active { color: var(--accent); }.info-content .btn-modify, .save-blog-profile, .info-content .btn-verify-confirm { border-color: var(--accent); background: var(--accent); color: #fff; box-shadow: none; }.info-content .btn-modify:hover:not(:disabled), .save-blog-profile:hover:not(:disabled), .info-content .btn-verify-confirm:hover { background: var(--accent-strong); transform: none; box-shadow: none; }.info-content .btn-cancel, .info-content .btn-complete-password, .info-content .password-toggle, .info-content .btn-verify-cancel { border-color: var(--border); background: var(--surface-raised); color: var(--text); box-shadow: none; }.info-content .btn-cancel:hover:not(:disabled), .info-content .btn-complete-password:hover, .info-content .password-toggle:hover, .info-content .btn-verify-cancel:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.info-content .form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin: 0; padding: var(--space-4) 0 0; border-top: 1px solid var(--border); }.info-content .save-status { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }.info-content .save-status.success { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.info-content .save-status.error { border-color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 92%); color: var(--danger); }.info-content .verify-modal-overlay { background: rgb(20 25 23 / 56%); }.info-content .verify-modal { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: var(--shadow); }.info-content .verify-modal h3 { color: var(--text); }
 .blog-profile-panel { display: grid; gap: var(--space-5); margin-top: var(--space-5); }.blog-profile-heading { display: flex; justify-content: space-between; gap: var(--space-4); }.panel-eyebrow { margin: 0 0 var(--space-1); color: var(--accent); font-size: .8rem; font-weight: 750; letter-spacing: .07em; }.blog-profile-heading h3 { margin: 0; color: var(--text); font-size: 1.1rem; }.blog-profile-heading p:last-child { max-width: 58ch; margin: var(--space-2) 0 0; color: var(--muted); font-size: .9rem; line-height: 1.65; }.profile-preview-link { display: inline-flex; align-items: center; align-self: start; gap: 6px; color: var(--accent); font-size: .9rem; white-space: nowrap; text-underline-offset: 3px; }.blog-message { margin: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text); }.blog-message.success { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.blog-message.error { border-color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 92%); color: var(--danger); }.avatar-editor { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); }.avatar-editor img, .avatar-fallback { display: grid; flex: none; width: 58px; height: 58px; place-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 1.15rem; font-weight: 750; object-fit: cover; }.avatar-editor strong { color: var(--text); }.avatar-editor p { margin: 4px 0 var(--space-2); color: var(--muted); font-size: .82rem; }.avatar-editor input[type='file'] { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }.avatar-upload-button, .save-blog-profile { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 36px; padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); cursor: pointer; font-size: .88rem; font-weight: 650; }.avatar-upload-button:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }.blog-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }.blog-wide { grid-column: 1 / -1; }.personal-slug { display: flex; align-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); }.personal-slug span { padding-left: 11px; color: var(--muted); }.personal-slug input { border: 0; outline: 0; }.personal-slug:focus-within { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent), transparent 70%); outline-offset: 1px; }.social-links { margin: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-sm); }.social-links legend { padding: 0 var(--space-1); color: var(--text); font-size: .9rem; font-weight: 650; }.save-blog-profile { justify-self: end; border-color: var(--accent); background: var(--accent); color: #fff; }.info-content button:focus-visible, .blog-profile-panel input:focus-visible, .blog-profile-panel select:focus-visible, .blog-profile-panel textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent), transparent 68%); outline-offset: 2px; }
 @media (max-width: 720px) { .info-content .info-form, .blog-form-grid { grid-template-columns: 1fr; }.info-content .form-group, .blog-wide { grid-column: auto; }.blog-profile-heading { align-items: flex-start; flex-direction: column; }.profile-preview-link { align-self: auto; }.info-content .info-form, .blog-profile-panel { padding: var(--space-4); }.avatar-editor { align-items: flex-start; }.info-content .form-actions { justify-content: stretch; }.info-content .form-actions button { flex: 1; } }
 </style>
