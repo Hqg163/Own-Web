@@ -201,10 +201,15 @@ async function run() {
   blockAttachment.set('label', '文章内音频');
   blockAttachment.set('media', new Blob([Buffer.from('ID3')], { type: 'audio/mpeg' }), 'article.mp3');
   const articleAudio = await expectStatus(baseUrl, '/api/posts/media/attachment', 201, { method: 'POST', headers: auth(author), body: blockAttachment });
+  const galleryImageForm = new FormData();
+  galleryImageForm.set('postId', String(safeBlocksPost.post.id));
+  galleryImageForm.set('altText', '图库审计图片');
+  galleryImageForm.set('image', new Blob([Buffer.from([137, 80, 78, 71])], { type: 'image/png' }), 'gallery.png');
+  const galleryImage = await expectStatus(baseUrl, '/api/posts/media', 201, { method: 'POST', headers: auth(author), body: galleryImageForm });
   await expectStatus(baseUrl, `/api/posts/${safeBlocksPost.post.id}`, 403, { method: 'PUT', headers: { ...auth(author), 'content-type': 'application/json' }, body: JSON.stringify({ contentBlocks: { type: 'doc', content: [...safeBlocks.content, { type: 'audio', attrs: { src: uploadedAttachment.media.url, label: uploadedAttachment.media.label } }] } }) });
-  safeBlocks.content.push({ type: 'audio', attrs: { src: articleAudio.media.url, label: articleAudio.media.label } });
+  safeBlocks.content.push({ type: 'gallery', attrs: { items: [{ src: galleryImage.media.url, alt: galleryImage.media.altText }] } }, { type: 'audio', attrs: { src: articleAudio.media.url, label: articleAudio.media.label } });
   await expectStatus(baseUrl, `/api/posts/${safeBlocksPost.post.id}`, 200, { method: 'PUT', headers: { ...auth(author), 'content-type': 'application/json' }, body: JSON.stringify({ contentBlocks: safeBlocks }) });
-  await expectStatus(baseUrl, `/api/posts/${safeBlocksPost.post.id}`, 200, { headers: auth(author) }).then((body) => { assert.match(body.post.content_html, /data-callout="note"/, '提示卡应生成安全 HTML'); assert.match(body.post.content_html, /<audio controls/, '音频块应生成受控播放元素'); });
+  await expectStatus(baseUrl, `/api/posts/${safeBlocksPost.post.id}`, 200, { headers: auth(author) }).then((body) => { assert.match(body.post.content_html, /data-callout="note"/, '提示卡应生成安全 HTML'); assert.match(body.post.content_html, /data-gallery/, '图库应生成安全 HTML'); assert.match(body.post.content_html, /<audio controls/, '音频块应生成受控播放元素'); });
   const blockDoc = { type: 'doc', content: [
     { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '结构化内容' }] },
     { type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: '列名' }] }] }] }] }

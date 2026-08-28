@@ -18,7 +18,7 @@ function renderMarkdown(markdown) {
   return html.split(/\n{2,}/).map((line) => /^<h[1-3]>|^<pre>|^<blockquote>/.test(line) ? line : `<p>${line.replace(/\n/g, '<br>')}</p>`).join('');
 }
 
-const blockNodeTypes = new Set(['doc', 'paragraph', 'heading', 'text', 'hardBreak', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'horizontalRule', 'codeBlock', 'image', 'attachment', 'audio', 'video', 'table', 'tableRow', 'tableHeader', 'tableCell', 'callout', 'details', 'embed']);
+const blockNodeTypes = new Set(['doc', 'paragraph', 'heading', 'text', 'hardBreak', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'horizontalRule', 'codeBlock', 'image', 'gallery', 'attachment', 'audio', 'video', 'table', 'tableRow', 'tableHeader', 'tableCell', 'callout', 'details', 'embed']);
 const blockMarks = new Set(['bold', 'italic', 'strike', 'code', 'link']);
 const invalidBlocks = (message) => Object.assign(new Error(message), { status: 400, code: 'INVALID_BLOCKS' });
 function validateBlocks(value) {
@@ -33,6 +33,7 @@ function validateBlocks(value) {
     if (node.type === 'text' && (typeof node.text !== 'string' || node.text.length > 20000)) throw invalidBlocks('文本块无效');
     if (node.type === 'heading' && ![1, 2, 3, 4, 5, 6].includes(Number(node.attrs?.level))) throw invalidBlocks('标题级别无效');
     if (node.type === 'image') { const src = String(node.attrs?.src || ''); const alt = String(node.attrs?.alt || '').trim(); if (!/^\/api\/public\/media\/\d+(?:\?share=[a-f0-9]{64})?$/.test(src) || !alt) throw invalidBlocks('图片必须使用自己的已上传媒体并提供替代文本'); }
+    if (node.type === 'gallery') { const items = node.attrs?.items; if (!Array.isArray(items) || !items.length || items.length > 12 || items.some((item) => !/^\/api\/public\/media\/\d+$/.test(String(item?.src || '')) || !String(item?.alt || '').trim())) throw invalidBlocks('图库必须由不超过 12 张带替代文本的已上传图片组成'); }
     if (['attachment', 'audio', 'video'].includes(node.type)) { const src = String(node.attrs?.src || ''); const label = String(node.attrs?.label || '').trim(); if (!/^\/api\/public\/media\/\d+$/.test(src) || !label || label.length > 255) throw invalidBlocks('媒体块必须使用自己的已上传文件并提供名称'); }
     if (node.type === 'callout' && !['info', 'note', 'warning'].includes(String(node.attrs?.tone || 'info'))) throw invalidBlocks('提示卡类型无效');
     if (node.type === 'details' && (String(node.attrs?.summary || '').trim().length > 120 || String(node.attrs?.body || '').length > 5000)) throw invalidBlocks('折叠内容无效');
@@ -67,6 +68,7 @@ function blocksToMarkdown(doc) {
     if (node.type === 'codeBlock') return `\`\`\`\n${children}\n\`\`\`\n\n`;
     if (node.type === 'hardBreak') return '\n';
     if (node.type === 'image') return `![${node.attrs.alt}](${node.attrs.src})\n\n`;
+    if (node.type === 'gallery') return node.attrs.items.map((item) => `![${item.alt}](${item.src})`).join('\n\n') + '\n\n';
     if (['attachment', 'audio', 'video'].includes(node.type)) return `[${node.attrs.label}](${node.attrs.src})\n\n`;
     if (node.type === 'callout') return `> ${children.replace(/\n+/g, '\n> ').trim()}\n\n`;
     if (node.type === 'details') return `> ${node.attrs.summary || '展开阅读'}\n> ${String(node.attrs.body || children).replace(/\n+/g, '\n> ').trim()}\n\n`;
@@ -99,6 +101,7 @@ function blocksToSafeHtml(doc) {
     if (node.type === 'codeBlock') return `<pre><code>${children}</code></pre>`;
     if (node.type === 'hardBreak') return '<br>';
     if (node.type === 'image') return `<img src="${escapeHtml(node.attrs.src)}" alt="${escapeHtml(node.attrs.alt)}">`;
+    if (node.type === 'gallery') return `<div data-gallery>${node.attrs.items.map((item) => `<figure><img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.alt)}"><figcaption>${escapeHtml(item.alt)}</figcaption></figure>`).join('')}</div>`;
     if (node.type === 'attachment') return `<p><a href="${escapeHtml(node.attrs.src)}" download>${escapeHtml(node.attrs.label)}</a></p>`;
     if (node.type === 'audio') return `<figure><audio controls src="${escapeHtml(node.attrs.src)}"></audio><figcaption>${escapeHtml(node.attrs.label)}</figcaption></figure>`;
     if (node.type === 'video') return `<figure><video controls src="${escapeHtml(node.attrs.src)}"></video><figcaption>${escapeHtml(node.attrs.label)}</figcaption></figure>`;
@@ -189,6 +192,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
         const match = String(node.attrs?.src || '').match(/^\/api\/public\/media\/(\d+)/);
         if (match) requested.set(Number(match[1]), node.type === 'attachment' ? 'file' : node.type);
       }
+      if (node?.type === 'gallery') for (const item of node.attrs?.items || []) { const match = String(item?.src || '').match(/^\/api\/public\/media\/(\d+)/); if (match) requested.set(Number(match[1]), 'image'); }
       (node?.content || []).forEach(walk);
     };
     walk(doc);
