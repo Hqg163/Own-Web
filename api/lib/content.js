@@ -85,7 +85,7 @@ function normalizeBlocks(value) {
     }
     if (node.type === 'mermaid') {
       const value = String(node.attrs.value || '').trim();
-      if (!value || value.length > 12000 || /\b(click|callback|javascript|script|href)\b/i.test(value)) throw invalid('Mermaid 图表内容无效');
+      if (!value || value.length > 12000 || /<|\b(click|callback|javascript|data|script|href|classDef|style)\b/i.test(value)) throw invalid('Mermaid 图表内容无效');
       node.attrs.value = value;
     }
     if (['embed', 'bookmarkCard'].includes(node.type)) {
@@ -129,6 +129,7 @@ function inlineMarkdown(value) {
   html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/~~([^~]+)~~/g, '<s>$1</s>').replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
   html = html.replace(/\\\(([^\n]+?)\\\)/g, (_m, value) => hold(`<span class="math-inline" data-math="${escapeHtml(value)}">${escapeHtml(value)}</span>`));
   html = html.replace(/\$\$([\s\S]+?)\$\$/g, (_m, value) => hold(`<div class="math-block" data-math="${escapeHtml(value.trim())}">${escapeHtml(value.trim())}</div>`));
+  html = html.replace(/\[\^([a-z0-9_-]{1,30})\]/gi, '<sup data-footnote-ref="$1">$1</sup>');
   return html.replace(/\u0000(\d+)\u0000/g, (_m, index) => placeholders[Number(index)]);
 }
 
@@ -146,9 +147,41 @@ function renderMarkdown(markdown) {
       index += 1;
       while (index < lines.length && !/^```\s*$/.test(lines[index])) code.push(lines[index++]);
       if (index < lines.length) index += 1;
-      html.push(`<pre data-language="${language}"><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+      if ((fence[1] || '').toLowerCase() === 'mermaid') html.push(`<pre class="mermaid" data-mermaid="${escapeHtml(code.join('\n'))}"><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+      else html.push(`<pre data-language="${language}"><code>${escapeHtml(code.join('\n'))}</code></pre>`);
       continue;
     }
+    const callout = line.match(/^:::callout(?:\s+(info|note|warning|success))?\s*$/i);
+    if (callout) {
+      const body = []; index += 1;
+      while (index < lines.length && !/^:::\s*$/.test(lines[index])) body.push(lines[index++]);
+      if (index < lines.length) index += 1;
+      html.push(`<aside data-callout="${callout[1]?.toLowerCase() || 'info'}"><p>${inlineMarkdown(body.join('\n')).replace(/\n/g, '<br>')}</p></aside>`);
+      continue;
+    }
+    const details = line.match(/^:::details\s+(.+)$/i);
+    if (details) {
+      const body = []; index += 1;
+      while (index < lines.length && !/^:::\s*$/.test(lines[index])) body.push(lines[index++]);
+      if (index < lines.length) index += 1;
+      html.push(`<details><summary>${escapeHtml(details[1])}</summary><p>${inlineMarkdown(body.join('\n')).replace(/\n/g, '<br>')}</p></details>`);
+      continue;
+    }
+    const bookmark = line.match(/^@\[(bookmark|embed)\]\((https:\/\/[^\s)]+)\)(?:\s+(.+))?$/i);
+    if (bookmark) {
+      const url = safeEmbedUrl(bookmark[2]);
+      if (url) {
+        const title = escapeHtml(bookmark[3] || (bookmark[1].toLowerCase() === 'embed' ? '受控嵌入' : 'Bookmark Card'));
+        html.push(`<a data-${bookmark[1].toLowerCase() === 'embed' ? 'embed' : 'bookmark-card'} href="${escapeHtml(url)}" rel="nofollow noopener" target="_blank"><strong>${title}</strong><span>${escapeHtml(url)}</span></a>`);
+        index += 1;
+        continue;
+      }
+      html.push(`<p>${escapeHtml(line)}</p>`);
+      index += 1;
+      continue;
+    }
+    const footnote = line.match(/^\[\^([a-z0-9_-]{1,30})\]:\s*(.+)$/i);
+    if (footnote) { html.push(`<aside data-footnote><sup>${escapeHtml(footnote[1])}</sup> ${inlineMarkdown(footnote[2])}</aside>`); index += 1; continue; }
     const heading = line.match(/^(#{1,4})\s+(.+)$/);
     if (heading) { const level = heading[1].length; html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`); index += 1; continue; }
     if (/^\s*(---+|\*\*\*+)\s*$/.test(line)) { html.push('<hr>'); index += 1; continue; }

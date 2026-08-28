@@ -33,4 +33,13 @@ describe('canonical blog content', () => {
     expect(html).toContain('data-math=')
     expect(html).not.toContain('<script')
   })
+
+  it('renders safe markdown extensions without accepting unsafe embeds', () => {
+    const html = renderMarkdown(':::callout warning\n注意内容\n:::\n\n:::details 说明\n折叠内容\n:::\n\n@[bookmark](https://www.youtube.com/watch?v=abc) 视频\n\n@[embed](https://example.com/nope)\n\n[^adam]: 参考说明')
+    expect(html).toContain('data-callout="warning"')
+    expect(html).toContain('<details>')
+    expect(html).toContain('data-bookmark-card')
+    expect(html).toContain('data-footnote')
+    expect(html).not.toContain('href="https://example.com/nope"')
+  })
 })

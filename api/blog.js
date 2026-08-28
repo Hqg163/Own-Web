@@ -226,6 +226,14 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     const [tags] = await query('SELECT name,slug FROM tags ORDER BY name LIMIT 200');
     res.json({ categories, tags });
   } catch (e) { next(e); } });
+  app.post('/api/editor/preview', optionalAuth, requireAuth, async (req, res, next) => { try {
+    const format = req.body.contentFormat === 'blocks' ? 'blocks' : 'markdown';
+    const blocks = format === 'blocks' ? canonicalContent.validateBlocks(req.body.contentBlocks) : null;
+    if (blocks && req.body.postId) await ensureOwnedBlockMedia(blocks, req.user.id, Number(req.body.postId));
+    const markdown = format === 'blocks' ? canonicalContent.blocksToMarkdown(blocks) : String(req.body.contentMarkdown || '');
+    const html = format === 'blocks' ? canonicalContent.blocksToSafeHtml(blocks) : canonicalContent.renderMarkdown(markdown);
+    res.json({ html, contentMarkdown: markdown, contentFormat: format });
+  } catch (e) { next(e); } });
   app.get('/api/public/media/:id', optionalAuth, async(req,res,next)=>{try{const [rows]=await query('SELECT m.*,p.author_id,p.status,p.visibility,p.share_token FROM post_media m LEFT JOIN posts p ON p.id=m.post_id WHERE m.id=?',[req.params.id]);const m=rows[0];if(!m)return error(res,404,'NOT_FOUND','媒体不存在');if(!m.post_id ? req.user?.id!==m.owner_id : !await access(m,req.user,req.query.share))return error(res,m.visibility==='unlisted'?404:403,m.visibility==='unlisted'?'NOT_FOUND':'FORBIDDEN',m.visibility==='unlisted'?'媒体不存在':'无权访问媒体');res.setHeader('X-Content-Type-Options','nosniff');if(m.media_kind==='file')res.attachment(path.basename(m.label||m.file_path));res.sendFile(path.resolve(uploadRoot,'..',m.file_path.replace(/^[/\\]+/,'')));}catch(e){next(e);}});
   app.get('/api/public/avatars/:userId', optionalAuth, async(req,res,next)=>{try{const [users]=await query('SELECT id,avatar_path,profile_visibility FROM users WHERE id=?',[req.params.userId]);const user=users[0];if(!user||!user.avatar_path||((user.profile_visibility!=='public')&&req.user?.id!==user.id))return error(res,404,'NOT_FOUND','头像不存在');const avatarPath=resolveAvatarPath(user.avatar_path);if(!avatarPath||!fs.existsSync(avatarPath))return error(res,404,'NOT_FOUND','头像不存在');res.sendFile(avatarPath);}catch(e){next(e);}});
 
