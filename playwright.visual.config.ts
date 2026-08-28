@@ -19,8 +19,8 @@ export default defineConfig({
     { name:`${name}-dark`, use:{ viewport, colorScheme:'dark' } },
   ]),
   webServer:[
-    { command:'node tests/support/start-test-server.cjs', url:'http://127.0.0.1:3301/api/health', reuseExistingServer:true, timeout:120_000 },
-    { command:'node tests/support/start-vite.cjs', url:'http://127.0.0.1:5173', reuseExistingServer:true, timeout:120_000 },
+    { command:'node tests/support/start-test-server.cjs', url:'http://127.0.0.1:3301/api/health', reuseExistingServer:false, timeout:120_000 },
+    { command:'node tests/support/start-vite.cjs', url:'http://127.0.0.1:5173', reuseExistingServer:false, timeout:120_000 },
   ],
   globalTeardown:'./tests/support/cleanup-test-db.cjs',
 })

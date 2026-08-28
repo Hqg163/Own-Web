@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests/e2e',
+  testIgnore: '**/visual.spec.ts',
   timeout: 30_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -18,8 +19,8 @@ export default defineConfig({
     { name: 'mobile-dark', use: { ...devices['iPhone 13'], colorScheme: 'dark' } }
   ],
   webServer: [
-    { command: 'node tests/support/start-test-server.cjs', url: 'http://127.0.0.1:3301/api/health', reuseExistingServer: true, timeout: 120_000 },
-    { command: 'node tests/support/start-vite.cjs', url: 'http://127.0.0.1:5173', reuseExistingServer: true, timeout: 120_000 }
+    { command: 'node tests/support/start-test-server.cjs', url: 'http://127.0.0.1:3301/api/health', reuseExistingServer: false, timeout: 120_000 },
+    { command: 'node tests/support/start-vite.cjs', url: 'http://127.0.0.1:5173', reuseExistingServer: false, timeout: 120_000 }
   ],
   globalTeardown: './tests/support/cleanup-test-db.cjs'
 })

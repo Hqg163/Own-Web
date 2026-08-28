@@ -11,7 +11,7 @@ async function login(page:any, testInfo:any) {
   await page.getByLabel('密码', { exact:true }).fill(password)
   await page.getByLabel('确认密码').fill(password)
   await page.getByRole('button', { name:'创建账户' }).click()
-  await page.goto('/login')
+  await expect(page).toHaveURL(/\/login\?registered=1/)
   await page.locator('#login-email').fill(email)
   await page.locator('#login-password').fill(password)
   await page.getByRole('button', { name:'登录' }).click()
