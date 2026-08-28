@@ -64,7 +64,7 @@ async function handleLogin() {
     localStorage.removeItem('redirectAfterLogin')
     await router.push(redirectTo)
   } catch (requestError: any) {
-    error.value = requestError.response?.data?.error || '登录失败，请检查邮箱和密码。'
+    error.value = requestError.response?.data?.error?.message || requestError.response?.data?.error || '登录失败，请检查邮箱和密码。'
   } finally {
     loading.value = false
   }

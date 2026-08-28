@@ -15,10 +15,10 @@
         <div class="field">
           <label for="register-password">密码</label>
           <div class="password-field">
-            <input id="register-password" v-model="password" :type="passwordVisible ? 'text' : 'password'" autocomplete="new-password" required minlength="6" aria-describedby="password-help" placeholder="至少 6 位" />
+            <input id="register-password" v-model="password" :type="passwordVisible ? 'text' : 'password'" autocomplete="new-password" required minlength="10" aria-describedby="password-help" placeholder="至少 10 位，含大小写和数字" />
             <button type="button" class="icon-button" :aria-label="passwordVisible ? '隐藏密码' : '显示密码'" @click="passwordVisible = !passwordVisible"><AppIcon :name="passwordVisible ? 'eye-off' : 'eye'" :size="19" /></button>
           </div>
-          <small id="password-help">密码至少需要 6 位字符。</small>
+          <small id="password-help">密码至少 10 位，并同时包含大小写字母和数字。</small>
         </div>
         <div class="field">
           <label for="register-confirm-password">确认密码</label>
@@ -52,14 +52,14 @@ const error = ref('')
 
 async function handleRegister() {
   if (password.value !== confirmPassword.value) { error.value = '两次输入的密码不一致。'; return }
-  if (password.value.length < 6) { error.value = '密码长度至少为 6 位。'; return }
+  if (password.value.length < 10 || !/[a-z]/.test(password.value) || !/[A-Z]/.test(password.value) || !/\d/.test(password.value)) { error.value = '密码至少 10 位，并同时包含大小写字母和数字。'; return }
   loading.value = true
   error.value = ''
   try {
     await http.post('/api/register', { email: email.value, password: password.value })
     await router.push({ path: '/login', query: { registered: '1' } })
   } catch (requestError: any) {
-    error.value = requestError.response?.data?.error || '注册失败，请稍后重试。'
+    error.value = requestError.response?.data?.error?.message || requestError.response?.data?.error || '注册失败，请稍后重试。'
   } finally {
     loading.value = false
   }
