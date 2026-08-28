@@ -10,13 +10,13 @@
     "typecheck": "vue-tsc -b",
     "api:dev": "npm --prefix api run dev",
     "api:start": "npm --prefix api run start",
-    "api:check": "npm --prefix api run check"
+    "api:check": "npm --prefix api run check",
+    "test:lrc": "tsx scripts/lrc-smoke.ts"
   },
   "workspaces": [
     "api"
   ],
   "dependencies": {
-    "axios": "^1.13.2",
     "@tiptap/core": "^3.30.5",
     "@tiptap/extension-image": "^3.30.5",
     "@tiptap/extension-link": "^3.30.5",
@@ -28,6 +28,7 @@
     "@tiptap/pm": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",
     "@tiptap/vue-3": "^3.30.5",
+    "axios": "^1.13.2",
     "dompurify": "^3.2.6",
     "marked": "^17.0.1",
     "vue": "^3.5.24",
@@ -38,6 +39,7 @@
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.8.1",
     "nodemon": "^3.1.11",
+    "tsx": "^4.23.12",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
     "vue-tsc": "^3.1.4"
