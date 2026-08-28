@@ -3,125 +3,18 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { createShareToken } = require('./migrations');
+const canonicalContent = require('./lib/content');
+const { validateUploadedFile } = require('./lib/security');
 
 const PAGE_SIZE = 12;
 const allowedVisibilities = new Set(['public', 'private', 'followers', 'unlisted']);
 const allowedStatuses = new Set(['draft', 'published', 'scheduled', 'archived']);
 const slugify = (value, fallback = 'post') => String(value || '').toLowerCase().trim().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 160) || fallback;
-const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-function renderMarkdown(markdown) {
-  let html = escapeHtml(markdown);
-  html = html.replace(/^### (.*)$/gm, '<h3>$1</h3>').replace(/^## (.*)$/gm, '<h2>$1</h2>').replace(/^# (.*)$/gm, '<h1>$1</h1>');
-  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>').replace(/^&gt; (.*)$/gm, '<blockquote>$1</blockquote>');
-  html = html.replace(/!\[([^\]]+)\]\((\/api\/public\/media\/\d+)\)/g, '<img src="$2" alt="$1">').replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" rel="nofollow noopener" target="_blank">$1</a>');
-  // 输入先完整 HTML 转义，仅由上面的固定模板重新生成允许的标签；原始 HTML 永远不会进入输出。
-  return html.split(/\n{2,}/).map((line) => /^<h[1-3]>|^<pre>|^<blockquote>/.test(line) ? line : `<p>${line.replace(/\n/g, '<br>')}</p>`).join('');
-}
-
-const blockNodeTypes = new Set(['doc', 'paragraph', 'heading', 'text', 'hardBreak', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'horizontalRule', 'codeBlock', 'image', 'gallery', 'attachment', 'audio', 'video', 'table', 'tableRow', 'tableHeader', 'tableCell', 'callout', 'details', 'embed']);
-const blockMarks = new Set(['bold', 'italic', 'strike', 'code', 'link']);
-const invalidBlocks = (message) => Object.assign(new Error(message), { status: 400, code: 'INVALID_BLOCKS' });
-function validateBlocks(value) {
-  let doc = value;
-  if (typeof doc === 'string') { try { doc = JSON.parse(doc); } catch (_) { throw invalidBlocks('文章块内容不是有效 JSON'); } }
-  if (!doc || typeof doc !== 'object' || doc.type !== 'doc' || !Array.isArray(doc.content)) throw invalidBlocks('文章块结构无效');
-  if (JSON.stringify(doc).length > 1024 * 1024) throw invalidBlocks('文章块内容过大');
-  let count = 0;
-  const walk = (node) => {
-    if (!node || typeof node !== 'object' || !blockNodeTypes.has(node.type)) throw invalidBlocks('文章包含不支持的内容块');
-    if (++count > 1000) throw invalidBlocks('文章块数量过多');
-    if (node.type === 'text' && (typeof node.text !== 'string' || node.text.length > 20000)) throw invalidBlocks('文本块无效');
-    if (node.type === 'heading' && ![1, 2, 3, 4, 5, 6].includes(Number(node.attrs?.level))) throw invalidBlocks('标题级别无效');
-    if (node.type === 'image') { const src = String(node.attrs?.src || ''); const alt = String(node.attrs?.alt || '').trim(); if (!/^\/api\/public\/media\/\d+(?:\?share=[a-f0-9]{64})?$/.test(src) || !alt) throw invalidBlocks('图片必须使用自己的已上传媒体并提供替代文本'); }
-    if (node.type === 'gallery') { const items = node.attrs?.items; if (!Array.isArray(items) || !items.length || items.length > 12 || items.some((item) => !/^\/api\/public\/media\/\d+$/.test(String(item?.src || '')) || !String(item?.alt || '').trim())) throw invalidBlocks('图库必须由不超过 12 张带替代文本的已上传图片组成'); }
-    if (['attachment', 'audio', 'video'].includes(node.type)) { const src = String(node.attrs?.src || ''); const label = String(node.attrs?.label || '').trim(); if (!/^\/api\/public\/media\/\d+$/.test(src) || !label || label.length > 255) throw invalidBlocks('媒体块必须使用自己的已上传文件并提供名称'); }
-    if (node.type === 'callout' && !['info', 'note', 'warning'].includes(String(node.attrs?.tone || 'info'))) throw invalidBlocks('提示卡类型无效');
-    if (node.type === 'details' && (String(node.attrs?.summary || '').trim().length > 120 || String(node.attrs?.body || '').length > 5000)) throw invalidBlocks('折叠内容无效');
-    if (node.type === 'embed') {
-      let url;
-      try { url = new URL(String(node.attrs?.url || '')); } catch (_) { throw invalidBlocks('嵌入链接无效'); }
-      const allowedHosts = new Set(['www.youtube.com', 'youtu.be', 'www.bilibili.com', 'open.spotify.com']);
-      if (!allowedHosts.has(url.hostname) || !['https:'].includes(url.protocol)) throw invalidBlocks('仅支持 Bilibili、YouTube 或 Spotify 的 HTTPS 嵌入');
-      node.attrs = { provider: url.hostname, url: url.toString() };
-    }
-    if (node.marks) for (const mark of node.marks) { if (!blockMarks.has(mark?.type)) throw invalidBlocks('文章包含不支持的文本格式'); if (mark.type === 'link') { const href = String(mark.attrs?.href || ''); if (!/^https?:\/\//i.test(href)) throw invalidBlocks('链接仅支持 HTTP 或 HTTPS 地址'); } }
-    if (node.content) { if (!Array.isArray(node.content)) throw invalidBlocks('文章块子内容无效'); node.content.forEach(walk); }
-  };
-  walk(doc); return doc;
-}
-function parseStoredBlocks(value) {
-  if (!value) return null;
-  if (typeof value === 'object') return value;
-  try { return JSON.parse(value); } catch (_) { return null; }
-}
-function blocksToMarkdown(doc) {
-  const render = (node) => {
-    const children = (node.content || []).map(render).join('');
-    if (node.type === 'text') { let text = node.text || ''; for (const mark of node.marks || []) { if (mark.type === 'bold') text = `**${text}**`; else if (mark.type === 'italic') text = `*${text}*`; else if (mark.type === 'strike') text = `~~${text}~~`; else if (mark.type === 'code') text = `\`${text}\``; else if (mark.type === 'link') text = `[${text}](${mark.attrs.href})`; } return text; }
-    if (node.type === 'heading') return `${'#'.repeat(node.attrs.level)} ${children}\n\n`;
-    if (node.type === 'paragraph') return `${children}\n\n`;
-    if (node.type === 'blockquote') return children.split('\n').filter(Boolean).map((line) => `> ${line}`).join('\n') + '\n\n';
-    if (node.type === 'bulletList') return (node.content || []).map((item) => `- ${render(item).trim()}\n`).join('') + '\n';
-    if (node.type === 'orderedList') return (node.content || []).map((item, index) => `${index + 1}. ${render(item).trim()}\n`).join('') + '\n';
-    if (node.type === 'listItem') return children;
-    if (node.type === 'horizontalRule') return '---\n\n';
-    if (node.type === 'codeBlock') return `\`\`\`\n${children}\n\`\`\`\n\n`;
-    if (node.type === 'hardBreak') return '\n';
-    if (node.type === 'image') return `![${node.attrs.alt}](${node.attrs.src})\n\n`;
-    if (node.type === 'gallery') return node.attrs.items.map((item) => `![${item.alt}](${item.src})`).join('\n\n') + '\n\n';
-    if (['attachment', 'audio', 'video'].includes(node.type)) return `[${node.attrs.label}](${node.attrs.src})\n\n`;
-    if (node.type === 'callout') return `> ${children.replace(/\n+/g, '\n> ').trim()}\n\n`;
-    if (node.type === 'details') return `> ${node.attrs.summary || '展开阅读'}\n> ${String(node.attrs.body || children).replace(/\n+/g, '\n> ').trim()}\n\n`;
-    if (node.type === 'embed') return `[受控嵌入](${node.attrs.url})\n\n`;
-    return children;
-  };
-  return render(doc).trim();
-}
-function blocksToSafeHtml(doc) {
-  const render = (node) => {
-    const children = (node.content || []).map(render).join('');
-    if (node.type === 'text') {
-      let text = escapeHtml(node.text || '');
-      for (const mark of node.marks || []) {
-        if (mark.type === 'bold') text = `<strong>${text}</strong>`;
-        else if (mark.type === 'italic') text = `<em>${text}</em>`;
-        else if (mark.type === 'strike') text = `<s>${text}</s>`;
-        else if (mark.type === 'code') text = `<code>${text}</code>`;
-        else if (mark.type === 'link') text = `<a href="${escapeHtml(mark.attrs.href)}" rel="nofollow noopener" target="_blank">${text}</a>`;
-      }
-      return text;
-    }
-    if (node.type === 'paragraph') return `<p>${children}</p>`;
-    if (node.type === 'heading') return `<h${node.attrs.level}>${children}</h${node.attrs.level}>`;
-    if (node.type === 'blockquote') return `<blockquote>${children}</blockquote>`;
-    if (node.type === 'bulletList') return `<ul>${children}</ul>`;
-    if (node.type === 'orderedList') return `<ol>${children}</ol>`;
-    if (node.type === 'listItem') return `<li>${children}</li>`;
-    if (node.type === 'horizontalRule') return '<hr>';
-    if (node.type === 'codeBlock') return `<pre><code>${children}</code></pre>`;
-    if (node.type === 'hardBreak') return '<br>';
-    if (node.type === 'image') return `<img src="${escapeHtml(node.attrs.src)}" alt="${escapeHtml(node.attrs.alt)}">`;
-    if (node.type === 'gallery') return `<div data-gallery>${node.attrs.items.map((item) => `<figure><img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.alt)}"><figcaption>${escapeHtml(item.alt)}</figcaption></figure>`).join('')}</div>`;
-    if (node.type === 'attachment') return `<p><a href="${escapeHtml(node.attrs.src)}" download>${escapeHtml(node.attrs.label)}</a></p>`;
-    if (node.type === 'audio') return `<figure><audio controls src="${escapeHtml(node.attrs.src)}"></audio><figcaption>${escapeHtml(node.attrs.label)}</figcaption></figure>`;
-    if (node.type === 'video') return `<figure><video controls src="${escapeHtml(node.attrs.src)}"></video><figcaption>${escapeHtml(node.attrs.label)}</figcaption></figure>`;
-    if (node.type === 'callout') return `<aside data-callout="${escapeHtml(node.attrs.tone || 'info')}">${children}</aside>`;
-    if (node.type === 'details') return `<details><summary>${escapeHtml(node.attrs.summary || '展开阅读')}</summary><p>${escapeHtml(node.attrs.body || children)}</p></details>`;
-    if (node.type === 'embed') return `<p><a href="${escapeHtml(node.attrs.url)}" rel="nofollow noopener" target="_blank">查看受控嵌入内容</a></p>`;
-    if (node.type === 'table') return `<table><tbody>${children}</tbody></table>`;
-    if (node.type === 'tableRow') return `<tr>${children}</tr>`;
-    if (node.type === 'tableHeader') return `<th>${children}</th>`;
-    if (node.type === 'tableCell') return `<td>${children}</td>`;
-    return children;
-  };
-  return render(doc);
-}
-
 function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
   const query = db.promise().query.bind(db.promise());
   const adminEmails = new Set(String(process.env.ADMIN_EMAILS || '').split(',').map((email) => email.trim()).filter(Boolean));
   const jwt = require('jsonwebtoken');
-  const optionalAuth = (req, _res, next) => { const token = getAuthToken(req); if (token) { try { const p = jwt.verify(token, authSecret); req.user = { id: Number(p.sub), email: p.email }; } catch (_) {} } next(); };
+  const optionalAuth = (req, _res, next) => { const token = getAuthToken(req); if (!token) return next(); try { const p = jwt.verify(token, authSecret); db.promise().query('SELECT id,email,session_version FROM users WHERE id=?', [Number(p.sub)]).then(([rows]) => { if (rows[0] && Number(p.sv || 0) === Number(rows[0].session_version || 0)) req.user = { id:Number(p.sub), email:rows[0].email }; next(); }).catch(() => next()); } catch (_) { next(); } };
   const requireAuth = (req, res, next) => req.user ? next() : res.status(401).json({ error: { code: 'AUTH_REQUIRED', message: '请先登录' } });
   const error = (res, status, code, message, fields) => res.status(status).json({ error: { code, message, ...(fields ? { fields } : {}) } });
   const page = (req) => Math.max(1, Number(req.query.page) || 1);
@@ -203,11 +96,17 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     if (!postId || rows.some((row) => row.post_id !== null && Number(row.post_id) !== Number(postId))) throw Object.assign(new Error('媒体必须绑定到当前文章'), { status: 403, code: 'MEDIA_POST_REQUIRED' });
     for (const row of rows.filter((row) => row.post_id === null)) await query('UPDATE post_media SET post_id=? WHERE id=? AND owner_id=? AND post_id IS NULL', [postId, row.id, ownerId]);
   }
+  async function ensureOwnedCover(coverImage, ownerId) {
+    const match = String(coverImage || '').match(/^\/api\/public\/media\/(\d+)$/);
+    if (!match) throw Object.assign(new Error('封面必须来自已上传的图片媒体'), { status: 400, code: 'INVALID_COVER' });
+    const [rows] = await query("SELECT id FROM post_media WHERE id=? AND owner_id=? AND media_kind='image'", [match[1], ownerId]);
+    if (!rows.length) throw Object.assign(new Error('封面图片不属于当前用户'), { status: 403, code: 'COVER_OWNERSHIP_REQUIRED' });
+  }
   function presentPublicPost(row, categories, shareToken, tags = new Map(), viewer = null) {
     const post = {
       id: row.id, title: row.title, slug: row.slug, excerpt: row.excerpt,
       content_markdown: row.content_markdown, content_html: row.content_html, content_format: row.content_format,
-      cover_image: row.cover_image, status: row.status, visibility: row.visibility,
+      cover_image: row.cover_image, cover_alt_text: row.cover_alt_text, status: row.status, visibility: row.visibility,
       allow_comments: Boolean(row.allow_comments), published_at: row.published_at,
       scheduled_at: row.scheduled_at, view_count: row.view_count, like_count: row.like_count,
       bookmark_count: row.bookmark_count, comment_count: row.comment_count,
@@ -244,7 +143,8 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     for (const name of tags) { const slug = slugify(name, `tag-${Date.now()}`); await query('INSERT IGNORE INTO tags (name,slug) VALUES (?,?)', [name.slice(0,60), slug]); const [rows] = await query('SELECT id FROM tags WHERE slug=?', [slug]); if (rows[0]) await query('INSERT IGNORE INTO post_tags (post_id,tag_id) VALUES (?,?)', [postId, rows[0].id]); }
   }
   const storage = multer.diskStorage({ destination(req, _file, cb) { const dir = path.join(uploadRoot, 'posts', String(req.user.id)); fs.mkdirSync(dir, { recursive: true }); cb(null, dir); }, filename(_req, file, cb) { cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${path.extname(file.originalname).toLowerCase()}`); } });
-  const mediaUpload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 }, fileFilter(_req, file, cb) { cb(null, /^image\//.test(file.mimetype)); } });
+  const mediaTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+  const mediaUpload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 }, fileFilter(_req, file, cb) { cb(null, mediaTypes.has(String(file.mimetype).toLowerCase()) && path.extname(file.originalname || '').toLowerCase() !== '.svg'); } });
   const allowedAttachmentTypes = new Set(['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/aac', 'audio/flac', 'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'application/pdf', 'application/zip', 'application/x-zip-compressed', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
   const attachmentUpload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter(_req, file, cb) { cb(null, allowedAttachmentTypes.has(file.mimetype)); } });
   const inspectAttachment = (file) => {
@@ -265,15 +165,22 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
 
   app.get('/api/public/home', optionalAuth, async (req, res, next) => { try { const [latest] = await query(`SELECT p.*,u.username,u.blog_slug,u.avatar_path,u.blog_title FROM posts p JOIN users u ON u.id=p.author_id WHERE p.status='published' AND p.visibility='public' ORDER BY p.published_at DESC LIMIT 6`); const cats = await postMeta(latest.map(p => p.id)); const [tags] = await query('SELECT t.name,t.slug,COUNT(*) count FROM tags t JOIN post_tags pt ON pt.tag_id=t.id JOIN posts p ON p.id=pt.post_id WHERE p.status=\'published\' AND p.visibility=\'public\' GROUP BY t.id ORDER BY count DESC LIMIT 10'); res.json({ latest: latest.map(p => presentPublicPost(p,cats)), featured: latest.slice(0,3).map(p => presentPublicPost(p,cats)), tags }); } catch (e) { next(e); } });
   app.get('/api/public/posts', optionalAuth, async (req, res, next) => { try {
-    const p = page(req), offset = (p - 1) * PAGE_SIZE, params = [], where = ["p.status='published'", "p.visibility='public'"];
+    const p = Math.min(100, page(req)), offset = (p - 1) * PAGE_SIZE, params = [], where = ["p.status='published'", "p.visibility='public'"];
     const feed = ['discover', 'latest', 'hot', 'following'].includes(req.query.feed) ? req.query.feed : 'discover';
     if (feed === 'following') { if (!req.user) return error(res, 401, 'AUTH_REQUIRED', '请登录后查看关注内容'); where.push('EXISTS (SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=p.author_id)'); params.push(req.user.id); }
-    if (req.query.tag) { where.push('EXISTS (SELECT 1 FROM post_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.post_id=p.id AND t.slug=?)'); params.push(req.query.tag); }
-    if (req.query.category) { where.push('EXISTS (SELECT 1 FROM post_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.post_id=p.id AND c.slug=?)'); params.push(req.query.category); }
-    if (req.query.q) { where.push('(p.title LIKE ? OR p.excerpt LIKE ?)'); params.push(`%${req.query.q}%`, `%${req.query.q}%`); }
-    const order = feed === 'hot' || req.query.sort === 'hot' ? 'p.like_count + p.comment_count DESC, p.published_at DESC' : 'p.published_at DESC';
-    const [rows] = await query(`SELECT SQL_CALC_FOUND_ROWS p.*,u.username,u.blog_slug,u.avatar_path FROM posts p JOIN users u ON u.id=p.author_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`, [...params, PAGE_SIZE, offset]);
-    const [[total]] = await query('SELECT FOUND_ROWS() total'); const ids = rows.map((row) => row.id);
+    if (req.query.tag) { where.push('EXISTS (SELECT 1 FROM post_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.post_id=p.id AND t.slug=?)'); params.push(String(req.query.tag).slice(0, 80)); }
+    if (req.query.category) { where.push('EXISTS (SELECT 1 FROM post_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.post_id=p.id AND c.slug=?)'); params.push(String(req.query.category).slice(0, 80)); }
+    if (req.query.q) {
+      const term = `%${String(req.query.q).slice(0, 100)}%`;
+      where.push('(p.title LIKE ? OR p.excerpt LIKE ? OR p.content_markdown LIKE ? OR u.username LIKE ? OR EXISTS (SELECT 1 FROM post_categories sc JOIN categories sca ON sca.id=sc.category_id WHERE sc.post_id=p.id AND (sca.name LIKE ? OR sca.slug LIKE ?)) OR EXISTS (SELECT 1 FROM post_tags st JOIN tags sta ON sta.id=st.tag_id WHERE st.post_id=p.id AND (sta.name LIKE ? OR sta.slug LIKE ?)))');
+      params.push(term, term, term, term, term, term, term, term);
+    }
+    const ageHours = 'GREATEST(TIMESTAMPDIFF(HOUR, COALESCE(p.published_at,p.updated_at), UTC_TIMESTAMP()), 0)';
+    const order = feed === 'latest' ? 'p.published_at DESC, p.id DESC' : feed === 'hot' ? `((p.like_count * 2) + (p.comment_count * 3) + (p.view_count * 0.2)) / POW(${ageHours} + 2, 1.2) DESC, p.published_at DESC` : `((p.like_count * 2) + (p.comment_count * 3) + (p.view_count * 0.2) + 1) / POW(${ageHours} + 2, 0.9) DESC, p.published_at DESC, p.id DESC`;
+    const from = `FROM posts p JOIN users u ON u.id=p.author_id WHERE ${where.join(' AND ')}`;
+    const [[total]] = await query(`SELECT COUNT(*) total ${from}`, params);
+    const [rows] = await query(`SELECT p.*,u.username,u.blog_slug,u.avatar_path ${from} ORDER BY ${order} LIMIT ? OFFSET ?`, [...params, PAGE_SIZE, offset]);
+    const ids = rows.map((row) => row.id);
     const [cats, tags, states] = await Promise.all([postMeta(ids), postTags(ids), viewerPostStates(ids, req.user?.id)]);
     const items = rows.map((row) => {
       const post = presentPublicPost(row, cats, null, tags, states.get(row.id));
@@ -281,7 +188,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       delete post.content_html;
       return post;
     });
-    res.json({ items, page: p, total: total.total, pageSize: PAGE_SIZE });
+    res.json({ items, page: p, total: Number(total.total || 0), pageSize: PAGE_SIZE, feed });
   } catch (e) { next(e); } });
   app.get('/api/public/creators', optionalAuth, async (req, res, next) => { try {
     const ownFilter = req.user ? ' AND u.id<>?' : '';
@@ -293,9 +200,32 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     res.json({ items: items.map((item) => ({ ...item, avatar_url: publicAvatarUrl(item) })) });
   } catch (e) { next(e); } });
   app.get('/api/public/posts/:slug', optionalAuth, async (req,res,next)=>{ try { const [rows] = await query('SELECT p.*,u.username,u.blog_slug,u.avatar_path,u.bio,u.blog_title FROM posts p JOIN users u ON u.id=p.author_id WHERE p.slug=?',[req.params.slug]); const post=rows[0]; if (!post) return error(res,404,'NOT_FOUND','文章不存在'); if (!await access(post,req.user,req.query.share)) { if (post.visibility === 'unlisted') return error(res,404,'NOT_FOUND','文章不存在'); return error(res,req.user?403:401,req.user?'FORBIDDEN':'AUTH_REQUIRED',req.user?'无权阅读此文章':'请登录后阅读此文章'); } const [cats,tags,states]=await Promise.all([postMeta([post.id]),postTags([post.id]),viewerPostStates([post.id],req.user?.id)]); if (post.visibility==='public') { await query('UPDATE posts SET view_count=view_count+1 WHERE id=?',[post.id]); post.view_count++; } res.json({ post:presentPublicPost(post,cats,req.query.share,tags,states.get(post.id)), canComment:post.allow_comments }); } catch(e){next(e);} });
+  app.get('/api/public/posts/:slug/related', optionalAuth, async (req, res, next) => { try {
+    const [currentRows] = await query("SELECT p.id,p.author_id,p.published_at FROM posts p WHERE p.slug=? AND p.status='published'", [req.params.slug]);
+    if (!currentRows[0]) return error(res, 404, 'NOT_FOUND', '文章不存在');
+    const current = currentRows[0];
+    const [relatedRows] = await query("SELECT p.id,p.title,p.slug,p.excerpt,p.published_at,p.cover_image,p.cover_alt_text,u.username,u.blog_slug,u.avatar_path FROM posts p JOIN users u ON u.id=p.author_id WHERE p.status='published' AND p.visibility='public' AND p.id<>? ORDER BY (p.author_id=? ) DESC,p.published_at DESC,p.id DESC LIMIT 3", [current.id, current.author_id]);
+    const [[previous]] = await query("SELECT p.title,p.slug,p.published_at FROM posts p WHERE p.status='published' AND p.visibility='public' AND p.published_at<? ORDER BY p.published_at DESC,p.id DESC LIMIT 1", [current.published_at]);
+    const [[next]] = await query("SELECT p.title,p.slug,p.published_at FROM posts p WHERE p.status='published' AND p.visibility='public' AND p.published_at>? ORDER BY p.published_at ASC,p.id ASC LIMIT 1", [current.published_at]);
+    res.json({ related:relatedRows, previous:previous || null, next:next || null });
+  } catch (e) { next(e); } });
   app.get('/api/public/users/:slug', optionalAuth, async (req,res,next)=>{ try { const [users]=await query("SELECT id,username,blog_slug,avatar_path,bio,blog_title,social_links FROM users WHERE blog_slug=? AND profile_visibility='public'",[req.params.slug]); if(!users[0])return error(res,404,'NOT_FOUND','用户不存在'); const u=users[0]; const [[count]]=await query("SELECT COUNT(*) count FROM posts WHERE author_id=? AND status='published' AND visibility='public'",[u.id]); const [[followers]]=await query('SELECT COUNT(*) count FROM follows WHERE following_id=?',[u.id]); let following=false; if(req.user){const [f]=await query('SELECT 1 FROM follows WHERE follower_id=? AND following_id=?',[req.user.id,u.id]);following=!!f.length;} res.json({user:{...u,avatar_url:publicAvatarUrl(u),post_count:count.count,follower_count:followers.count,following}});}catch(e){next(e);} });
-  app.get('/api/public/users/:slug/posts', optionalAuth, async (req,res,next)=>{ try { const [users]=await query("SELECT id FROM users WHERE blog_slug=? AND profile_visibility='public'",[req.params.slug]);if(!users[0])return error(res,404,'NOT_FOUND','用户不存在'); req.query={...req.query}; const [rows]=await query("SELECT p.*,u.username,u.blog_slug,u.avatar_path FROM posts p JOIN users u ON u.id=p.author_id WHERE p.author_id=? AND p.status='published' AND p.visibility='public' ORDER BY p.published_at DESC LIMIT 50",[users[0].id]);const cats=await postMeta(rows.map(x=>x.id));res.json({items:rows.map(x=>presentPublicPost(x,cats))}); }catch(e){next(e);} });
+  app.get('/api/public/users/:slug/posts', optionalAuth, async (req, res, next) => { try {
+    const [users] = await query("SELECT id FROM users WHERE blog_slug=? AND profile_visibility='public'", [req.params.slug]);
+    if (!users[0]) return error(res, 404, 'NOT_FOUND', '用户不存在');
+    const currentPage = Math.min(100, page(req)), offset = (currentPage - 1) * PAGE_SIZE;
+    const base = "FROM posts p JOIN users u ON u.id=p.author_id WHERE p.author_id=? AND p.status='published' AND p.visibility='public'";
+    const [[count]] = await query(`SELECT COUNT(*) total ${base}`, [users[0].id]);
+    const [rows] = await query(`SELECT p.*,u.username,u.blog_slug,u.avatar_path ${base} ORDER BY p.published_at DESC,p.id DESC LIMIT ? OFFSET ?`, [users[0].id, PAGE_SIZE, offset]);
+    const cats = await postMeta(rows.map((x) => x.id));
+    res.json({ items: rows.map((x) => presentPublicPost(x, cats)), page: currentPage, pageSize: PAGE_SIZE, total: Number(count.total || 0) });
+  } catch (e) { next(e); } });
   app.get('/api/public/taxonomy', async (_req,res,next)=>{try{const [categories]=await query("SELECT DISTINCT c.name,c.slug FROM categories c JOIN post_categories pc ON pc.category_id=c.id JOIN posts p ON p.id=pc.post_id WHERE p.status='published' AND p.visibility='public' ORDER BY c.name");const [tags]=await query("SELECT DISTINCT t.name,t.slug FROM tags t JOIN post_tags pt ON pt.tag_id=t.id JOIN posts p ON p.id=pt.post_id WHERE p.status='published' AND p.visibility='public' ORDER BY t.name LIMIT 50");res.json({categories,tags});}catch(e){next(e);}});
+  app.get('/api/editor/taxonomy', optionalAuth, requireAuth, async (_req, res, next) => { try {
+    const [categories] = await query('SELECT name,slug,description FROM categories ORDER BY name');
+    const [tags] = await query('SELECT name,slug FROM tags ORDER BY name LIMIT 200');
+    res.json({ categories, tags });
+  } catch (e) { next(e); } });
   app.get('/api/public/media/:id', optionalAuth, async(req,res,next)=>{try{const [rows]=await query('SELECT m.*,p.author_id,p.status,p.visibility,p.share_token FROM post_media m LEFT JOIN posts p ON p.id=m.post_id WHERE m.id=?',[req.params.id]);const m=rows[0];if(!m)return error(res,404,'NOT_FOUND','媒体不存在');if(!m.post_id ? req.user?.id!==m.owner_id : !await access(m,req.user,req.query.share))return error(res,m.visibility==='unlisted'?404:403,m.visibility==='unlisted'?'NOT_FOUND':'FORBIDDEN',m.visibility==='unlisted'?'媒体不存在':'无权访问媒体');res.setHeader('X-Content-Type-Options','nosniff');if(m.media_kind==='file')res.attachment(path.basename(m.label||m.file_path));res.sendFile(path.resolve(uploadRoot,'..',m.file_path.replace(/^[/\\]+/,'')));}catch(e){next(e);}});
   app.get('/api/public/avatars/:userId', optionalAuth, async(req,res,next)=>{try{const [users]=await query('SELECT id,avatar_path,profile_visibility FROM users WHERE id=?',[req.params.userId]);const user=users[0];if(!user||!user.avatar_path||((user.profile_visibility!=='public')&&req.user?.id!==user.id))return error(res,404,'NOT_FOUND','头像不存在');const avatarPath=resolveAvatarPath(user.avatar_path);if(!avatarPath||!fs.existsSync(avatarPath))return error(res,404,'NOT_FOUND','头像不存在');res.sendFile(avatarPath);}catch(e){next(e);}});
 
@@ -303,7 +233,18 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
   app.post('/api/me/avatar', optionalAuth, requireAuth, avatarUpload.single('avatar'), async(req,res,next)=>{try{if(!req.file)return error(res,400,'FILE_REQUIRED','请选择 PNG、JPEG、WebP 或 GIF 格式的头像');const [users]=await query('SELECT avatar_path FROM users WHERE id=?',[req.user.id]);const previousPath=resolveAvatarPath(users[0]?.avatar_path);const avatarPath=path.relative(path.dirname(uploadRoot),req.file.path).replace(/\\/g,'/');await query('UPDATE users SET avatar_path=? WHERE id=?',[avatarPath,req.user.id]);if(previousPath&&previousPath!==req.file.path)fs.unlink(previousPath,()=>{});res.status(201).json({avatarUrl:publicAvatarUrl({id:req.user.id,avatar_path:avatarPath})});}catch(e){removeUploadedFile(req.file);next(e);}});
   app.put('/api/me/blog-profile', optionalAuth, requireAuth, async(req,res,next)=>{try{const {bio='',blogTitle='',blogSlug='',socialLinks={},profileVisibility='public'}=req.body;const slug=slugify(blogSlug,`u-${req.user.id}`);if(!/^[a-z0-9-]{3,50}$/.test(slug))return error(res,400,'INVALID_SLUG','主页标识须为 3–50 位小写字母、数字或连字符');if(!['public','private'].includes(profileVisibility))return error(res,400,'INVALID_VISIBILITY','主页可见性无效');const normalizedLinks=normalizeSocialLinks(socialLinks);if(normalizedLinks.message)return error(res,400,'INVALID_SOCIAL_LINK',normalizedLinks.message);const [dup]=await query('SELECT id FROM users WHERE blog_slug=? AND id<>?',[slug,req.user.id]);if(dup.length)return error(res,409,'SLUG_TAKEN','该主页标识已被使用');await query('UPDATE users SET bio=?,blog_title=?,blog_slug=?,social_links=?,profile_visibility=? WHERE id=?',[String(bio).slice(0,1000),String(blogTitle).slice(0,120),slug,JSON.stringify(normalizedLinks.links),profileVisibility,req.user.id]);const [saved]=await query('SELECT id,username,avatar_path,bio,blog_title,blog_slug,social_links,profile_visibility FROM users WHERE id=?',[req.user.id]);if(saved[0])saved[0].avatar_url=publicAvatarUrl(saved[0]);res.json({profile:saved[0]});}catch(e){next(e);}});
   app.get('/api/dashboard/overview',optionalAuth,requireAuth,async(req,res,next)=>{try{const [[stats]]=await query("SELECT COUNT(*) total, SUM(status='draft') drafts, SUM(status='published') published, SUM(view_count) views FROM posts WHERE author_id=?",[req.user.id]);const [recent]=await query('SELECT id,title,status,updated_at FROM posts WHERE author_id=? ORDER BY updated_at DESC LIMIT 5',[req.user.id]);res.json({stats,recent});}catch(e){next(e);}});
-  app.get('/api/posts',optionalAuth,requireAuth,async(req,res,next)=>{try{const params=[req.user.id];let where='author_id=?';if(req.query.status&&allowedStatuses.has(req.query.status)){where+=' AND status=?';params.push(req.query.status);}const [rows]=await query(`SELECT * FROM posts WHERE ${where} ORDER BY updated_at DESC`,params);const cats=await postMeta(rows.map(x=>x.id));res.json({items:rows.map(x=>presentOwnerPost(x,cats))});}catch(e){next(e);}});
+  app.get('/api/posts', optionalAuth, requireAuth, async (req, res, next) => { try {
+    const pageNumber = Math.min(100, page(req)), offset = (pageNumber - 1) * PAGE_SIZE, params = [req.user.id], conditions = ['author_id=?'];
+    if (req.query.status && allowedStatuses.has(req.query.status)) { conditions.push('status=?'); params.push(req.query.status); }
+    if (req.query.visibility && allowedVisibilities.has(req.query.visibility)) { conditions.push('visibility=?'); params.push(req.query.visibility); }
+    if (req.query.q) { conditions.push('(title LIKE ? OR excerpt LIKE ? OR content_markdown LIKE ?)'); const term = `%${String(req.query.q).slice(0,100)}%`; params.push(term,term,term); }
+    const from = `FROM posts WHERE ${conditions.join(' AND ')}`;
+    const [[count]] = await query(`SELECT COUNT(*) total ${from}`, params);
+    const order = req.query.sort === 'views' ? 'view_count DESC,updated_at DESC' : req.query.sort === 'title' ? 'title ASC,id DESC' : 'updated_at DESC,id DESC';
+    const [rows] = await query(`SELECT * ${from} ORDER BY ${order} LIMIT ? OFFSET ?`, [...params, PAGE_SIZE, offset]);
+    const cats = await postMeta(rows.map((x) => x.id));
+    res.json({ items:rows.map((x) => presentOwnerPost(x,cats)), page:pageNumber, pageSize:PAGE_SIZE, total:Number(count.total || 0) });
+  } catch (e) { next(e); } });
   app.post('/api/posts', optionalAuth, requireAuth, async (req, res, next) => {
     let insertedPostId = null;
     try {
@@ -311,10 +252,11 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       let slug = slugify(req.body.slug || title, `post-${Date.now()}`);
       const [taken] = await query('SELECT id FROM posts WHERE slug=?', [slug]);
       if (taken.length) slug = `${slug.slice(0, 145)}-${Date.now().toString(36)}`;
-      const blocks = req.body.contentBlocks ? validateBlocks(req.body.contentBlocks) : null;
+      const wantsBlocks = req.body.contentFormat === 'blocks' || req.body.contentBlocks !== undefined;
+      const blocks = wantsBlocks ? canonicalContent.validateBlocks(req.body.contentBlocks || { type:'doc', content:[] }) : null;
       const format = blocks ? 'blocks' : 'markdown';
-      const markdown = blocks ? blocksToMarkdown(blocks) : String(req.body.contentMarkdown || '');
-      const html = blocks ? blocksToSafeHtml(blocks) : renderMarkdown(markdown);
+      const markdown = blocks ? canonicalContent.blocksToMarkdown(blocks) : String(req.body.contentMarkdown || '');
+      const html = blocks ? canonicalContent.blocksToSafeHtml(blocks) : canonicalContent.renderMarkdown(markdown);
       const [result] = await query("INSERT INTO posts (author_id,title,slug,excerpt,content_markdown,content_html,content_format,content_blocks,status,visibility,allow_comments,share_token) VALUES (?,?,?,?,?,?,?,?, 'draft','private',TRUE,?)", [req.user.id, title, slug, '', markdown, html, format, blocks ? JSON.stringify(blocks) : null, createShareToken()]);
       insertedPostId = result.insertId;
       if (blocks) await ensureOwnedBlockMedia(blocks, req.user.id, insertedPostId);
@@ -326,10 +268,97 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     }
   });
   app.get('/api/posts/:id',optionalAuth,requireAuth,async(req,res,next)=>{try{const [r]=await query('SELECT * FROM posts WHERE id=? AND author_id=?',[req.params.id,req.user.id]);if(!r[0])return error(res,404,'NOT_FOUND','文章不存在');const [categories]=await query('SELECT c.slug FROM post_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.post_id=?',[r[0].id]);const [tags]=await query('SELECT t.name FROM post_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.post_id=?',[r[0].id]);res.json({post:{...r[0],categorySlugs:categories.map(x=>x.slug),tags:tags.map(x=>x.name)}});}catch(e){next(e);}});
-  app.put('/api/posts/:id',optionalAuth,requireAuth,async(req,res,next)=>{try{const [r]=await query('SELECT * FROM posts WHERE id=? AND author_id=?',[req.params.id,req.user.id]);const old=r[0];if(!old)return error(res,404,'NOT_FOUND','文章不存在');const title=String(req.body.title??old.title).trim().slice(0,180);const blocks=req.body.contentBlocks===undefined?parseStoredBlocks(old.content_blocks):validateBlocks(req.body.contentBlocks);if(blocks)await ensureOwnedBlockMedia(blocks,req.user.id,old.id);const format=blocks?'blocks':'markdown';const markdown=blocks?blocksToMarkdown(blocks):String(req.body.contentMarkdown??old.content_markdown);const html=blocks?blocksToSafeHtml(blocks):renderMarkdown(markdown);const visibility=allowedVisibilities.has(req.body.visibility)?req.body.visibility:old.visibility;const status=allowedStatuses.has(req.body.status)?req.body.status:old.status;let slug=slugify(req.body.slug??old.slug,old.slug);const [dup]=await query('SELECT id FROM posts WHERE slug=? AND id<>?',[slug,old.id]);if(dup.length)return error(res,409,'SLUG_TAKEN','文章链接已被使用');const scheduledAt=req.body.scheduledAt||null;if(status==='scheduled'&&(!scheduledAt||Number.isNaN(new Date(scheduledAt).getTime())||new Date(scheduledAt)<=new Date()))return error(res,400,'INVALID_SCHEDULE','定时发布时间必须晚于当前时间');const publishedAt=status==='published'?(old.published_at||new Date()):old.published_at;const excerpt=String((req.body.excerpt ?? old.excerpt) || '').slice(0,500);await query('UPDATE posts SET title=?,slug=?,excerpt=?,content_markdown=?,content_html=?,content_format=?,content_blocks=?,cover_image=?,status=?,visibility=?,allow_comments=?,scheduled_at=?,published_at=? WHERE id=?',[title,slug,excerpt,markdown,html,format,blocks?JSON.stringify(blocks):null,req.body.coverImage??old.cover_image,status,visibility,req.body.allowComments??old.allow_comments,scheduledAt,publishedAt,old.id]);await syncTaxonomy(old.id,req.body.categorySlugs,req.body.tags);await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source) VALUES (?,?,?,?,?,?,'manual')",[old.id,req.user.id,title,markdown,format,blocks?JSON.stringify(blocks):null]);res.json({message:'文章已保存'});}catch(e){next(e);}});
-  app.post('/api/posts/:id/autosave',optionalAuth,requireAuth,async(req,res,next)=>{try{const [r]=await query('SELECT id,title FROM posts WHERE id=? AND author_id=?',[req.params.id,req.user.id]);if(!r[0])return error(res,404,'NOT_FOUND','文章不存在');const title=String(req.body.title??r[0].title).slice(0,180),blocks=req.body.contentBlocks?validateBlocks(req.body.contentBlocks):null;if(blocks)await ensureOwnedBlockMedia(blocks,req.user.id,r[0].id);const format=blocks?'blocks':'markdown',markdown=blocks?blocksToMarkdown(blocks):String(req.body.contentMarkdown||''),html=blocks?blocksToSafeHtml(blocks):renderMarkdown(markdown);await query('UPDATE posts SET title=?,content_markdown=?,content_html=?,content_format=?,content_blocks=? WHERE id=?',[title,markdown,html,format,blocks?JSON.stringify(blocks):null,r[0].id]);await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source) VALUES (?,?,?,?,?,?,'autosave')",[r[0].id,req.user.id,title,markdown,format,blocks?JSON.stringify(blocks):null]);res.json({savedAt:new Date().toISOString()});}catch(e){next(e);}});
+  app.put('/api/posts/:id', optionalAuth, requireAuth, async (req, res, next) => {
+    try {
+      const [rows] = await query('SELECT * FROM posts WHERE id=? AND author_id=?', [req.params.id, req.user.id]);
+      const old = rows[0];
+      if (!old) return error(res, 404, 'NOT_FOUND', '文章不存在');
+      const title = String(req.body.title ?? old.title).trim().slice(0, 180);
+      const format = req.body.contentFormat === 'blocks' || req.body.contentBlocks !== undefined ? 'blocks' : req.body.contentFormat === 'markdown' || req.body.contentMarkdown !== undefined ? 'markdown' : (old.content_format || 'markdown');
+      const blocks = format === 'blocks' ? canonicalContent.validateBlocks(req.body.contentBlocks === undefined ? canonicalContent.parseStoredBlocks(old.content_blocks) || { type: 'doc', content: [] } : req.body.contentBlocks) : null;
+      if (blocks) await ensureOwnedBlockMedia(blocks, req.user.id, old.id);
+      const markdown = format === 'blocks' ? canonicalContent.blocksToMarkdown(blocks) : String(req.body.contentMarkdown ?? old.content_markdown ?? '');
+      const html = format === 'blocks' ? canonicalContent.blocksToSafeHtml(blocks) : canonicalContent.renderMarkdown(markdown);
+      const visibility = allowedVisibilities.has(req.body.visibility) ? req.body.visibility : old.visibility;
+      const status = allowedStatuses.has(req.body.status) ? req.body.status : old.status;
+      let slug = slugify(req.body.slug ?? old.slug, old.slug);
+      const [duplicate] = await query('SELECT id FROM posts WHERE slug=? AND id<>?', [slug, old.id]);
+      if (duplicate.length) return error(res, 409, 'SLUG_TAKEN', '文章链接已被使用');
+      let scheduledAt = null;
+      if (status === 'scheduled') {
+        const rawSchedule = String(req.body.scheduledAt || '');
+        if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(rawSchedule)) return error(res, 400, 'SCHEDULE_TIMEZONE_REQUIRED', '定时发布时间必须包含时区');
+        const scheduledDate = new Date(rawSchedule);
+        if (Number.isNaN(scheduledDate.getTime()) || scheduledDate <= new Date()) return error(res, 400, 'INVALID_SCHEDULE', '定时发布时间必须晚于当前时间');
+        scheduledAt = scheduledDate;
+      }
+      const publishedAt = status === 'published' ? (old.published_at || new Date()) : old.published_at;
+      const excerpt = String((req.body.excerpt ?? old.excerpt) || '').slice(0, 500);
+      const coverImage = req.body.coverImage === undefined ? old.cover_image : (req.body.coverImage || null);
+      const coverAlt = String(req.body.coverAltText ?? old.cover_alt_text ?? '').trim().slice(0, 255) || null;
+      if (coverImage) await ensureOwnedCover(coverImage, req.user.id);
+      await query('UPDATE posts SET title=?,slug=?,excerpt=?,content_markdown=?,content_html=?,content_format=?,content_blocks=?,content_version=content_version+1,content_source=?,cover_image=?,cover_alt_text=?,status=?,visibility=?,allow_comments=?,scheduled_at=?,published_at=? WHERE id=?', [title, slug, excerpt, markdown, html, format, blocks ? JSON.stringify(blocks) : null, req.body.contentSource || 'editor', coverImage, coverAlt, status, visibility, req.body.allowComments ?? old.allow_comments, scheduledAt, publishedAt, old.id]);
+      await syncTaxonomy(old.id, req.body.categorySlugs, req.body.tags);
+      const revisionSource = status === 'published' ? 'publish' : 'manual';
+      await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source,content_source) VALUES (?,?,?,?,?,?, ?, ?)", [old.id, req.user.id, title, markdown, format, blocks ? JSON.stringify(blocks) : null, revisionSource, req.body.contentSource || 'editor']);
+      res.json({ message: status === 'published' ? '文章已发布' : status === 'scheduled' ? '文章已安排定时发布' : '草稿已保存', status, slug, scheduledAt: scheduledAt ? scheduledAt.toISOString() : null });
+    } catch (e) { next(e); }
+  });
+  app.post('/api/posts/:id/autosave', optionalAuth, requireAuth, async (req, res, next) => {
+    try {
+      const [rows] = await query('SELECT * FROM posts WHERE id=? AND author_id=?', [req.params.id, req.user.id]);
+      const old = rows[0];
+      if (!old) return error(res, 404, 'NOT_FOUND', '文章不存在');
+      const title = String(req.body.title ?? old.title).trim().slice(0, 180);
+      const format = req.body.contentFormat === 'blocks' || req.body.contentBlocks !== undefined ? 'blocks' : 'markdown';
+      const blocks = format === 'blocks' ? canonicalContent.validateBlocks(req.body.contentBlocks) : null;
+      if (blocks) await ensureOwnedBlockMedia(blocks, req.user.id, old.id);
+      const markdown = format === 'blocks' ? canonicalContent.blocksToMarkdown(blocks) : String(req.body.contentMarkdown ?? '');
+      const html = format === 'blocks' ? canonicalContent.blocksToSafeHtml(blocks) : canonicalContent.renderMarkdown(markdown);
+      await query('UPDATE posts SET title=?,content_markdown=?,content_html=?,content_format=?,content_blocks=?,content_version=content_version+1,content_source=? WHERE id=? AND author_id=?', [title, markdown, html, format, blocks ? JSON.stringify(blocks) : null, req.body.contentSource || 'autosave', old.id, req.user.id]);
+      const [recent] = await query("SELECT id FROM post_revisions WHERE post_id=? AND editor_id=? AND source='autosave' AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE) ORDER BY created_at DESC LIMIT 1", [old.id, req.user.id]);
+      const values = [old.id, req.user.id, title, markdown, format, blocks ? JSON.stringify(blocks) : null, req.body.contentSource || 'autosave'];
+      if (recent[0]) await query('UPDATE post_revisions SET title=?,content_markdown=?,content_format=?,content_blocks=?,content_version=(SELECT content_version FROM posts WHERE id=?),content_source=? WHERE id=?', [title, markdown, format, blocks ? JSON.stringify(blocks) : null, old.id, req.body.contentSource || 'autosave', recent[0].id]);
+      else await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source,content_source) VALUES (?,?,?,?,?,?, 'autosave', ?)", values);
+      res.json({ savedAt: new Date().toISOString(), status: 'saved' });
+    } catch (e) { next(e); }
+  });
+  app.get('/api/posts/:id/revisions', optionalAuth, requireAuth, async (req, res, next) => {
+    try {
+      const [rows] = await query('SELECT r.id,r.post_id,r.title,r.content_format,r.content_version,r.source,r.content_source,r.created_at,u.username FROM post_revisions r JOIN users u ON u.id=r.editor_id JOIN posts p ON p.id=r.post_id WHERE r.post_id=? AND p.author_id=? ORDER BY r.created_at DESC LIMIT 100', [req.params.id, req.user.id]);
+      res.json({ items: rows });
+    } catch (e) { next(e); }
+  });
+  app.post('/api/posts/:id/revisions/:revisionId/restore', optionalAuth, requireAuth, async (req, res, next) => {
+    try {
+      const [rows] = await query('SELECT r.* FROM post_revisions r JOIN posts p ON p.id=r.post_id WHERE r.id=? AND r.post_id=? AND p.author_id=?', [req.params.revisionId, req.params.id, req.user.id]);
+      const revision = rows[0];
+      if (!revision) return error(res, 404, 'NOT_FOUND', '修订不存在');
+      const blocks = revision.content_format === 'blocks' ? canonicalContent.validateBlocks(revision.content_blocks) : null;
+      const markdown = revision.content_format === 'blocks' ? canonicalContent.blocksToMarkdown(blocks) : revision.content_markdown;
+      const html = revision.content_format === 'blocks' ? canonicalContent.blocksToSafeHtml(blocks) : canonicalContent.renderMarkdown(markdown);
+      await query('UPDATE posts SET title=?,content_markdown=?,content_html=?,content_format=?,content_blocks=?,content_version=content_version+1,content_source=? WHERE id=? AND author_id=?', [revision.title, markdown, html, revision.content_format, blocks ? JSON.stringify(blocks) : null, 'restore', req.params.id, req.user.id]);
+      await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source,content_source) VALUES (?,?,?,?,?,?, 'manual', 'restore')", [req.params.id, req.user.id, revision.title, markdown, revision.content_format, blocks ? JSON.stringify(blocks) : null]);
+      res.json({ message: '修订已恢复' });
+    } catch (e) { next(e); }
+  });
   app.delete('/api/posts/:id',optionalAuth,requireAuth,async(req,res,next)=>{try{const [r]=await query('DELETE FROM posts WHERE id=? AND author_id=?',[req.params.id,req.user.id]);if(!r.affectedRows)return error(res,404,'NOT_FOUND','文章不存在');res.status(204).end();}catch(e){next(e);}});
-  app.post('/api/posts/media',optionalAuth,requireAuth,mediaUpload.single('image'),async(req,res,next)=>{try{if(!req.file)return error(res,400,'FILE_REQUIRED','请选择图片');const alt=String(req.body.altText||'').trim();if(!alt){removeUploadedFile(req.file);return error(res,400,'ALT_REQUIRED','图片必须提供替代文本');}const rawPostId=String(req.body.postId||'').trim();let postId=null;if(rawPostId){if(!/^\d+$/.test(rawPostId)){removeUploadedFile(req.file);return error(res,400,'INVALID_POST','文章标识无效');}const [posts]=await query('SELECT id FROM posts WHERE id=? AND author_id=?',[rawPostId,req.user.id]);if(!posts[0]){removeUploadedFile(req.file);return error(res,403,'POST_OWNERSHIP_REQUIRED','只能向自己的文章上传媒体');}postId=posts[0].id;}const rel=path.relative(path.dirname(uploadRoot),req.file.path).replace(/\\/g,'/');const [r]=await query('INSERT INTO post_media (owner_id,post_id,file_path,mime_type,alt_text) VALUES (?,?,?,?,?)',[req.user.id,postId,rel,req.file.mimetype,alt]);res.status(201).json({media:{id:r.insertId,url:`/api/public/media/${r.insertId}`,altText:alt}});}catch(e){removeUploadedFile(req.file);next(e);}});
+  app.post('/api/posts/media', optionalAuth, requireAuth, mediaUpload.single('image'), async (req, res, next) => { try {
+    if (!req.file) return error(res, 400, 'FILE_REQUIRED', '请选择 PNG、JPEG、WebP 或 GIF 图片');
+    const validated = validateUploadedFile(req.file, { allowed: mediaTypes, maxBytes: 10 * 1024 * 1024 });
+    const alt = String(req.body.altText || '').trim();
+    if (!alt) { removeUploadedFile(req.file); return error(res, 400, 'ALT_REQUIRED', '图片必须提供替代文本'); }
+    const rawPostId = String(req.body.postId || '').trim(); let postId = null;
+    if (rawPostId) {
+      if (!/^\d+$/.test(rawPostId)) { removeUploadedFile(req.file); return error(res, 400, 'INVALID_POST', '文章标识无效'); }
+      const [posts] = await query('SELECT id FROM posts WHERE id=? AND author_id=?', [rawPostId, req.user.id]);
+      if (!posts[0]) { removeUploadedFile(req.file); return error(res, 403, 'POST_OWNERSHIP_REQUIRED', '只能向自己的文章上传媒体'); }
+      postId = posts[0].id;
+    }
+    const rel = path.relative(path.dirname(uploadRoot), req.file.path).replace(/\\/g, '/');
+    const [result] = await query('INSERT INTO post_media (owner_id,post_id,file_path,mime_type,alt_text,media_kind) VALUES (?,?,?,?,?,\'image\')', [req.user.id, postId, rel, validated.detectedMime, alt]);
+    res.status(201).json({ media: { id: result.insertId, url: `/api/public/media/${result.insertId}`, altText: alt } });
+  } catch (e) { removeUploadedFile(req.file); next(e); } });
   app.post('/api/posts/media/attachment', optionalAuth, requireAuth, (req, res, next) => attachmentUpload.single('media')(req, res, (uploadError) => {
     if (!uploadError) return next();
     removeUploadedFile(req.file);
@@ -343,7 +372,8 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       if (!/^\d+$/.test(rawPostId)) { removeUploadedFile(req.file); return error(res, 400, 'INVALID_POST', '文章标识无效'); }
       const [posts] = await query('SELECT id FROM posts WHERE id=? AND author_id=?', [rawPostId, req.user.id]);
       if (!posts[0]) { removeUploadedFile(req.file); return error(res, 403, 'POST_OWNERSHIP_REQUIRED', '只能向自己的文章上传媒体'); }
-      const detectedType = inspectAttachment(req.file);
+      const validated = validateUploadedFile(req.file, { allowed: allowedAttachmentTypes, maxBytes: 50 * 1024 * 1024 });
+      const detectedType = validated.detectedMime || inspectAttachment(req.file);
       if (!detectedType || (detectedType !== req.file.mimetype && !(detectedType === 'application/zip' && req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'))) { removeUploadedFile(req.file); return error(res, 400, 'INVALID_MEDIA_CONTENT', '文件内容与声明的媒体类型不一致'); }
       const kind = detectedType.startsWith('audio/') ? 'audio' : detectedType.startsWith('video/') ? 'video' : 'file';
       const rel = path.relative(path.dirname(uploadRoot), req.file.path).replace(/\\/g, '/');
@@ -351,9 +381,26 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       res.status(201).json({ media: { id: result.insertId, url: `/api/public/media/${result.insertId}`, label, kind } });
     } catch (e) { removeUploadedFile(req.file); next(e); }
   });
+  app.get('/api/posts/:id/media', optionalAuth, requireAuth, async (req, res, next) => { try {
+    const [rows] = await query('SELECT id,media_kind,mime_type,alt_text,label,caption,created_at FROM post_media WHERE post_id=? AND owner_id=? ORDER BY created_at DESC', [req.params.id, req.user.id]);
+    res.json({ items: rows.map((media) => ({ ...media, url: `/api/public/media/${media.id}` })) });
+  } catch (e) { next(e); } });
+  app.delete('/api/posts/media/:mediaId', optionalAuth, requireAuth, async (req, res, next) => { try {
+    const [rows] = await query('SELECT id,file_path FROM post_media WHERE id=? AND owner_id=?', [req.params.mediaId, req.user.id]);
+    if (!rows[0]) return error(res, 404, 'NOT_FOUND', '媒体不存在');
+    await query('DELETE FROM post_media WHERE id=? AND owner_id=?', [req.params.mediaId, req.user.id]);
+    removeUploadedFile({ path: path.resolve(uploadRoot, '..', rows[0].file_path.replace(/^[/\\]+/, '')) });
+    res.status(204).end();
+  } catch (e) { next(e); } });
   app.post('/api/posts/:id/like',optionalAuth,requireAuth,async(req,res,next)=>{try{const post=await loadAccessiblePost(req.params.id,req,res);if(!post)return;const [r]=await query('INSERT IGNORE INTO post_likes (post_id,user_id) VALUES (?,?)',[post.id,req.user.id]);if(r.affectedRows){await query('UPDATE posts SET like_count=like_count+1 WHERE id=?',[post.id]);await createNotification(post.author_id,req.user.id,'like',post.id);}res.json({liked:true});}catch(e){next(e);}});
   app.delete('/api/posts/:id/like',optionalAuth,requireAuth,async(req,res,next)=>{try{const post=await loadAccessiblePost(req.params.id,req,res);if(!post)return;const [r]=await query('DELETE FROM post_likes WHERE post_id=? AND user_id=?',[post.id,req.user.id]);if(r.affectedRows)await query('UPDATE posts SET like_count=GREATEST(0,like_count-1) WHERE id=?',[post.id]);res.json({liked:false});}catch(e){next(e);}});
   app.post('/api/posts/:id/bookmark',optionalAuth,requireAuth,async(req,res,next)=>{try{const post=await loadAccessiblePost(req.params.id,req,res);if(!post)return;if(post.visibility==='unlisted'&&post.author_id!==req.user.id)return error(res,400,'UNLISTED_BOOKMARK_UNSUPPORTED','仅链接文章不支持收藏');const [r]=await query('INSERT IGNORE INTO post_bookmarks (post_id,user_id) VALUES (?,?)',[post.id,req.user.id]);if(r.affectedRows)await query('UPDATE posts SET bookmark_count=bookmark_count+1 WHERE id=?',[post.id]);res.json({bookmarked:true});}catch(e){next(e);}});
+  app.delete('/api/posts/:id/bookmark', optionalAuth, requireAuth, async (req, res, next) => { try {
+    const post = await loadAccessiblePost(req.params.id, req, res); if (!post) return;
+    const [result] = await query('DELETE FROM post_bookmarks WHERE post_id=? AND user_id=?', [post.id, req.user.id]);
+    if (result.affectedRows) await query('UPDATE posts SET bookmark_count=GREATEST(0,bookmark_count-1) WHERE id=?', [post.id]);
+    res.json({ bookmarked: false });
+  } catch (e) { next(e); } });
   app.get('/api/bookmarks',optionalAuth,requireAuth,async(req,res,next)=>{try{const [rows]=await query("SELECT p.*,u.username,u.blog_slug,u.avatar_path FROM post_bookmarks b JOIN posts p ON p.id=b.post_id JOIN users u ON u.id=p.author_id WHERE b.user_id=? AND p.status='published' AND p.visibility<>'unlisted' ORDER BY b.created_at DESC",[req.user.id]);const accessible=[];for(const post of rows){if(await access(post,req.user,null))accessible.push(post);}const cats=await postMeta(accessible.map(x=>x.id));res.json({items:accessible.map(x=>presentPublicPost(x,cats))});}catch(e){next(e);}});
   app.post('/api/users/:slug/follow',optionalAuth,requireAuth,async(req,res,next)=>{try{const [u]=await query('SELECT id FROM users WHERE blog_slug=?',[req.params.slug]);if(!u[0])return error(res,404,'NOT_FOUND','用户不存在');if(u[0].id===req.user.id)return error(res,400,'SELF_FOLLOW','不能关注自己');const [r]=await query('INSERT IGNORE INTO follows (follower_id,following_id) VALUES (?,?)',[req.user.id,u[0].id]);if(r.affectedRows)await createNotification(u[0].id,req.user.id,'follow');res.json({following:true});}catch(e){next(e);}});
   app.delete('/api/users/:slug/follow',optionalAuth,requireAuth,async(req,res,next)=>{try{const [u]=await query('SELECT id FROM users WHERE blog_slug=?',[req.params.slug]);if(!u[0])return error(res,404,'NOT_FOUND','用户不存在');await query('DELETE FROM follows WHERE follower_id=? AND following_id=?',[req.user.id,u[0].id]);res.json({following:false});}catch(e){next(e);}});
@@ -365,6 +412,20 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
   app.post('/api/reports',optionalAuth,requireAuth,async(req,res,next)=>{try{if(!req.body.postId&&!req.body.commentId)return error(res,400,'TARGET_REQUIRED','请选择举报内容');let postId=req.body.postId?Number(req.body.postId):null,commentId=req.body.commentId?Number(req.body.commentId):null;if((req.body.postId&&!Number.isInteger(postId))||(req.body.commentId&&!Number.isInteger(commentId)))return error(res,400,'INVALID_TARGET','举报目标无效');if(commentId){const [comments]=await query('SELECT id,post_id FROM comments WHERE id=?',[commentId]);if(!comments[0])return error(res,404,'NOT_FOUND','评论不存在');if(postId&&postId!==comments[0].post_id)return error(res,400,'TARGET_MISMATCH','评论不属于指定文章');postId=comments[0].post_id;}const post=await loadAccessiblePost(postId,req,res);if(!post)return;const [r]=await query('INSERT INTO reports (reporter_id,post_id,comment_id,reason,details) VALUES (?,?,?,?,?)',[req.user.id,post.id,commentId,String(req.body.reason||'其他').slice(0,80),String(req.body.details||'').slice(0,2000)]);res.status(201).json({report:{id:r.insertId,status:'pending'}});}catch(e){next(e);}});
   app.get('/api/admin/reports',optionalAuth,requireAuth,async(req,res,next)=>{try{if(!isAdmin(req))return error(res,403,'ADMIN_REQUIRED','需要管理员权限');const [items]=await query('SELECT * FROM reports ORDER BY created_at DESC LIMIT 100');res.json({items});}catch(e){next(e);}});
   app.put('/api/admin/reports/:id',optionalAuth,requireAuth,async(req,res,next)=>{try{if(!isAdmin(req))return error(res,403,'ADMIN_REQUIRED','需要管理员权限');const status=['reviewed','dismissed'].includes(req.body.status)?req.body.status:'reviewed';await query('UPDATE reports SET status=?,reviewed_by=?,reviewed_at=NOW() WHERE id=?',[status,req.user.id,req.params.id]);res.status(204).end();}catch(e){next(e);}});
-  setInterval(() => query("UPDATE posts SET status='published',published_at=COALESCE(published_at,NOW()) WHERE status='scheduled' AND scheduled_at IS NOT NULL AND scheduled_at<=NOW()"), 60 * 1000).unref();
+  async function publishDuePosts() {
+    if (typeof db.getConnection !== 'function') {
+      await query("UPDATE posts SET status='published',published_at=COALESCE(published_at,UTC_TIMESTAMP()),scheduled_at=NULL WHERE status='scheduled' AND scheduled_at IS NOT NULL AND scheduled_at<=UTC_TIMESTAMP()");
+      return;
+    }
+    const connection = await new Promise((resolve, reject) => db.getConnection((connectError, poolConnection) => connectError ? reject(connectError) : resolve(poolConnection)));
+    try {
+      const [lockRows] = await connection.promise().query("SELECT GET_LOCK('own_web_scheduled_publisher', 0) AS acquired");
+      if (!lockRows[0]?.acquired) return;
+      await connection.promise().query("UPDATE posts SET status='published',published_at=COALESCE(published_at,UTC_TIMESTAMP()),scheduled_at=NULL WHERE status='scheduled' AND scheduled_at IS NOT NULL AND scheduled_at<=UTC_TIMESTAMP()");
+      await connection.promise().query("SELECT RELEASE_LOCK('own_web_scheduled_publisher')");
+    } finally { connection.release(); }
+  }
+  setTimeout(() => publishDuePosts().catch((error) => console.error('[scheduler] startup compensation failed', error)), 0).unref();
+  setInterval(() => publishDuePosts().catch((error) => console.error('[scheduler] scheduled publish failed', error)), 60 * 1000).unref();
 }
 module.exports = { mountBlogRoutes };
