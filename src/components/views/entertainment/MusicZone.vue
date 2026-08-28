@@ -2730,7 +2730,9 @@ export default {
 
 .fs-playlist-content {
   flex: 1;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -2741,9 +2743,9 @@ export default {
 .fs-playlist-content h4 {
   margin: 0;
   padding: 16px 20px;
-  color: white;
+  color: var(--text);
   font-size: 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border);
 }
 
 .fs-playlist-scroll {
@@ -2764,26 +2766,28 @@ export default {
 }
 
 .fs-playlist-item:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .fs-playlist-item.active {
   background: var(--accent);
+  color: var(--on-accent);
 }
 
 .fs-playlist-item.played {
-  opacity: 0.6;
+  color: var(--muted);
 }
 
 .playlist-number {
   width: 24px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--muted);
   font-size: 12px;
 }
 
 .fs-playlist-item.active .playlist-number {
-  color: white;
+  color: var(--on-accent);
 }
 
 .fs-playlist-item img {
@@ -2801,7 +2805,7 @@ export default {
 }
 
 .playlist-title {
-  color: white;
+  color: var(--text);
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -2809,12 +2813,12 @@ export default {
 }
 
 .playlist-artist {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--muted);
   font-size: 11px;
 }
 
 .playlist-duration {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--muted);
   font-size: 11px;
   font-family: monospace;
 }
@@ -2828,7 +2832,7 @@ export default {
 
 .playing-indicator span {
   width: 3px;
-  background: white;
+  background: currentColor;
   border-radius: 2px;
   animation: playing-bar 0.6s ease-in-out infinite;
 }
@@ -4283,6 +4287,11 @@ input:focus-visible {
 .music-zone .fs-playlist-item { color: var(--text); }
 .music-zone .fs-playlist-item:hover,
 .music-zone .fs-playlist-item.active { background: var(--accent-soft); color: var(--accent); }
+.music-zone .fs-playlist-item.active .playlist-title,
+.music-zone .fs-playlist-item.active .playlist-artist,
+.music-zone .fs-playlist-item.active .playlist-duration,
+.music-zone .fs-playlist-item.active .playlist-number { color: var(--accent); }
+.music-zone .fs-playlist-item.active .playing-indicator { color: var(--accent); }
 .music-zone .fs-play-btn { border-color: var(--accent); background: var(--accent); color: #fff; }
 .music-zone .fs-play-btn:hover { background: var(--accent-strong); color: #fff; }
 .music-zone .mode-btn { width: auto !important; padding: 0 var(--space-2) !important; }

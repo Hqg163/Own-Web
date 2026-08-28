@@ -342,7 +342,17 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       res.json({ message: '修订已恢复' });
     } catch (e) { next(e); }
   });
-  app.delete('/api/posts/:id',optionalAuth,requireAuth,async(req,res,next)=>{try{const [r]=await query('DELETE FROM posts WHERE id=? AND author_id=?',[req.params.id,req.user.id]);if(!r.affectedRows)return error(res,404,'NOT_FOUND','文章不存在');res.status(204).end();}catch(e){next(e);}});
+  app.delete('/api/posts/:id', optionalAuth, requireAuth, async (req, res, next) => { try {
+    const [posts] = await query('SELECT id,status FROM posts WHERE id=? AND author_id=?', [req.params.id, req.user.id]);
+    const post = posts[0];
+    if (!post) return error(res, 404, 'NOT_FOUND', '文章不存在');
+    if (post.status === 'published') return error(res, 409, 'POST_NOT_DELETABLE', '已发布文章不能从此处删除');
+    const [media] = await query('SELECT file_path FROM post_media WHERE post_id=? AND owner_id=?', [post.id, req.user.id]);
+    await query('DELETE FROM post_media WHERE post_id=? AND owner_id=?', [post.id, req.user.id]);
+    await query('DELETE FROM posts WHERE id=? AND author_id=? AND status IN (\'draft\',\'scheduled\')', [post.id, req.user.id]);
+    for (const item of media) removeUploadedFile({ path:path.resolve(path.dirname(uploadRoot), String(item.file_path || '').replace(/^[/\\]+/, '')) });
+    res.status(204).end();
+  } catch (e) { next(e); } });
   app.post('/api/posts/media', optionalAuth, requireAuth, mediaUpload.single('image'), async (req, res, next) => { try {
     if (!req.file) return error(res, 400, 'FILE_REQUIRED', '请选择 PNG、JPEG、WebP 或 GIF 图片');
     const validated = validateUploadedFile(req.file, { allowed: mediaTypes, maxBytes: 10 * 1024 * 1024 });
