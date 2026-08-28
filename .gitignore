@@ -47,3 +47,8 @@ prompt提示词/
 # FFmpeg / media processing leftovers
 *.part
 *.crdownload
+
+# Concentrated audit screenshots, Lighthouse and Playwright reports
+audit-artifacts/
+test-results/
+tests/.auth/

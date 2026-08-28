@@ -7,10 +7,10 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "check": "node --check server.js && node --check blog.js && node --check migrations.js",
-    "test:blog-access": "node scripts/blog-access-smoke.js",
-    "test:study-access": "node scripts/study-access-smoke.js",
-    "test:media-access": "node scripts/media-access-smoke.js",
-    "test:auth-account": "node scripts/auth-account-smoke.js"
+    "test:blog-access": "node scripts/ensure-test-db.js && node scripts/blog-access-smoke.js",
+    "test:study-access": "node scripts/ensure-test-db.js && node scripts/study-access-smoke.js",
+    "test:media-access": "node scripts/ensure-test-db.js && node scripts/media-access-smoke.js",
+    "test:auth-account": "node scripts/ensure-test-db.js && node scripts/auth-account-smoke.js"
   },
   "keywords": [],
   "author": "",
@@ -23,7 +23,7 @@
     "dotenv": "^16.4.7",
     "express": "^5.2.1",
     "fluent-ffmpeg": "^2.1.3",
-    "image-size": "^2.0.2",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "mime-types": "^3.0.2",
     "multer": "^2.0.2",

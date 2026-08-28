@@ -15,12 +15,13 @@ for (const key of required) assert(process.env[key], `缺少 ${key}，无法运�
 
 const suffix = `study-access-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 const port = 34000 + Math.floor(Math.random() * 1000);
+const testDatabase = process.env.TEST_DB_NAME || 'own_web_test';
 const db = mysql.createConnection({
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT || 3306),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
+  database: testDatabase
 });
 const query = db.promise().query.bind(db.promise());
 let server;
@@ -33,6 +34,7 @@ function auth(user) {
 }
 
 async function request(pathname, options = {}) {
+  options.headers = { Origin: 'http://localhost:5173', ...(options.headers || {}) };
   const response = await fetch(`http://127.0.0.1:${port}${pathname}`, options);
   const text = await response.text();
   let body;
@@ -98,7 +100,7 @@ async function cleanUp() {
 async function run() {
   server = spawn(process.execPath, ['server.js'], {
     cwd: apiRoot,
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, DB_NAME:testDatabase, PORT: String(port), CORS_ORIGIN:'http://localhost:5173' },
     stdio: ['ignore', 'ignore', 'ignore'],
     windowsHide: true
   });

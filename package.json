@@ -11,7 +11,14 @@
     "api:dev": "npm --prefix api run dev",
     "api:start": "npm --prefix api run start",
     "api:check": "npm --prefix api run check",
-    "test:lrc": "tsx scripts/lrc-smoke.ts"
+    "test:lrc": "tsx scripts/lrc-smoke.ts",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:api": "tsx tests/api/run-api-tests.ts",
+    "test:e2e": "playwright test",
+    "test:security": "tsx tests/security/security-regression.ts",
+    "test:performance": "node tests/performance/lighthouse.cjs",
+    "test:visual": "playwright test --config=playwright.visual.config.ts tests/e2e/visual.spec.ts",
+    "test:all": "npm run typecheck && npm run build && npm run api:check && npm run test:lrc && npm run test:unit && npm run test:api && npm run test:e2e && npm run test:security && npm run test:visual && npm run test:performance && npm --prefix api run test:auth-account && npm --prefix api run test:study-access && npm --prefix api run test:media-access && npm --prefix api run test:blog-access"
   },
   "workspaces": [
     "api"
@@ -30,6 +37,8 @@
     "@tiptap/vue-3": "^3.30.5",
     "axios": "^1.13.2",
     "dompurify": "^3.2.6",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.22",
     "marked": "^17.0.1",
     "vue": "^3.5.24",
     "vue-router": "^4.6.4"
@@ -38,9 +47,14 @@
     "@types/node": "^24.10.1",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.8.1",
+    "@playwright/test": "^1.55.0",
+    "@axe-core/playwright": "^4.10.2",
+    "lighthouse": "^12.8.2",
     "nodemon": "^3.1.11",
+    "supertest": "^7.1.4",
     "tsx": "^4.23.12",
     "typescript": "~5.9.3",
+    "vitest": "^3.2.4",
     "vite": "^7.2.4",
     "vue-tsc": "^3.1.4"
   }

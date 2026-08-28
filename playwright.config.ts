@@ -1,0 +1,25 @@
+import { defineConfig, devices } from '@playwright/test'
+
+export default defineConfig({
+  testDir: './tests/e2e',
+  timeout: 30_000,
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  reporter: [['list'], ['html', { outputFolder: 'audit-artifacts/playwright-report', open: 'never' }]],
+  use: {
+    baseURL: 'http://127.0.0.1:5173',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure'
+  },
+  projects: [
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], colorScheme: 'light' } },
+    { name: 'desktop-dark', use: { ...devices['Desktop Chrome'], colorScheme: 'dark' } },
+    { name: 'mobile', use: { ...devices['iPhone 13'], colorScheme: 'light' } },
+    { name: 'mobile-dark', use: { ...devices['iPhone 13'], colorScheme: 'dark' } }
+  ],
+  webServer: [
+    { command: 'node tests/support/start-test-server.cjs', url: 'http://127.0.0.1:3301/api/health', reuseExistingServer: true, timeout: 120_000 },
+    { command: 'node tests/support/start-vite.cjs', url: 'http://127.0.0.1:5173', reuseExistingServer: true, timeout: 120_000 }
+  ],
+  globalTeardown: './tests/support/cleanup-test-db.cjs'
+})
