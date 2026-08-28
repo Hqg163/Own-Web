@@ -55,7 +55,7 @@
     </div>
 
     <!-- 学习区弹窗组件 -->
-    
+
     <!-- 上传/下载选择 -->
     <div v-if="showUploadDialog" class="modal-overlay" @click.self="showUploadDialog = false">
       <div class="modal-content">
@@ -125,7 +125,7 @@
               </button>
               <div v-show="expandedDownloadCats.includes(cat.id)" class="tree-files">
                 <button
-                  v-for="file in studyFilesByCategory[cat.id] || []" 
+                  v-for="file in studyFilesByCategory[cat.id] || []"
                   :key="file.id"
                   class="tree-file-row"
                   :class="{ selected: selectedDownloadFiles.includes(file.id) }"
@@ -157,9 +157,9 @@
         <h3>添加新分类</h3>
         <div class="modal-form-group">
           <label>分类名称</label>
-          <input 
-            type="text" 
-            v-model="newStudyCategoryName" 
+          <input
+            type="text"
+            v-model="newStudyCategoryName"
             placeholder="输入分类名称"
             @keyup.enter="confirmAddCategory"
           />
@@ -199,7 +199,7 @@
           <button class="btn-primary" type="button" @click="showPublishMarkdownDialog = true">发布</button>
         </div>
       </div>
-      
+
       <div class="md-toolbar">
         <button type="button" aria-label="粗体" @click="insertMdSyntax('**', '**')"><b>B</b></button>
         <button type="button" aria-label="斜体" @click="insertMdSyntax('*', '*')"><i>I</i></button>
@@ -211,17 +211,17 @@
         <button type="button" aria-label="链接" @click="insertMdSyntax('[', '](url)')">链接</button>
         <button type="button" aria-label="插入图片（需填写 alt 文本）" @click="insertMdSyntax('![alt](', ')')">图片</button>
       </div>
-      
+
       <div class="md-editor-body">
-        <textarea 
+        <textarea
           ref="mdTextarea"
-          v-model="markdownContent" 
+          v-model="markdownContent"
           placeholder="开始编写 Markdown..."
           class="md-input"
         ></textarea>
         <div class="md-preview" v-html="renderedMarkdown"></div>
       </div>
-      
+
       <!-- 发布Markdown弹窗 -->
       <div v-if="showPublishMarkdownDialog" class="modal-overlay publish-overlay" @click.self="showPublishMarkdownDialog = false">
         <div class="modal-content">
@@ -261,50 +261,50 @@
           <button type="button" :disabled="!hasNextStudyFile" @click="nextStudyFile">下一个<AppIcon name="arrow-right" :size="15" /></button>
         </div>
       </div>
-      
+
       <div class="viewer-content-area">
         <!-- 图片预览 -->
-        <img 
-          v-if="isImageType(viewingStudyFile.file_type)" 
-          :src="studyFileContent.url" 
+        <img
+          v-if="isImageType(viewingStudyFile.file_type)"
+          :src="studyFileContent.url"
           class="preview-img"
           @error="handleImageError"
         />
-        
+
         <!-- 视频预览 -->
-        <video 
-          v-else-if="isVideoType(viewingStudyFile.file_type)" 
-          controls 
+        <video
+          v-else-if="isVideoType(viewingStudyFile.file_type)"
+          controls
           class="preview-video"
           :type="getVideoMimeType(viewingStudyFile.file_type)"
         >
           <source :src="studyFileContent.url" />
           您的浏览器不支持视频播放
         </video>
-        
+
         <!-- 音频预览 -->
-        <audio 
-          v-else-if="isAudioType(viewingStudyFile.file_type)" 
-          controls 
+        <audio
+          v-else-if="isAudioType(viewingStudyFile.file_type)"
+          controls
           class="preview-audio"
         >
           <source :src="studyFileContent.url" :type="getAudioMimeType(viewingStudyFile.file_type)" />
           您的浏览器不支持音频播放
         </audio>
-        
+
         <!-- PDF预览（修复） -->
         <!-- 修改 PDF 预览部分 -->
         <div v-else-if="isPdfType(viewingStudyFile.file_type)" class="preview-pdf-container">
           <!-- 使用 embed 替代 iframe，兼容性更好 -->
-          <embed 
-            :src="studyFileContent.url" 
+          <embed
+            :src="studyFileContent.url"
             type="application/pdf"
-            width="100%" 
+            width="100%"
             height="100%"
             style="border: none;"
           />
         </div>
-        
+
         <!-- Office文档提示（新增） -->
         <div v-else-if="isOfficeType(viewingStudyFile.file_type)" class="preview-unsupported office-preview">
           <AppIcon class="big-file-icon" name="file" :size="44" />
@@ -313,13 +313,13 @@
           <p class="sub-hint">建议下载后使用相应软件打开</p>
           <button class="btn-primary" type="button" @click="downloadCurrentStudyFile"><AppIcon name="download" :size="17" />下载到本地</button>
         </div>
-        
+
         <!-- 文本/Markdown预览 -->
         <div v-else-if="studyFileContent.type === 'text' || studyFileContent.type === 'markdown'" class="preview-text-content">
           <pre v-if="studyFileContent.type === 'text'">{{ studyFileContent.content }}</pre>
           <div v-else v-html="renderedFileMarkdown" class="markdown-body"></div>
         </div>
-        
+
         <!-- 其他不支持的格式 -->
         <div v-else class="preview-unsupported">
           <AppIcon class="big-file-icon" name="file" :size="44" />
@@ -341,7 +341,7 @@
           确认发送
         </button>
       </div>
-      
+
       <div class="email-compose-form">
         <div class="compose-row">
           <label>收件人：</label>
@@ -378,7 +378,7 @@
                   <div class="selector-cat-name">{{ cat.name }}</div>
                   <div class="selector-file-list">
                     <button
-                      v-for="file in studyFilesByCategory[cat.id] || []" 
+                      v-for="file in studyFilesByCategory[cat.id] || []"
                       :key="file.id"
                       class="selector-file-row"
                       @click="selectInternalFileForEmail(file)"
@@ -406,8 +406,8 @@
         </button>
         <h3>收件箱</h3>
         <div class="inbox-filter-tabs">
-          <button 
-            v-for="filter in ['all', 'unread', 'read']" 
+          <button
+            v-for="filter in ['all', 'unread', 'read']"
             :key="filter"
             :class="['filter-tab', { active: emailFilter === filter }]"
             type="button"
@@ -418,11 +418,11 @@
           </button>
         </div>
       </div>
-      
+
       <div class="inbox-content">
         <div v-if="!viewingEmail" class="email-list-view">
           <button
-            v-for="email in filteredEmails" 
+            v-for="email in filteredEmails"
             :key="email.id"
             type="button"
             class="email-row"
@@ -443,7 +443,7 @@
             <p>暂无邮件</p>
           </div>
         </div>
-        
+
         <div v-else class="email-detail-view">
           <!-- 返回按钮 -->
           <div class="email-detail-nav">
@@ -454,7 +454,7 @@
             <button type="button" :disabled="!hasPrevEmail" @click="prevEmail"><AppIcon name="arrow-left" :size="15" />上一封</button>
             <button type="button" :disabled="!hasNextEmail" @click="nextEmail">下一封<AppIcon name="arrow-right" :size="15" /></button>
           </div>
-          
+
           <div class="email-detail-content">
             <h2>{{ viewingEmail.subject }}</h2>
             <div class="email-meta-info">
@@ -462,16 +462,16 @@
               <div><strong>收件人：</strong>{{ viewingEmail.recipient_email }}</div>
               <div><strong>时间：</strong>{{ formatEmailTime(viewingEmail.created_at) }}</div>
             </div>
-            
+
             <!-- 邮件正文 -->
             <div class="email-body-text">{{ viewingEmail.content }}</div>
-            
+
             <!-- 附件部分 - 使用更稳定的条件判断 -->
             <div v-if="emailHasAttachments" class="email-attachments-section">
               <h4>附件（{{ attachmentCount }}个）：</h4>
-              <div 
-                v-for="(att, idx) in viewingEmail.attachments" 
-                :key="idx" 
+              <div
+                v-for="(att, idx) in viewingEmail.attachments"
+                :key="idx"
                 class="email-att-item"
               >
                 <div class="att-info">
@@ -498,24 +498,24 @@
         </button>
         <h3>发送通知记录</h3>
         <button
-          v-if="notifications.length > 0" 
-          class="btn-secondary" 
+          v-if="notifications.length > 0"
+          class="btn-secondary"
           type="button"
           @click="clearAllNotifications"
         >
           清空全部
         </button>
       </div>
-      
+
       <div class="notification-content">
         <div v-if="notifications.length === 0" class="empty-notifications">
           <AppIcon class="empty-icon" name="inbox" :size="32" />
           <p>暂无发送记录</p>
         </div>
-        
+
         <div v-else class="notification-list">
-          <div 
-            v-for="notif in notifications" 
+          <div
+            v-for="notif in notifications"
             :key="notif.id"
             :class="['notification-item', notif.type, { unread: !notif.read }]"
             @click="markNotificationRead(notif.id)"
@@ -524,7 +524,7 @@
               <AppIcon v-if="notif.type === 'success'" name="check" :size="16" />
               <AppIcon v-else name="close" :size="16" />
             </div>
-            
+
             <div class="notification-body">
               <div class="notification-title">{{ notif.title }}</div>
               <div class="notification-detail">
@@ -536,7 +536,7 @@
               <div class="notification-message">{{ notif.message }}</div>
               <div class="notification-time">{{ formatEmailTime(notif.time) }}</div>
             </div>
-            
+
             <button class="notification-delete" type="button" aria-label="删除通知记录" @click.stop="removeNotification(notif.id)"><AppIcon name="close" :size="15" /></button>
           </div>
         </div>
@@ -562,7 +562,7 @@ export default {
   data() {
     return {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
-      
+
       // 学习区数据
       studyCategories: [{ id: 'all', name: '所有' }],
       currentStudyCategory: 'all',
@@ -571,7 +571,7 @@ export default {
       studySearchQuery: '',
       isSearching: false,
       viewMode: 'grid',
-      
+
       // 上传/下载
       showUploadDialog: false,
       showUploadForm: false,
@@ -585,17 +585,17 @@ export default {
       allDownloadExpanded: true,
       expandedDownloadCats: [],
       selectedDownloadFiles: [],
-      
+
       // 批量删除
       isBatchDeleteMode: false,
       selectedStudyFiles: [],
       showDeleteConfirmDialog: false,
       deletingFiles: false,
-      
+
       // 添加分类
       showAddCategoryDialog: false,
       newStudyCategoryName: '',
-      
+
       // Markdown编辑器
       showMarkdownEditor: false,
       markdownContent: '',
@@ -604,12 +604,12 @@ export default {
         title: '',
         categoryId: ''
       },
-      
+
       // 文件预览
       viewingStudyFile: null,
       studyFileContent: null,
       currentStudyFileIndex: 0,
-      
+
       // 邮件
       showSendEmail: false,
       showInbox: false,
@@ -624,18 +624,18 @@ export default {
       },
       showAttOptions: false,
       showInternalSelector: false,
-      
+
       // 提示
       studyToast: {
         show: false,
         message: '',
         type: 'success'
       },
-      
+
       // 通知系统
       showNotificationPanel: false,
       notifications: [],
-      
+
       // 邮件发送状态追踪
       emailSendingStatus: null,
 
@@ -647,18 +647,18 @@ export default {
     // 学习区计算属性
     currentStudyFiles() {
       let files = []
-      
+
       if (this.currentStudyCategory === 'all') {
         files = this.studyFiles
       } else {
         files = this.studyFilesByCategory[this.currentStudyCategory] || []
       }
-      
+
       const query = this.studySearchQuery.trim().toLowerCase()
       if (!query) {
         return files
       }
-      
+
       return files.filter(file => {
         const displayName = this.getDisplayFileName(file).toLowerCase()
         return displayName.includes(query)
@@ -772,7 +772,7 @@ export default {
         this.showNotificationPanel = false
       }
     },
-    
+
     // ==================== 学习区方法 ====================
     async loadStudyCategories() {
       try {
@@ -813,15 +813,15 @@ export default {
     },
     handleStudySearch() {
       const query = this.studySearchQuery.trim()
-      
+
       if (!query) {
         this.loadStudyFiles()
         this.isSearching = false
         return
       }
-      
+
       this.isSearching = true
-      
+
       const results = this.currentStudyFiles
       if (results.length === 0) {
         this.showStudyToast('没有找到匹配的文件', 'warning')
@@ -929,7 +929,7 @@ export default {
       const date = new Date(dateStr)
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
     },
-    
+
     // 批量删除
     startBatchDelete() {
       this.isBatchDeleteMode = true
@@ -968,7 +968,7 @@ export default {
         this.deletingFiles = false
       }
     },
-    
+
     // 添加分类
     async confirmAddCategory() {
       if (!this.newStudyCategoryName.trim()) return
@@ -986,7 +986,7 @@ export default {
         this.showStudyToast(err.response?.data?.error || '添加失败', 'error')
       }
     },
-    
+
     // 上传下载
     switchToUploadMode() {
       this.showUploadDialog = false
@@ -1007,19 +1007,19 @@ export default {
     },
     async confirmUpload() {
       if (!this.uploadFormData.selectedFile) return
-  
+
       this.uploadingFile = true
       const formData = new FormData()
       formData.append('file', this.uploadFormData.selectedFile)
       formData.append('userId', this.userId)
       formData.append('categoryId', this.uploadFormData.categoryId)
-      
+
       if (this.uploadFormData.customName) {
         formData.append('customName', this.uploadFormData.customName)
       }
       try {
         await axios.post('/api/upload', formData, {
-          headers: { 
+          headers: {
             'Content-Type': 'multipart/form-data',
             'x-user-id': this.userId
           }
@@ -1078,7 +1078,7 @@ export default {
       }
       return file.original_name
     },
-    
+
     // Markdown编辑器
     openMarkdownEditor() {
       this.showMarkdownEditor = true
@@ -1123,7 +1123,7 @@ export default {
         this.showStudyToast(err.response?.data?.error || '发布失败', 'error')
       }
     },
-    
+
     // 文件预览
     isImageType(ext) {
       return ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].includes(ext.toLowerCase())
@@ -1143,8 +1143,8 @@ export default {
     async openStudyFile(file) {
       this.viewingStudyFile = file;
       this.currentStudyFileIndex = this.currentStudyFiles.findIndex(f => f.id === file.id);
-      
-      if (this.isImageType(file.file_type) || this.isVideoType(file.file_type) || 
+
+      if (this.isImageType(file.file_type) || this.isVideoType(file.file_type) ||
           this.isAudioType(file.file_type) || this.isPdfType(file.file_type)) {
         this.studyFileContent = {
           type: 'binary',
@@ -1153,7 +1153,7 @@ export default {
         };
         return;
       }
-      
+
       try {
         const res = await axios.get(`/api/file-content/${file.id}`);
         this.studyFileContent = res.data;
@@ -1183,7 +1183,7 @@ export default {
         window.open(`/api/download/${this.viewingStudyFile.id}?userId=${this.userId}`, '_blank')
       }
     },
-    
+
     // 邮件系统
     closeSendEmail() {
       this.showSendEmail = false
@@ -1227,12 +1227,12 @@ export default {
         this.showStudyToast('请填写收件人和主题', 'error');
         return;
       }
-      
+
       this.emailSendingStatus = 'sending';
-      
+
       try {
         const processedAttachments = [];
-        
+
         for (const att of this.emailForm.attachments) {
           if (att.type === 'local' && att.file instanceof File) {
             try {
@@ -1256,10 +1256,10 @@ export default {
             });
           }
         }
-        
+
         const userRes = await axios.get(`/api/user/${this.userId}`);
         const user = userRes.data.user;
-        
+
         await axios.post('/api/emails', {
           senderId: this.userId,
           senderEmail: this.userEmail,
@@ -1269,11 +1269,11 @@ export default {
           content: this.emailForm.content,
           attachments: processedAttachments
         });
-        
+
         this.emailSendingStatus = 'success';
         this.showStudyToast('邮件发送成功', 'success');
         this.closeSendEmail();
-        
+
       } catch (err) {
         console.error('发送邮件失败:', err);
         const errorMsg = err.response?.data?.error || '网络错误，请重试';
@@ -1288,7 +1288,7 @@ export default {
         formData.append('userId', this.userId);
         formData.append('categoryId', this.getDefaultCategoryId());
         formData.append('customName', file.name);
-        
+
         axios.post('/api/upload', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         })
@@ -1303,7 +1303,7 @@ export default {
     getDefaultCategoryId() {
       const defaultCat = this.studyCategories.find(c => c.name === '其它');
       if (defaultCat) return defaultCat.id;
-      
+
       const firstCat = this.studyCategories.find(c => c.id !== 'all');
       return firstCat ? firstCat.id : null;
     },
@@ -1347,13 +1347,13 @@ export default {
     },
     async viewEmail(email) {
       console.log('查看邮件:', email.id);
-      
+
       this.viewingEmail = {
         ...email,
         attachments: Array.isArray(email.attachments) ? email.attachments : [],
         has_attachments: email.has_attachments || false
       };
-      
+
       if (!email.is_read) {
         try {
           await axios.put(`/api/emails/${email.id}/read`);
@@ -1366,16 +1366,16 @@ export default {
           console.error('标记已读失败', err);
         }
       }
-      
+
       try {
         const res = await axios.get(`/api/email/${email.id}/detail`, {
           params: { userEmail: this.userEmail }
         });
-        
+
         console.log('邮件详情API返回:', res.data);
-        
+
         const emailData = res.data.email;
-        
+
         let attachments = emailData.attachments;
         if (typeof attachments === 'string') {
           try {
@@ -1387,18 +1387,18 @@ export default {
         if (!Array.isArray(attachments)) {
           attachments = [];
         }
-        
+
         this.viewingEmail = {
           ...this.viewingEmail,
           ...emailData,
           attachments: attachments,
           has_attachments: attachments.length > 0
         };
-        
+
         console.log('最终邮件数据:', this.viewingEmail);
         console.log('附件列表:', this.viewingEmail.attachments);
         console.log('是否有附件:', this.emailHasAttachments);
-        
+
       } catch (err) {
         console.error('获取邮件详情失败:', err);
         if (!Array.isArray(this.viewingEmail.attachments)) {
@@ -1424,37 +1424,37 @@ export default {
     },
     async downloadEmailAttachment(att, index = 0) {
       console.log('下载附件:', att);
-      
+
       if (!this.viewingEmail) {
         console.error('viewingEmail 为空');
         this.showStudyToast('邮件信息缺失', 'error');
         return;
       }
-      
+
       const attachmentIndex = this.viewingEmail.attachments.findIndex(
         a => a.name === att.name && a.type === att.type
       );
-      
+
       if (attachmentIndex === -1) {
         console.error('找不到附件索引');
         this.showStudyToast('附件信息错误', 'error');
         return;
       }
-      
+
       try {
         if (att.fileId) {
           const downloadUrl = `/api/email-attachment/${this.viewingEmail.id}/${attachmentIndex}?userEmail=${encodeURIComponent(this.userEmail)}`;
           console.log('下载站内文件, URL:', downloadUrl);
-          
+
           const link = document.createElement('a');
           link.href = downloadUrl;
           link.target = '_blank';
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          
+
           this.showStudyToast('开始下载附件', 'success');
-          
+
         } else if (att.type === 'local' && att.file instanceof File) {
           const url = URL.createObjectURL(att.file);
           const a = document.createElement('a');
@@ -1464,7 +1464,7 @@ export default {
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-          
+
         } else if (att.downloadUrl) {
           console.log('使用直接下载链接:', att.downloadUrl);
           const link = document.createElement('a');
@@ -1473,9 +1473,9 @@ export default {
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          
+
           this.showStudyToast('开始下载附件', 'success');
-          
+
         } else {
           console.error('无法识别的附件类型或缺少下载信息:', att);
           this.showStudyToast('无法下载此附件：不支持的类型', 'error');
@@ -1500,127 +1500,11 @@ export default {
 .study-zone-container {
   min-height: 100vh;
   transition: background-color 0.3s, color 0.3s;
-  background-color: #f5f7fa;
+  background-color: var(--bg);
   padding: 20px;
 }
 
-.dark-mode {
-  background-color: #1a202c;
-  color: #e2e8f0;
-  
-  --sidebar-bg: #1f2937;
-  --sidebar-border: #374151;
-  --profile-border: #374151;
-  --avatar-border: #60a5fa;
-  --option-hover: #374151;
-  --option-active-bg: #1e40af;
-  --option-active-border: #3b82f6;
-  --option-active-text: #ffffff;
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --text-disabled: #6b7280;
-  --text-muted: #9ca3af;
-  
-  --content-bg: #1f2937;
-  --content-border: #374151;
-  --title-border: #60a5fa;
-  
-  --input-bg: #111827;
-  --input-border: #4b5563;
-  --input-disabled-bg: #374151;
-  --input-editable-bg: #111827;
-  --input-editable-border: #60a5fa;
-  --input-focus-border: #3b82f6;
-  --input-focus-shadow: rgba(59, 130, 246, 0.2);
-  
-  --btn-primary-bg: #2563eb;
-  --btn-primary-text: #ffffff;
-  --btn-primary-hover: #1d4ed8;
-  
-  --btn-secondary-bg: #374151;
-  --btn-secondary-text: #d1d5db;
-  --btn-secondary-border: #4b5563;
-  --btn-secondary-hover: #4b5563;
-  
-  --btn-cancel-bg: #374151;
-  --btn-cancel-text: #9ca3af;
-  --btn-cancel-enabled-bg: #7f1d1d;
-  --btn-cancel-enabled-text: #fecaca;
-  --btn-cancel-enabled-hover: #991b1b;
-  
-  --actions-border: #374151;
-  
-  --status-success-bg: #064e3b;
-  --status-success-text: #a7f3d0;
-  --status-success-border: #047857;
-  
-  --status-error-bg: #7f1d1d;
-  --status-error-text: #fecaca;
-  --status-error-border: #991b1b;
-  
-  --datepicker-bg: #1f2937;
-  --datepicker-border: #374151;
-  --datepicker-header-bg: #111827;
-  --datepicker-wheel-bg: #1f2937;
-  --datepicker-wheel-active: #3b82f6;
-  --datepicker-wheel-text: #d1d5db;
-  --datepicker-highlight: rgba(59, 130, 246, 0.15);
-}
-
-.light-mode {
-  background-color: #f5f7fa;
-  color: #1f2937;
-  
-  --sidebar-bg: #ffffff;
-  --sidebar-border: #e5e7eb;
-  --profile-border: #f3f4f6;
-  --avatar-border: #3b82f6;
-  --option-hover: #f8fafc;
-  --option-active-bg: #eff6ff;
-  --option-active-border: #3b82f6;
-  --option-active-text: #1d4ed8;
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
-  --text-disabled: #9ca3af;
-  --text-muted: #9ca3af;
-  
-  --content-bg: #ffffff;
-  --content-border: #e5e7eb;
-  --title-border: #3b82f6;
-  
-  --input-bg: #ffffff;
-  --input-border: #d1d5db;
-  --input-disabled-bg: #f9fafb;
-  --input-editable-bg: #ffffff;
-  --input-editable-border: #3b82f6;
-  --input-focus-border: #2563eb;
-  --input-focus-shadow: rgba(59, 130, 246, 0.1);
-  
-  --btn-primary-bg: #3b82f6;
-  --btn-primary-text: #ffffff;
-  --btn-primary-hover: #2563eb;
-  
-  --btn-secondary-bg: #f3f4f6;
-  --btn-secondary-text: #4b5563;
-  --btn-secondary-border: #d1d5db;
-  --btn-secondary-hover: #e5e7eb;
-  
-  --btn-cancel-bg: #f3f4f6;
-  --btn-cancel-text: #6b7280;
-  --btn-cancel-enabled-bg: #fef2f2;
-  --btn-cancel-enabled-text: #dc2626;
-  --btn-cancel-enabled-hover: #fee2e2;
-  
-  --actions-border: #e5e7eb;
-  
-  --datepicker-bg: #ffffff;
-  --datepicker-border: #e5e7eb;
-  --datepicker-header-bg: #f8fafc;
-  --datepicker-wheel-bg: #ffffff;
-  --datepicker-wheel-active: #3b82f6;
-  --datepicker-wheel-text: #4b5563;
-  --datepicker-highlight: rgba(59, 130, 246, 0.15);
-}
+.dark-mode, .light-mode { background: var(--bg); color: var(--text); }
 
 .study-layout {
   display: flex;
@@ -1643,7 +1527,7 @@ export default {
   flex-wrap: wrap;
   gap: 15px;
   padding-bottom: 15px;
-  border-bottom: 1px solid var(--content-border);
+  border-bottom: 1px solid var(--border);
 }
 
 .category-tabs-wrapper {
@@ -1655,9 +1539,9 @@ export default {
 
 .study-category-btn {
   padding: 8px 16px;
-  border: 1px solid var(--content-border);
-  background: var(--content-bg);
-  color: var(--text-primary);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   border-radius: 20px;
   cursor: pointer;
   transition: all 0.3s;
@@ -1666,7 +1550,7 @@ export default {
 }
 
 .study-category-btn:hover {
-  background: var(--option-hover);
+  background: var(--surface-raised);
   transform: translateY(-2px);
 }
 
@@ -1686,8 +1570,8 @@ export default {
 .study-search-box {
   display: flex;
   align-items: center;
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   border-radius: 25px;
   padding: 5px 15px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -1697,7 +1581,7 @@ export default {
 .study-search-box input {
   border: none;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--text);
   outline: none;
   width: 150px;
   padding: 5px;
@@ -1725,7 +1609,7 @@ export default {
 .clear-search-btn {
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: var(--muted);
   cursor: pointer;
   font-size: 12px;
   margin-left: 5px;
@@ -1756,9 +1640,9 @@ export default {
   cursor: pointer;
   font-size: 14px;
   transition: all 0.3s;
-  background: var(--content-bg);
-  color: var(--text-primary);
-  border: 1px solid var(--content-border);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
   position: relative;
   white-space: nowrap;
 }
@@ -1802,7 +1686,7 @@ export default {
   padding: 15px;
   background: rgba(128, 128, 128, 0.05);
   border-radius: 10px;
-  border: 1px solid var(--content-border);
+  border: 1px solid var(--border);
   flex-wrap: wrap;
   gap: 10px;
 }
@@ -1815,9 +1699,9 @@ export default {
 
 .study-tool-btn {
   padding: 8px 16px;
-  border: 1px solid var(--content-border);
-  background: var(--content-bg);
-  color: var(--text-primary);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.3s;
@@ -1826,7 +1710,7 @@ export default {
 }
 
 .study-tool-btn:hover:not(:disabled) {
-  background: var(--option-hover);
+  background: var(--surface-raised);
   transform: translateY(-1px);
 }
 
@@ -1905,13 +1789,13 @@ export default {
   padding: 20px;
   background: rgba(128, 128, 128, 0.03);
   border-radius: 12px;
-  border: 1px solid var(--content-border);
+  border: 1px solid var(--border);
 }
 
 .study-cat-title {
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
   margin-bottom: 15px;
   padding-left: 10px;
   border-left: 4px solid #3b82f6;
@@ -1929,7 +1813,7 @@ export default {
   align-items: center;
   padding: 15px 10px;
   border-radius: 12px;
-  background: var(--content-bg);
+  background: var(--surface);
   border: 2px solid transparent;
   cursor: pointer;
   transition: all 0.3s;
@@ -1943,7 +1827,7 @@ export default {
 }
 
 .study-file-card.selectable {
-  border: 2px dashed var(--content-border);
+  border: 2px dashed var(--border);
 }
 
 .study-file-card.selected {
@@ -1959,7 +1843,7 @@ export default {
   height: 20px;
   border-radius: 50%;
   border: 2px solid #9ca3af;
-  background: var(--content-bg);
+  background: var(--surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1985,7 +1869,7 @@ export default {
 
 .study-file-name {
   font-size: 12px;
-  color: var(--text-primary);
+  color: var(--text);
   text-align: center;
   width: 100%;
   overflow: hidden;
@@ -2007,7 +1891,7 @@ export default {
 
 .study-file-meta {
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--muted);
   margin-top: 4px;
 }
 
@@ -2016,10 +1900,10 @@ export default {
   flex-direction: column;
   align-items: center;
   padding: 40px;
-  color: var(--text-secondary);
+  color: var(--muted);
   background: rgba(128, 128, 128, 0.05);
   border-radius: 10px;
-  border: 2px dashed var(--content-border);
+  border: 2px dashed var(--border);
 }
 
 .study-empty-block.main-empty {
@@ -2061,12 +1945,11 @@ export default {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(4px);
 }
 
 .modal-content {
-  background: var(--content-bg);
-  border: 1px solid var(--content-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 25px;
   max-width: 500px;
@@ -2079,7 +1962,7 @@ export default {
 .modal-content h3 {
   margin-top: 0;
   margin-bottom: 20px;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .modal-form-group {
@@ -2089,7 +1972,7 @@ export default {
 .modal-form-group label {
   display: block;
   margin-bottom: 8px;
-  color: var(--text-primary);
+  color: var(--text);
   font-weight: 500;
   font-size: 14px;
 }
@@ -2098,10 +1981,10 @@ export default {
 .modal-form-group select {
   width: 100%;
   padding: 10px 15px;
-  border: 1px solid var(--input-border);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--input-bg);
-  color: var(--text-primary);
+  background: var(--surface-raised);
+  color: var(--text);
   font-size: 15px;
   transition: all 0.3s;
 }
@@ -2121,7 +2004,7 @@ export default {
 .selected-file-info {
   margin-top: 8px;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .modal-actions {
@@ -2152,13 +2035,13 @@ export default {
 }
 
 .btn-secondary {
-  background: var(--btn-secondary-bg);
-  color: var(--text-primary);
-  border: 1px solid var(--btn-secondary-border);
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .btn-secondary:hover {
-  background: var(--btn-secondary-hover);
+  background: var(--accent-soft);
 }
 
 .btn-danger {
@@ -2179,16 +2062,16 @@ button:disabled {
   width: 100%;
   margin-top: 15px;
   padding: 10px;
-  background: var(--btn-secondary-bg);
-  border: 1px solid var(--btn-secondary-border);
-  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .modal-close-btn:hover {
-  background: var(--btn-secondary-hover);
+  background: var(--accent-soft);
 }
 
 /* 上传/下载选择弹窗 */
@@ -2201,9 +2084,9 @@ button:disabled {
 
 .choice-card {
   padding: 30px 20px;
-  border: 2px solid var(--content-border);
+  border: 2px solid var(--border);
   border-radius: 12px;
-  background: var(--content-bg);
+  background: var(--surface);
   cursor: pointer;
   transition: all 0.3s;
   display: flex;
@@ -2226,7 +2109,7 @@ button:disabled {
 .download-tree-view {
   max-height: 400px;
   overflow-y: auto;
-  border: 1px solid var(--content-border);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 15px;
   margin-bottom: 20px;
@@ -2247,18 +2130,18 @@ button:disabled {
 .tree-root:hover,
 .tree-category-header:hover,
 .tree-file-row:hover {
-  background: var(--option-hover);
+  background: var(--surface-raised);
 }
 
 .tree-children {
   margin-left: 25px;
-  border-left: 1px solid var(--content-border);
+  border-left: 1px solid var(--border);
   padding-left: 10px;
 }
 
 .tree-toggle-icon {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--muted);
   width: 16px;
   text-align: center;
 }
@@ -2274,11 +2157,11 @@ button:disabled {
 .tree-file-name {
   flex: 1;
   font-size: 14px;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .tree-file-row.selected {
-  background: var(--option-active-bg);
+  background: var(--accent-soft);
   border-radius: 6px;
 }
 
@@ -2288,7 +2171,7 @@ button:disabled {
 }
 
 .tree-empty {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 13px;
   padding: 5px 10px;
   font-style: italic;
@@ -2301,7 +2184,7 @@ button:disabled {
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--content-bg);
+  background: var(--surface);
   z-index: 2000;
   display: flex;
   flex-direction: column;
@@ -2312,8 +2195,8 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   padding: 15px 25px;
-  border-bottom: 1px solid var(--content-border);
-  background: var(--content-bg);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .back-btn {
@@ -2321,16 +2204,16 @@ button:disabled {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  border: 1px solid var(--content-border);
-  background: var(--btn-secondary-bg);
-  color: var(--text-primary);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .back-btn:hover {
-  background: var(--btn-secondary-hover);
+  background: var(--accent-soft);
 }
 
 .back-btn span {
@@ -2339,7 +2222,7 @@ button:disabled {
 
 .fullscreen-header h3 {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .header-actions {
@@ -2362,16 +2245,16 @@ button:disabled {
   display: flex;
   gap: 10px;
   padding: 10px 25px;
-  border-bottom: 1px solid var(--content-border);
+  border-bottom: 1px solid var(--border);
   background: rgba(128, 128, 128, 0.05);
   overflow-x: auto;
 }
 
 .md-toolbar button {
   padding: 6px 12px;
-  border: 1px solid var(--content-border);
-  background: var(--content-bg);
-  color: var(--text-primary);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   border-radius: 6px;
   cursor: pointer;
   font-weight: bold;
@@ -2380,7 +2263,7 @@ button:disabled {
 }
 
 .md-toolbar button:hover {
-  background: var(--option-active-bg);
+  background: var(--accent-soft);
   border-color: #3b82f6;
   color: #3b82f6;
 }
@@ -2397,13 +2280,13 @@ button:disabled {
 .md-preview {
   padding: 20px;
   overflow-y: auto;
-  background: var(--content-bg);
-  color: var(--text-primary);
+  background: var(--surface);
+  color: var(--text);
 }
 
 .md-input {
   border: none;
-  border-right: 1px solid var(--content-border);
+  border-right: 1px solid var(--border);
   resize: none;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 14px;
@@ -2412,31 +2295,31 @@ button:disabled {
 }
 
 .md-preview {
-  background: var(--content-bg);
+  background: var(--surface);
 }
 
-.md-preview :deep(h1) { border-bottom: 2px solid var(--content-border); padding-bottom: 10px; margin-top: 0; }
-.md-preview :deep(h2) { border-bottom: 1px solid var(--content-border); padding-bottom: 8px; }
-.md-preview :deep(code) { 
-  background: rgba(128, 128, 128, 0.1); 
-  padding: 2px 6px; 
-  border-radius: 4px; 
+.md-preview :deep(h1) { border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-top: 0; }
+.md-preview :deep(h2) { border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.md-preview :deep(code) {
+  background: rgba(128, 128, 128, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
   font-family: monospace;
 }
-.md-preview :deep(pre) { 
-  background: rgba(128, 128, 128, 0.1); 
-  padding: 15px; 
-  border-radius: 8px; 
+.md-preview :deep(pre) {
+  background: rgba(128, 128, 128, 0.1);
+  padding: 15px;
+  border-radius: 8px;
   overflow-x: auto;
 }
 .md-preview :deep(pre code) { background: none; padding: 0; }
-.md-preview :deep(blockquote) { 
-  border-left: 4px solid #3b82f6; 
-  margin: 0; 
-  padding-left: 20px; 
-  color: var(--text-secondary); 
+.md-preview :deep(blockquote) {
+  border-left: 4px solid #3b82f6;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
 }
-.md-preview :deep(ul), 
+.md-preview :deep(ul),
 .md-preview :deep(ol) { padding-left: 25px; }
 .md-preview :deep(table) {
   border-collapse: collapse;
@@ -2445,7 +2328,7 @@ button:disabled {
 }
 .md-preview :deep(th),
 .md-preview :deep(td) {
-  border: 1px solid var(--content-border);
+  border: 1px solid var(--border);
   padding: 8px;
   text-align: left;
 }
@@ -2470,7 +2353,7 @@ button:disabled {
 .compose-row label {
   display: block;
   margin-bottom: 8px;
-  color: var(--text-primary);
+  color: var(--text);
   font-weight: 500;
 }
 
@@ -2478,10 +2361,10 @@ button:disabled {
 .compose-row textarea {
   width: 100%;
   padding: 12px 15px;
-  border: 1px solid var(--input-border);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--input-bg);
-  color: var(--text-primary);
+  background: var(--surface-raised);
+  color: var(--text);
   font-size: 15px;
   transition: all 0.3s;
 }
@@ -2509,10 +2392,10 @@ button:disabled {
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: var(--option-active-bg);
+  background: var(--accent-soft);
   border-radius: 20px;
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .remove-attachment {
@@ -2532,9 +2415,9 @@ button:disabled {
 
 .add-att-btn {
   padding: 8px 16px;
-  border: 1px dashed var(--content-border);
+  border: 1px dashed var(--border);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--muted);
   border-radius: 20px;
   cursor: pointer;
   transition: all 0.3s;
@@ -2548,8 +2431,8 @@ button:disabled {
 .att-options-menu {
   position: absolute;
   margin-top: 5px;
-  background: var(--content-bg);
-  border: 1px solid var(--content-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 100;
@@ -2561,22 +2444,22 @@ button:disabled {
   padding: 10px 20px;
   border: none;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--text);
   cursor: pointer;
   text-align: left;
   transition: background 0.3s;
 }
 
 .att-options-menu button:hover {
-  background: var(--option-hover);
+  background: var(--surface-raised);
 }
 
 /* 站内文件选择器 */
 .internal-selector-embedded {
   margin-top: 15px;
   padding: 15px;
-  background: var(--content-bg);
-  border: 1px solid var(--content-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   max-height: 300px;
   overflow-y: auto;
@@ -2604,7 +2487,7 @@ button:disabled {
 
 .selector-cat-name {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
   margin-bottom: 8px;
   padding: 5px 10px;
   background: rgba(59, 130, 246, 0.1);
@@ -2627,7 +2510,7 @@ button:disabled {
 }
 
 .selector-file-row:hover {
-  background: var(--option-hover);
+  background: var(--surface-raised);
 }
 
 /* 收件箱 */
@@ -2638,9 +2521,9 @@ button:disabled {
 
 .filter-tab {
   padding: 6px 16px;
-  border: 1px solid var(--content-border);
-  background: var(--content-bg);
-  color: var(--text-primary);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   border-radius: 20px;
   cursor: pointer;
   transition: all 0.3s;
@@ -2668,13 +2551,13 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   padding: 15px 20px;
-  border-bottom: 1px solid var(--content-border);
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.3s;
 }
 
 .email-row:hover {
-  background: var(--option-hover);
+  background: var(--surface-raised);
 }
 
 .email-row.unread {
@@ -2691,12 +2574,12 @@ button:disabled {
 
 .email-sender-name {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
   min-width: 120px;
 }
 
 .email-subject-line {
-  color: var(--text-secondary);
+  color: var(--muted);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2715,7 +2598,7 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 13px;
   flex-shrink: 0;
 }
@@ -2727,7 +2610,7 @@ button:disabled {
 .empty-inbox-msg {
   text-align: center;
   padding: 60px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 /* 通知面板样式 */
@@ -2743,7 +2626,7 @@ button:disabled {
 .empty-notifications {
   text-align: center;
   padding: 60px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .empty-notifications .empty-icon {
@@ -2763,8 +2646,8 @@ button:disabled {
   align-items: flex-start;
   gap: 15px;
   padding: 15px 20px;
-  background: var(--content-bg);
-  border: 1px solid var(--content-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s;
@@ -2810,13 +2693,13 @@ button:disabled {
 .notification-title {
   font-weight: 600;
   font-size: 16px;
-  color: var(--text-primary);
+  color: var(--text);
   margin-bottom: 8px;
 }
 
 .notification-detail {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--muted);
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2824,13 +2707,13 @@ button:disabled {
 }
 
 .detail-label {
-  color: var(--text-muted);
+  color: var(--subtle);
   margin-right: 5px;
 }
 
 .notification-message {
   font-size: 14px;
-  color: var(--text-primary);
+  color: var(--text);
   margin-top: 8px;
   padding: 8px;
   background: rgba(128, 128, 128, 0.05);
@@ -2839,14 +2722,14 @@ button:disabled {
 
 .notification-time {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--subtle);
   margin-top: 8px;
 }
 
 .notification-delete {
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 20px;
   cursor: pointer;
   padding: 0;
@@ -2878,16 +2761,16 @@ button:disabled {
 
 .email-detail-nav button {
   padding: 8px 16px;
-  border: 1px solid var(--content-border);
-  background: var(--content-bg);
-  color: var(--text-primary);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .email-detail-nav button:hover:not(:disabled) {
-  background: var(--option-hover);
+  background: var(--surface-raised);
 }
 
 .email-detail-nav button:disabled {
@@ -2897,7 +2780,7 @@ button:disabled {
 
 .email-detail-content h2 {
   margin-bottom: 20px;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .email-meta-info {
@@ -2909,24 +2792,24 @@ button:disabled {
   background: rgba(128, 128, 128, 0.05);
   border-radius: 8px;
   font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .email-body-text {
   line-height: 1.8;
-  color: var(--text-primary);
+  color: var(--text);
   white-space: pre-wrap;
 }
 
 .email-attachments-section {
   margin-top: 30px;
   padding-top: 20px;
-  border-top: 1px solid var(--content-border);
+  border-top: 1px solid var(--border);
 }
 
 .email-attachments-section h4 {
   margin-bottom: 15px;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .email-att-item {
@@ -2972,7 +2855,7 @@ button:disabled {
 
 .att-name {
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3059,7 +2942,7 @@ button:disabled {
 .preview-text-content {
   width: 80%;
   max-height: 90%;
-  background: var(--content-bg);
+  background: var(--surface);
   padding: 30px;
   border-radius: 12px;
   overflow: auto;
@@ -3069,7 +2952,7 @@ button:disabled {
   white-space: pre-wrap;
   word-wrap: break-word;
   margin: 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-family: monospace;
   line-height: 1.6;
 }
@@ -3138,7 +3021,7 @@ button:disabled {
 .preview-text-content {
   width: 90%;
   max-height: 90%;
-  background: var(--content-bg);
+  background: var(--surface);
   padding: 30px;
   border-radius: 12px;
   overflow: auto;
@@ -3149,7 +3032,7 @@ button:disabled {
   white-space: pre-wrap;
   word-wrap: break-word;
   margin: 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   line-height: 1.6;
   font-size: 14px;
@@ -3158,13 +3041,13 @@ button:disabled {
 /* Markdown内容样式优化 */
 .markdown-body {
   line-height: 1.8;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
-.markdown-body h1, 
-.markdown-body h2, 
+.markdown-body h1,
+.markdown-body h2,
 .markdown-body h3 {
-  border-bottom: 1px solid var(--content-border);
+  border-bottom: 1px solid var(--border);
   padding-bottom: 10px;
   margin-top: 30px;
 }
@@ -3187,7 +3070,7 @@ button:disabled {
   border-left: 4px solid #3b82f6;
   margin: 0;
   padding-left: 20px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .preview-unsupported {
@@ -3271,10 +3154,10 @@ button:disabled {
   .md-editor-body {
     grid-template-columns: 1fr;
   }
-  
+
   .md-input {
     border-right: none;
-    border-bottom: 1px solid var(--content-border);
+    border-bottom: 1px solid var(--border);
     min-height: 300px;
   }
 }
@@ -3283,37 +3166,37 @@ button:disabled {
   .study-header-bar {
     flex-direction: column;
   }
-  
+
   .study-header-actions {
     width: 100%;
     flex-wrap: wrap;
   }
-  
+
   .study-search-box input {
     width: 120px;
   }
-  
+
   .study-files-grid {
     grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
     gap: 15px;
   }
-  
+
   .study-file-icon {
     font-size: 32px;
   }
-  
+
   .fullscreen-header {
     flex-wrap: wrap;
     gap: 10px;
   }
-  
+
   .viewer-filename {
     max-width: 100%;
     order: 3;
     width: 100%;
     text-align: center;
   }
-  
+
   .choice-buttons {
     grid-template-columns: 1fr;
   }
@@ -3324,18 +3207,18 @@ button:disabled {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .toolbar-left-group,
   .toolbar-right-group {
     justify-content: center;
   }
-  
+
   .email-row-main {
     flex-direction: column;
     align-items: flex-start;
     gap: 5px;
   }
-  
+
   .email-sender-name {
     min-width: auto;
   }
@@ -3355,7 +3238,6 @@ button:disabled {
 /* 所有遗留弹窗、编辑器与邮件界面接入同一套工作区令牌。 */
 .study-zone-container .modal-overlay {
   background: rgb(20 25 23 / 46%);
-  backdrop-filter: blur(2px);
 }
 .study-zone-container .modal-content {
   width: min(500px, calc(100% - 32px));
