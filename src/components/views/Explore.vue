@@ -1,7 +1,7 @@
 <template>
   <main class="container page-section explore-page">
     <header class="explore-header">
-      <div><p class="eyebrow">社区发现</p><h1 class="page-title">发现公开文章</h1><p class="muted">从真实发布的文章、话题和创作者中继续阅读。</p></div>
+      <div><p class="eyebrow">社区发现</p><h1 class="page-title">探索公开文章</h1><p class="muted">从真实发布的文章、话题和创作者中继续阅读。</p></div>
       <RouterLink v-if="loggedIn" class="button button-primary write-link" to="/write"><AppIcon name="pen" :size="17" />写文章</RouterLink>
     </header>
     <div class="explore-layout">
@@ -10,7 +10,7 @@
           <button v-for="option in feedOptions" :key="option.value" class="feed-tab" :class="{ active: feed === option.value }" role="tab" :aria-selected="feed === option.value" type="button" @click="selectFeed(option.value)">{{ option.label }}</button>
         </div>
         <form class="search-row" @submit.prevent="applySearch">
-          <label class="search-field" for="explore-search"><AppIcon name="search" :size="18" /><span class="visually-hidden">搜索文章</span><input id="explore-search" v-model="searchDraft" type="search" placeholder="搜索标题或摘要" autocomplete="off"></label>
+          <label class="search-field" for="explore-search"><AppIcon name="search" :size="18" /><span class="visually-hidden">搜索文章</span><input id="explore-search" v-model="searchDraft" type="search" placeholder="搜索标题、摘要、正文、作者、分类或标签" autocomplete="off"></label>
           <label class="category-select" for="explore-category"><span class="visually-hidden">按分类筛选</span><select id="explore-category" v-model="categoryDraft"><option value="">全部分类</option><option v-for="category in taxonomy.categories" :key="category.slug" :value="category.slug">{{ category.name }}</option></select></label>
           <button class="button button-primary" type="submit" :disabled="loading">{{ loading ? '搜索中' : '搜索' }}</button>
         </form>
