@@ -164,7 +164,7 @@ export default {
     return {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
       userId: null,
-      
+
       // 最近内容
       recentImages: [],
       recentVideos: [],
@@ -172,20 +172,20 @@ export default {
       isLoading: false,
       loadError: '',
       uploadingKind: '',
-      
+
       // 上传弹窗控制
       showUploadImage: false,
       showUploadVideo: false,
       showUploadMusic: false,
-      
+
       // 上传表单
       uploadImageForm: { title: '', style: '普通', file: null },
       uploadVideoForm: { title: '', file: null },
       uploadMusicForm: { title: '', artist: '', album: '', releaseDate: '', file: null },
-      
+
       // 缩略图预览
       thumbnailImage: null,
-      
+
       // 提示
       toast: { show: false, message: '', type: 'success' },
       themeHandler: null
@@ -197,7 +197,7 @@ export default {
       this.$router.push('/login')
       return
     }
-    
+
     this.loadRecentData()
     this.setupThemeListener()
     document.addEventListener('keydown', this.handleEscape)
@@ -213,7 +213,7 @@ export default {
       }
       window.addEventListener('theme-changed', this.themeHandler)
     },
-    
+
     async loadRecentData() {
       this.isLoading = true
       this.loadError = ''
@@ -224,7 +224,7 @@ export default {
           axios.get(`/api/entertainment/videos/recent/${this.userId}`),
           axios.get(`/api/entertainment/music/recent/${this.userId}`)
         ])
-        
+
         this.recentImages = imagesRes.data.images || []
         this.recentVideos = videosRes.data.videos || []
         this.recentMusic = musicRes.data.music || []
@@ -242,35 +242,35 @@ export default {
       else if (this.showUploadVideo) this.showUploadVideo = false
       else if (this.showUploadMusic) this.showUploadMusic = false
     },
-    
+
     formatDate(dateStr) {
       const date = new Date(dateStr)
       return `${date.getMonth() + 1}/${date.getDate()}`
     },
-    
+
     viewThumbnail(image) {
       this.thumbnailImage = image
     },
-    
+
     getImageUrl(image) {
       return `/api/entertainment/image-file/${image.id}`
     },
     handleThumbnailError(event) {
       event.currentTarget.style.visibility = 'hidden'
     },
-    
+
     goToImageZone() {
       this.$router.push('/personal/entertainment/images')
     },
-    
+
     goToVideoZone() {
       this.$router.push('/personal/entertainment/videos')
     },
-    
+
     goToMusicZone() {
       this.$router.push('/personal/entertainment/music')
     },
-    
+
     // 图片上传
     handleImageFileSelect(event) {
       const file = event.target.files[0]
@@ -282,7 +282,7 @@ export default {
         this.uploadImageForm.file = file
       }
     },
-    
+
     async confirmUploadImage() {
       if (!this.uploadImageForm.file) return
       this.uploadingKind = 'image'
@@ -291,7 +291,7 @@ export default {
       formData.append('userId', this.userId)
       formData.append('title', this.uploadImageForm.title)
       formData.append('style', this.uploadImageForm.style)
-      
+
       try {
         await axios.post('/api/entertainment/images', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -306,7 +306,7 @@ export default {
         this.uploadingKind = ''
       }
     },
-    
+
     // 视频上传
     handleVideoFileSelect(event) {
       const file = event.target.files[0]
@@ -318,7 +318,7 @@ export default {
         this.uploadVideoForm.file = file
       }
     },
-    
+
     async confirmUploadVideo() {
       if (!this.uploadVideoForm.file) return
       this.uploadingKind = 'video'
@@ -326,7 +326,7 @@ export default {
       formData.append('video', this.uploadVideoForm.file)
       formData.append('userId', this.userId)
       formData.append('title', this.uploadVideoForm.title)
-      
+
       try {
         await axios.post('/api/entertainment/videos', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -341,7 +341,7 @@ export default {
         this.uploadingKind = ''
       }
     },
-    
+
     // 音乐上传
     handleMusicFileSelect(event) {
       const file = event.target.files[0]
@@ -353,7 +353,7 @@ export default {
         this.uploadMusicForm.file = file
       }
     },
-    
+
     async confirmUploadMusic() {
       if (!this.uploadMusicForm.file || !this.uploadMusicForm.title) return
       this.uploadingKind = 'music'
@@ -364,7 +364,7 @@ export default {
       formData.append('artist', this.uploadMusicForm.artist)
       formData.append('album', this.uploadMusicForm.album)  // 添加专辑
       formData.append('releaseDate', this.uploadMusicForm.releaseDate)
-      
+
       try {
         await axios.post('/api/entertainment/music', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -379,7 +379,7 @@ export default {
         this.uploadingKind = ''
       }
     },
-    
+
     showToast(message, type = 'success') {
       this.toast = { show: true, message, type }
       setTimeout(() => this.toast.show = false, 3000)
@@ -395,29 +395,7 @@ export default {
   padding: 20px;
 }
 
-.light-mode {
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  color: #333;
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --border-color: #e5e7eb;
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
-  --accent-color: #3b82f6;
-  --accent-hover: #2563eb;
-}
-
-.dark-mode {
-  background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
-  color: #e2e8f0;
-  --bg-primary: #1f2937;
-  --bg-secondary: #2d3748;
-  --border-color: #374151;
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --accent-color: #60a5fa;
-  --accent-hover: #3b82f6;
-}
+.light-mode, .dark-mode { background: var(--bg); color: var(--text); }
 
 .entertainment-content {
   max-width: 1000px;
@@ -426,11 +404,11 @@ export default {
 }
 
 .zone-section {
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 16px;
   padding: 24px;
   margin-bottom: 24px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
@@ -440,13 +418,13 @@ export default {
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 15px;
-  border-bottom: 2px solid var(--border-color);
+  border-bottom: 2px solid var(--border);
 }
 
 .zone-title {
   margin: 0;
   font-size: 24px;
-  color: var(--text-primary);
+  color: var(--text);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -454,7 +432,7 @@ export default {
 
 .upload-btn {
   padding: 8px 20px;
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 20px;
@@ -465,7 +443,7 @@ export default {
 }
 
 .upload-btn:hover {
-  background: var(--accent-hover);
+  background: var(--accent-strong);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
@@ -480,9 +458,9 @@ export default {
   display: flex;
   align-items: center;
   padding: 16px;
-  background: var(--bg-secondary);
+  background: var(--bg);
   border-radius: 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   transition: all 0.3s;
   position: relative;
 }
@@ -490,13 +468,13 @@ export default {
 .preview-item:hover {
   transform: translateX(5px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: var(--accent-color);
+  border-color: var(--accent);
 }
 
 .item-number {
   width: 30px;
   height: 30px;
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
   border-radius: 50%;
   display: flex;
@@ -517,13 +495,13 @@ export default {
 
 .item-title {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 15px;
 }
 
 .item-meta {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .item-style {
@@ -544,8 +522,8 @@ export default {
 .thumb-btn {
   padding: 6px 14px;
   background: transparent;
-  color: var(--accent-color);
-  border: 1px solid var(--accent-color);
+  color: var(--accent);
+  border: 1px solid var(--accent);
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
@@ -553,7 +531,7 @@ export default {
 }
 
 .thumb-btn:hover {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
 }
 
@@ -569,7 +547,7 @@ export default {
 .empty-zone {
   text-align: center;
   padding: 40px;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 16px;
 }
 
@@ -577,11 +555,11 @@ export default {
   text-align: center;
   margin-top: 20px;
   padding-top: 15px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border);
 }
 
 .view-more-link {
-  color: var(--accent-color);
+  color: var(--accent);
   cursor: pointer;
   font-weight: 500;
   font-size: 14px;
@@ -590,7 +568,7 @@ export default {
 
 .view-more-link:hover {
   text-decoration: underline;
-  color: var(--accent-hover);
+  color: var(--accent-strong);
 }
 
 /* 音乐专区特殊样式 */
@@ -607,15 +585,15 @@ export default {
 
 .music-title {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .music-separator {
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .music-artist {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 14px;
 }
 
@@ -631,18 +609,17 @@ export default {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(4px);
 }
 
 .thumbnail-modal, .upload-modal {
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 16px;
   padding: 24px;
   max-width: 500px;
   width: 90%;
   max-height: 80vh;
   overflow-y: auto;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
 }
 
 .thumbnail-modal img {
@@ -654,27 +631,27 @@ export default {
 
 .thumbnail-modal h4 {
   margin: 0 0 16px 0;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .close-btn {
   width: 100%;
   padding: 12px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .close-btn:hover {
-  background: var(--border-color);
+  background: var(--border);
 }
 
 .upload-modal h3 {
   margin: 0 0 20px 0;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .form-group {
@@ -684,7 +661,7 @@ export default {
 .form-group label {
   display: block;
   margin-bottom: 6px;
-  color: var(--text-primary);
+  color: var(--text);
   font-weight: 500;
   font-size: 14px;
 }
@@ -697,10 +674,10 @@ export default {
 .form-group select {
   width: 100%;
   padding: 10px 14px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--bg);
+  color: var(--text);
   font-size: 14px;
   transition: all 0.3s;
 }
@@ -708,7 +685,7 @@ export default {
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: var(--accent-color);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
@@ -716,7 +693,7 @@ export default {
   display: block;
   margin-top: 8px;
   font-size: 13px;
-  color: var(--accent-color);
+  color: var(--accent);
 }
 
 .modal-actions {
@@ -736,13 +713,13 @@ export default {
 }
 
 .btn-primary {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
   border: none;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent-strong);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
@@ -753,13 +730,13 @@ export default {
 }
 
 .btn-secondary {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .btn-secondary:hover {
-  background: var(--border-color);
+  background: var(--border);
 }
 
 /* Toast提示 */
@@ -795,12 +772,12 @@ export default {
     gap: 12px;
     align-items: flex-start;
   }
-  
+
   .preview-item {
     flex-wrap: wrap;
     gap: 8px;
   }
-  
+
   .thumb-btn {
     width: 100%;
     margin-top: 8px;
@@ -876,7 +853,7 @@ export default {
 .empty-zone,
 .media-loading { display: flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 112px; padding: var(--space-4); border: 1px dashed var(--border); border-radius: var(--radius-sm); background: transparent; color: var(--muted); text-align: center; }
 .empty-zone p { max-width: 46ch; margin: 0; }
-.modal-overlay { background: rgb(20 25 23 / 46%); backdrop-filter: blur(2px); }
+.modal-overlay { background: rgb(20 25 23 / 56%); }
 .thumbnail-modal,
 .upload-modal { width: min(480px, calc(100% - 32px)); padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .thumbnail-modal h3,

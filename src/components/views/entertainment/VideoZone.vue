@@ -2136,7 +2136,6 @@ export default {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
   z-index: 1200;
   display: flex;
   align-items: center;
@@ -2760,7 +2759,7 @@ export default {
 .video-zone .editor-preview { border-color: var(--border); background: var(--surface); box-shadow: none; }
 .video-zone .timeline-track { background: var(--bg); }
 .video-zone .clip-range { background: var(--accent); }
-.video-zone .modal-overlay { z-index: 1100; background: rgb(20 25 23 / 48%); backdrop-filter: blur(2px); }
+.video-zone .modal-overlay { z-index: 1100; background: rgb(20 25 23 / 56%); }
 .video-zone .properties-modal,
 .video-zone .save-options-modal,
 .video-zone .delete-modal,
