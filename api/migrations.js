@@ -125,6 +125,18 @@ async function runMigrations(db) {
     await addColumn(db, 'post_media', 'metadata', 'JSON NULL');
     await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260828_blocks_editor_v1']);
   }
+
+  const [contentDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260828_content_safety_v1']);
+  if (!contentDone.length) {
+    await addColumn(db, 'users', 'session_version', 'INT NOT NULL DEFAULT 0');
+    await addColumn(db, 'users', 'session_revoked_at', 'DATETIME NULL');
+    await addColumn(db, 'posts', 'content_version', 'INT NOT NULL DEFAULT 1');
+    await addColumn(db, 'posts', 'content_source', "VARCHAR(32) NOT NULL DEFAULT 'editor'");
+    await addColumn(db, 'posts', 'cover_alt_text', 'VARCHAR(255) NULL');
+    await addColumn(db, 'post_revisions', 'content_version', 'INT NOT NULL DEFAULT 1');
+    await addColumn(db, 'post_revisions', 'content_source', "VARCHAR(32) NOT NULL DEFAULT 'editor'");
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260828_content_safety_v1']);
+  }
 }
 
 function createShareToken() { return crypto.randomBytes(32).toString('hex'); }

@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
 const express = require('express');
+const helmet = require('helmet');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const mysql = require('mysql2');
@@ -14,6 +15,7 @@ const { imageSize } = require('image-size');
 const mm = require('music-metadata');
 const { runMigrations } = require('./migrations');
 const { mountBlogRoutes } = require('./blog');
+const { sendError, createRateLimiter, originGuard, imageDimensions, validateUploadedFile } = require('./lib/security');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -27,6 +29,13 @@ if (missingEnv.length > 0) {
 const app = express();
 // API 返回的是会话相关或用户私有数据，不应被浏览器或代理复用。
 app.disable('etag');
+app.disable('x-powered-by');
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  frameguard: { action: 'deny' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+}));
 const PORT = Number(process.env.PORT || 3000);
 const DB_PORT = Number(process.env.DB_PORT || 3306);
 const UPLOAD_ROOT = path.resolve(__dirname, 'uploads');
@@ -36,6 +45,17 @@ const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+// Keep the security baseline explicit and reviewable without introducing a second
+// framework layer. The policy is intentionally conservative for a personal blog.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://localhost:3000 http://127.0.0.1:3000");
+  next();
+});
 
 function resolveStoredFile(storedPath) {
   const normalizedPath = String(storedPath || '').replace(/^[/\\]+/, '');
@@ -81,8 +101,12 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use('/api', originGuard(allowedOrigins));
+app.use('/api/login', createRateLimiter({ windowMs: 15 * 60 * 1000, limit: 20, message: '登录尝试过于频繁，请稍后重试' }));
+app.use('/api/register', createRateLimiter({ windowMs: 60 * 60 * 1000, limit: 10, message: '注册请求过于频繁，请稍后重试' }));
+app.use('/api/reports', createRateLimiter({ windowMs: 10 * 60 * 1000, limit: 15 }));
+app.use(bodyParser.json({ limit: '3mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '3mb' }));
 
 app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -104,7 +128,7 @@ function parseCookies(cookieHeader = '') {
 
 function createAuthToken(user) {
   return jwt.sign(
-    { sub: String(user.id), email: user.email },
+    { sub: String(user.id), email: user.email, sv: Number(user.session_version || 0) },
     process.env.AUTH_SECRET,
     { expiresIn: AUTH_EXPIRES_IN }
   );
@@ -146,16 +170,34 @@ function getAuthToken(req) {
   return null;
 }
 
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function validatePassword(value) {
+  const password = String(value || '');
+  if (password.length < 10 || password.length > 128) return '密码长度必须为 10–128 位';
+  if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) return '密码需同时包含大小写字母和数字';
+  return null;
+}
+
 function requireAuth(req, res, next) {
   const token = getAuthToken(req);
-  if (!token) return res.status(401).json({ error: '请先登录' });
+  if (!token) return res.status(401).json({ error: { code: 'AUTH_REQUIRED', message: '请先登录' } });
 
   try {
     const payload = jwt.verify(token, process.env.AUTH_SECRET);
     req.user = { id: Number(payload.sub), email: payload.email };
-    return next();
+    return db.promise().query('SELECT id,email,session_version FROM users WHERE id=?', [req.user.id])
+      .then(([rows]) => {
+        const user = rows[0];
+        if (!user || Number(payload.sv || 0) !== Number(user.session_version || 0)) return res.status(401).json({ error: { code: 'SESSION_REVOKED', message: '登录状态已失效，请重新登录' } });
+        req.user.email = user.email;
+        return next();
+      })
+      .catch(() => res.status(503).json({ error: { code: 'AUTH_UNAVAILABLE', message: '认证服务暂时不可用' } }));
   } catch (error) {
-    return res.status(401).json({ error: '登录状态已失效，请重新登录' });
+    return res.status(401).json({ error: { code: 'AUTH_REQUIRED', message: '登录状态已失效，请重新登录' } });
   }
 }
 
@@ -180,7 +222,7 @@ function authenticatedApiRequest(req, res, next) {
   return requireAuth(req, res, () => {
     const requestedUserIds = findRequestedUserIds(req);
     if (requestedUserIds.some((id) => id !== String(req.user.id))) {
-      return res.status(403).json({ error: '无权访问其他用户的数据' });
+      return sendError(res, 403, 'OWNER_REQUIRED', '无权访问其他用户的数据');
     }
     req.authUserId = req.user.id;
     return next();
@@ -191,13 +233,20 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-// MySQL数据库连接配置
-const db = mysql.createConnection({
+// MySQL pool: every request gets a short-lived connection and the pool can
+// recover from a dropped connection without leaking a singleton socket.
+const db = mysql.createPool({
   host: process.env.DB_HOST,
   port: DB_PORT,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
+  database: process.env.DB_NAME,
+  timezone: 'Z',
+  waitForConnections: true,
+  connectionLimit: Number(process.env.DB_POOL_SIZE || 10),
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 });
 
 // 博客路由在旧的全局鉴权前注册：公开读取接口自行做可选会话识别，
@@ -209,16 +258,9 @@ mountBlogRoutes(app, db, {
 });
 app.use('/api', authenticatedApiRequest);
 
-// 连接到数据库
-db.connect((err) => {
-  if (err) {
-    console.error('数据库连接失败:', err);
-    return;
-  }
-  console.log('MySQL数据库连接成功');
-  
-  // 创建用户表
-  const createUsersTable = `
+// Database initialization is awaited before the HTTP listener is opened. This
+// prevents requests from seeing a partially migrated schema after a restart.
+const createUsersTable = `
     CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
       username VARCHAR(50),
@@ -232,19 +274,7 @@ db.connect((err) => {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
   `;
-  
-  db.query(createUsersTable, (err) => {
-    if (err) console.error('创建用户表失败:', err);
-    else {
-      console.log('用户表创建成功或已存在');
-      runMigrations(db).then(() => console.log('博客数据库迁移完成')).catch((migrationError) => {
-        console.error('博客数据库迁移失败:', migrationError);
-      });
-    }
-  });
-
-  // 创建学习区分类表
-  const createCategoriesTable = `
+const createCategoriesTable = `
     CREATE TABLE IF NOT EXISTS learning_categories (
       id INT AUTO_INCREMENT PRIMARY KEY,
       user_id INT NOT NULL,
@@ -256,14 +286,7 @@ db.connect((err) => {
       UNIQUE KEY unique_category_per_user (user_id, name)
     )
   `;
-  
-  db.query(createCategoriesTable, (err) => {
-    if (err) console.error('创建分类表失败:', err);
-    else console.log('分类表创建成功或已存在');
-  });
-
-  // 创建学习区文件表
-  const createFilesTable = `
+const createFilesTable = `
     CREATE TABLE IF NOT EXISTS learning_files (
       id INT AUTO_INCREMENT PRIMARY KEY,
       user_id INT NOT NULL,
@@ -281,14 +304,7 @@ db.connect((err) => {
       FOREIGN KEY (category_id) REFERENCES learning_categories(id) ON DELETE CASCADE
     )
   `;
-  
-  db.query(createFilesTable, (err) => {
-    if (err) console.error('创建文件表失败:', err);
-    else console.log('文件表创建成功或已存在');
-  });
-
-  // 创建邮件表
-  const createEmailsTable = `
+const createEmailsTable = `
     CREATE TABLE IF NOT EXISTS learning_emails (
       id INT AUTO_INCREMENT PRIMARY KEY,
       sender_id INT NOT NULL,
@@ -306,31 +322,29 @@ db.connect((err) => {
       INDEX idx_created (created_at)
     )
   `;
-  
-  db.query(createEmailsTable, (err) => {
-    if (err) console.error('创建邮件表失败:', err);
-    else console.log('邮件表创建成功或已存在');
-  });
 
-  // 插入默认分类
+async function initializeDatabase() {
+  await db.promise().query(createUsersTable);
+  // Media tables must exist before migrations inspect them on a fresh test or
+  // production database.
+  await db.promise().query(createImagesTable);
+  await db.promise().query(createVideosTable);
+  await db.promise().query(createMusicTable);
+  await runMigrations(db);
+  await db.promise().query(createCategoriesTable);
+  await db.promise().query(createFilesTable);
+  await db.promise().query(createEmailsTable);
   const defaultCategories = ['数学', '物理', '天文', 'web/app', '嵌入式', 'AI', '其它'];
-  defaultCategories.forEach((cat, index) => {
-    const checkQuery = 'SELECT id FROM learning_categories WHERE is_default = TRUE AND name = ?';
-    db.query(checkQuery, [cat], (err, results) => {
-      if (err) return;
-      if (results.length === 0) {
-        // 为所有现有用户插入默认分类
-        db.query('SELECT id FROM users', (err, users) => {
-          if (err) return;
-          users.forEach(user => {
-            const insertQuery = 'INSERT IGNORE INTO learning_categories (user_id, name, sort_order, is_default) VALUES (?, ?, ?, TRUE)';
-            db.query(insertQuery, [user.id, cat, index]);
-          });
-        });
-      }
-    });
-  });
-});
+  const [users] = await db.promise().query('SELECT id FROM users');
+  await Promise.all(users.flatMap((user) => defaultCategories.map((category, index) => db.promise().query(
+    'INSERT IGNORE INTO learning_categories (user_id, name, sort_order, is_default) VALUES (?, ?, ?, TRUE)',
+    [user.id, category, index]
+  ))));
+  await db.promise().query('SELECT 1');
+  console.log(`MySQL pool connected; database ${process.env.DB_NAME} is ready`);
+}
+
+let databaseReady;
 
 // 配置multer存储
 // 修改 server.js 中的 storage 配置（第68-84行附近）
@@ -367,21 +381,23 @@ const upload = multer({
 // 注册 API
 app.post('/api/register', async (req, res) => {
   try {
-    const email = String(req.body.email || '').trim().toLowerCase();
+    const email = normalizeEmail(req.body.email);
     const password = String(req.body.password || '');
 
     if (!email || !password) {
-      return res.status(400).json({ error: '邮箱、密码都是必填项' });
+      return sendError(res, 400, 'FIELDS_REQUIRED', '邮箱、密码都是必填项');
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: '请输入有效的邮箱地址' });
-    if (password.length < 6) return res.status(400).json({ error: '密码长度至少为 6 位' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return sendError(res, 400, 'INVALID_EMAIL', '请输入有效的邮箱地址');
+    const passwordError = validatePassword(password);
+    if (passwordError) return sendError(res, 400, 'WEAK_PASSWORD', passwordError);
 
     const [existingUsers] = await db.promise().query('SELECT id FROM users WHERE email = ?', [email]);
-    if (existingUsers.length > 0) return res.status(400).json({ error: '该邮箱已被注册' });
+    if (existingUsers.length > 0) return sendError(res, 409, 'EMAIL_TAKEN', '该邮箱已被注册');
 
     const username = `用户${Date.now()}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
     const hashedPassword = await bcrypt.hash(password, 10);
     const [result] = await db.promise().query('INSERT INTO users (username, email, password) VALUES (?, ?, ?)', [username, email, hashedPassword]);
+    await db.promise().query('UPDATE users SET blog_slug=? WHERE id=?', [`u-${result.insertId}`, result.insertId]);
     const defaultCategories = ['数学', '物理', '天文', 'web/app', '嵌入式', 'AI', '其它'];
     await Promise.all(defaultCategories.map((category, index) => db.promise().query(
       'INSERT INTO learning_categories (user_id, name, sort_order, is_default) VALUES (?, ?, ?, TRUE)',
@@ -389,42 +405,46 @@ app.post('/api/register', async (req, res) => {
     )));
     res.status(201).json({ message: '用户注册成功', userId: result.insertId });
   } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '该邮箱已被注册' });
+    if (error.code === 'ER_DUP_ENTRY') return sendError(res, 409, 'EMAIL_TAKEN', '该邮箱已被注册');
     console.error('注册错误:', error);
-    res.status(500).json({ error: '服务器内部错误' });
+    sendError(res, 500, 'INTERNAL_ERROR', '服务器内部错误');
   }
 });
 
 // 登录 API
-app.post('/api/login', (req, res) => {
-  const { email, password } = req.body;
-  
-  if (!email || !password) {
-    return res.status(400).json({ error: '邮箱和密码是必填项' });
-  }
-  
-  const query = 'SELECT * FROM users WHERE email = ?';
-  db.query(query, [email], async (err, results) => {
-    if (err) return res.status(500).json({ error: '数据库查询失败' });
-    if (results.length === 0) return res.status(401).json({ error: '邮箱或密码错误' });
-    
-    const user = results[0];
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) return res.status(401).json({ error: '邮箱或密码错误' });
-    
-    const { password: _, ...userWithoutPassword } = user;
+app.post('/api/login', async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const password = String(req.body.password || '');
+  if (!email || !password) return sendError(res, 400, 'FIELDS_REQUIRED', '邮箱和密码是必填项');
+  try {
+    const [results] = await db.promise().query('SELECT * FROM users WHERE email = ?', [email]);
+    if (!results.length || !await bcrypt.compare(password, results[0].password)) return sendError(res, 401, 'INVALID_CREDENTIALS', '邮箱或密码错误');
+    const { password: _, ...userWithoutPassword } = results[0];
     setAuthCookie(res, userWithoutPassword);
     res.status(200).json({ message: '登录成功', user: userWithoutPassword });
-  });
+  } catch (error) {
+    console.error('登录错误:', error);
+    sendError(res, 503, 'DATABASE_UNAVAILABLE', '认证服务暂时不可用');
+  }
 });
+const workspaceFileTypes = new Set(['image/png','image/jpeg','image/webp','image/gif','audio/mpeg','audio/ogg','audio/wav','audio/x-wav','audio/mp4','audio/aac','audio/flac','video/mp4','video/webm','video/ogg','video/quicktime','application/pdf','application/zip','application/x-zip-compressed','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
+function validateWorkspaceFile(file) {
+  const extension = path.extname(file?.originalname || '').toLowerCase();
+  if (['.md','.markdown','.txt','.csv','.json'].includes(extension) && /^text\//.test(String(file?.mimetype || ''))) {
+    if (!file.size) throw Object.assign(new Error('文件不能为空'), { status:400, code:'FILE_INVALID' });
+    return file;
+  }
+  return validateUploadedFile(file, { allowed:workspaceFileTypes, maxBytes:100 * 1024 * 1024 });
+}
 
-app.post('/api/logout', (req, res) => {
+app.post('/api/logout', requireAuth, async (req, res) => {
+  await db.promise().query('UPDATE users SET session_version=session_version+1,session_revoked_at=NOW() WHERE id=?', [req.user.id]);
   clearAuthCookie(res);
   res.status(200).json({ message: '已退出登录' });
 });
 
 app.get('/api/me', (req, res) => {
-  const query = 'SELECT id, username, email, birthday, hobbies, occupation, notes, avatar_path FROM users WHERE id = ?';
+  const query = 'SELECT id, username, email, birthday, hobbies, occupation, notes, avatar_path, blog_slug, bio, blog_title FROM users WHERE id = ?';
   db.query(query, [req.authUserId], (err, results) => {
     if (err) return res.status(500).json({ error: '数据库查询失败' });
     if (results.length === 0) return res.status(404).json({ error: '用户不存在' });
@@ -476,9 +496,8 @@ app.put('/api/user/:userId/password', async (req, res) => {
   if (!oldPassword || !newPassword) {
     return res.status(400).json({ error: '旧密码和新密码都是必填项' });
   }
-  if (newPassword.length < 6) {
-    return res.status(400).json({ error: '新密码长度至少6位' });
-  }
+  const passwordError = validatePassword(newPassword);
+  if (passwordError) return sendError(res, 400, 'WEAK_PASSWORD', passwordError);
   
   const query = 'SELECT password FROM users WHERE id = ?';
   db.query(query, [userId], async (err, results) => {
@@ -493,8 +512,9 @@ app.put('/api/user/:userId/password', async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, salt);
     
     const updateQuery = 'UPDATE users SET password = ? WHERE id = ?';
-    db.query(updateQuery, [hashedPassword, userId], (err, results) => {
+    db.query(updateQuery, [hashedPassword, userId], async (err, results) => {
       if (err) return res.status(500).json({ error: '更新密码失败' });
+      await db.promise().query('UPDATE users SET session_version=session_version+1,session_revoked_at=NOW() WHERE id=?', [userId]);
       res.status(200).json({ message: '密码更新成功' });
     });
   });
@@ -585,6 +605,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: '请选择要上传的文件' });
     }
+    try { validateWorkspaceFile(req.file); } catch (validationError) { removeTemporaryUpload(); return sendError(res, validationError.status || 400, validationError.code || 'FILE_INVALID', validationError.message); }
 
     if (!categoryId) {
       removeTemporaryUpload();
@@ -1173,10 +1194,6 @@ const createImagesTable = `
   )
 `;
 
-db.query(createImagesTable, (err) => {
-  if (err) console.error('创建图片表失败:', err);
-  else console.log('图片表创建成功或已存在');
-});
 
 // 创建视频表
 const createVideosTable = `
@@ -1196,10 +1213,6 @@ const createVideosTable = `
   )
 `;
 
-db.query(createVideosTable, (err) => {
-  if (err) console.error('创建视频表失败:', err);
-  else console.log('视频表创建成功或已存在');
-});
 
 // 创建音乐表
 const createMusicTable = `
@@ -1223,10 +1236,6 @@ const createMusicTable = `
   )
 `;
 
-db.query(createMusicTable, (err) => {
-  if (err) console.error('创建音乐表失败:', err);
-  else console.log('音乐表创建成功或已存在');
-});
 
 // 图片上传配置
 const imageStorage = multer.diskStorage({
@@ -1318,20 +1327,18 @@ app.post('/api/entertainment/images', imageUpload.single('image'), (req, res) =>
     if (!req.file) {
       return res.status(400).json({ error: '请选择图片文件' });
     }
+    try { validateUploadedFile(req.file, { allowed:new Set(['image/png','image/jpeg','image/webp','image/gif']), maxBytes:50 * 1024 * 1024 }); } catch (validationError) { removeUploadedImage(req.file); return sendError(res, validationError.status || 400, validationError.code || 'FILE_INVALID', validationError.message); }
     
     const ext = path.extname(req.file.originalname).toLowerCase();
     const finalTitle = title || req.file.originalname.replace(ext, '');
     const finalStyle = style || '普通';
     
-    // 获取图片尺寸 - 使用 fs 读取文件后再用 image-size
+    // 读取已通过 magic bytes 校验的图片尺寸，避免在不可信输入上调用有已知 DoS 风险的解析器。
     let width = 0, height = 0;
     try {
-      // const fs = require('fs');
-      const {imageSize} = require('image-size');
-      const buffer = fs.readFileSync(req.file.path);
-      const dimensions = imageSize(buffer);
-      width = dimensions.width || 0;
-      height = dimensions.height || 0;
+      const dimensions = imageDimensions(req.file.path);
+      width = dimensions?.width || 0;
+      height = dimensions?.height || 0;
     } catch (err) {
       console.error('读取图片尺寸失败:', err);
       width = 0;
@@ -1385,6 +1392,7 @@ app.post('/api/entertainment/images/:imageId/derivatives', canvasImageUpload.sin
     return res.status(400).json({ error: '图片标识无效' });
   }
   if (!req.file) return res.status(400).json({ error: '请选择编辑后的图片文件' });
+  try { validateUploadedFile(req.file, { allowed:new Set(['image/png','image/jpeg','image/webp']), maxBytes:50 * 1024 * 1024 }); } catch (validationError) { removeUploadedImage(req.file); return sendError(res, validationError.status || 400, validationError.code || 'FILE_INVALID', validationError.message); }
 
   db.query('SELECT * FROM entertainment_images WHERE id = ? AND user_id = ?', [imageId, userId], (lookupError, rows) => {
     if (lookupError) {
@@ -1439,6 +1447,7 @@ app.put('/api/entertainment/images/:imageId/file', canvasImageUpload.single('ima
     return res.status(400).json({ error: '请确认替换原图' });
   }
   if (!req.file) return res.status(400).json({ error: '请选择编辑后的图片文件' });
+  try { validateUploadedFile(req.file, { allowed:new Set(['image/png','image/jpeg','image/webp']), maxBytes:50 * 1024 * 1024 }); } catch (validationError) { removeUploadedImage(req.file); return sendError(res, validationError.status || 400, validationError.code || 'FILE_INVALID', validationError.message); }
 
   db.query('SELECT * FROM entertainment_images WHERE id = ? AND user_id = ?', [imageId, userId], (lookupError, rows) => {
     if (lookupError) {
@@ -1544,8 +1553,7 @@ function removeUploadedImage(file) {
 }
 
 function getEditedImageMetadata(file) {
-  const buffer = fs.readFileSync(file.path);
-  const dimensions = imageSize(buffer);
+  const dimensions = imageDimensions(file.path);
   const typeToExtension = { jpg: '.jpg', png: '.png', webp: '.webp' };
   const typeToMime = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
   if (!dimensions?.type || !typeToExtension[dimensions.type]) {
@@ -1699,6 +1707,7 @@ app.post('/api/entertainment/videos', videoUpload.single('video'), async (req, r
     if (!req.file) {
       return res.status(400).json({ error: '请选择视频文件' });
     }
+    try { validateUploadedFile(req.file, { allowed:new Set(['video/mp4','video/webm','video/ogg','video/quicktime']), maxBytes:500 * 1024 * 1024 }); } catch (validationError) { if (req.file?.path) fs.unlink(req.file.path, () => {}); return sendError(res, validationError.status || 400, validationError.code || 'FILE_INVALID', validationError.message); }
     
     const ext = path.extname(req.file.originalname).toLowerCase();
     const finalTitle = title || req.file.originalname.replace(ext, '');
@@ -1924,6 +1933,7 @@ app.post('/api/entertainment/music', musicUpload.single('music'), async (req, re
     if (!req.file) {
       return res.status(400).json({ error: '请选择音乐文件' });
     }
+    try { validateUploadedFile(req.file, { allowed:new Set(['audio/mpeg','audio/ogg','audio/wav','audio/x-wav','audio/mp4','audio/aac','audio/flac']), maxBytes:100 * 1024 * 1024 }); } catch (validationError) { if (req.file?.path) fs.unlink(req.file.path, () => {}); return sendError(res, validationError.status || 400, validationError.code || 'FILE_INVALID', validationError.message); }
     
     const ext = path.extname(req.file.originalname).toLowerCase();
     const finalTitle = title || req.file.originalname.replace(ext, '');
@@ -2098,20 +2108,29 @@ app.use((error, req, res, next) => {
   console.error('[api error]', error);
   if (res.headersSent) return next(error);
   const statusCode = error instanceof multer.MulterError ? 400 : (error.status || 500);
-  return res.status(statusCode).json({
-    error: statusCode === 500 ? '服务器内部错误' : error.message
-  });
+  return sendError(res, statusCode, error.code || (statusCode === 500 ? 'INTERNAL_ERROR' : 'REQUEST_INVALID'), statusCode === 500 ? '服务器内部错误' : error.message);
 });
 
-// 启动服务器
-app.listen(PORT, () => {
-  console.log(`服务器运行在端口 ${PORT}`);
-  console.log(`API地址: http://localhost:${PORT}`);
+// Start only after all base tables and additive migrations are ready.
+databaseReady = initializeDatabase().catch((error) => {
+  console.error('[startup] Database initialization failed:', error);
+  process.exitCode = 1;
+  throw error;
 });
+const serverReady = databaseReady.then(() => new Promise((resolve) => {
+  const server = app.listen(PORT, () => {
+    console.log(`服务器运行在端口 ${PORT}`);
+    console.log(`API地址: http://localhost:${PORT}`);
+    resolve(server);
+  });
+}));
 
 // 优雅关闭
-process.on('SIGINT', () => {
-  db.end();
+async function shutdown(signal) {
+  try { const server = await serverReady; await new Promise((resolve) => server.close(resolve)); } catch (_) { /* startup failed */ }
+  await db.end();
   console.log('数据库连接已关闭');
   process.exit(0);
-});
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
