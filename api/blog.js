@@ -18,7 +18,7 @@ function renderMarkdown(markdown) {
   return html.split(/\n{2,}/).map((line) => /^<h[1-3]>|^<pre>|^<blockquote>/.test(line) ? line : `<p>${line.replace(/\n/g, '<br>')}</p>`).join('');
 }
 
-const blockNodeTypes = new Set(['doc', 'paragraph', 'heading', 'text', 'hardBreak', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'horizontalRule', 'codeBlock', 'image', 'table', 'tableRow', 'tableHeader', 'tableCell']);
+const blockNodeTypes = new Set(['doc', 'paragraph', 'heading', 'text', 'hardBreak', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'horizontalRule', 'codeBlock', 'image', 'table', 'tableRow', 'tableHeader', 'tableCell', 'callout', 'details', 'embed']);
 const blockMarks = new Set(['bold', 'italic', 'strike', 'code', 'link']);
 const invalidBlocks = (message) => Object.assign(new Error(message), { status: 400, code: 'INVALID_BLOCKS' });
 function validateBlocks(value) {
@@ -33,6 +33,15 @@ function validateBlocks(value) {
     if (node.type === 'text' && (typeof node.text !== 'string' || node.text.length > 20000)) throw invalidBlocks('文本块无效');
     if (node.type === 'heading' && ![1, 2, 3, 4, 5, 6].includes(Number(node.attrs?.level))) throw invalidBlocks('标题级别无效');
     if (node.type === 'image') { const src = String(node.attrs?.src || ''); const alt = String(node.attrs?.alt || '').trim(); if (!/^\/api\/public\/media\/\d+(?:\?share=[a-f0-9]{64})?$/.test(src) || !alt) throw invalidBlocks('图片必须使用自己的已上传媒体并提供替代文本'); }
+    if (node.type === 'callout' && !['info', 'note', 'warning'].includes(String(node.attrs?.tone || 'info'))) throw invalidBlocks('提示卡类型无效');
+    if (node.type === 'details' && (String(node.attrs?.summary || '').trim().length > 120 || String(node.attrs?.body || '').length > 5000)) throw invalidBlocks('折叠内容无效');
+    if (node.type === 'embed') {
+      let url;
+      try { url = new URL(String(node.attrs?.url || '')); } catch (_) { throw invalidBlocks('嵌入链接无效'); }
+      const allowedHosts = new Set(['www.youtube.com', 'youtu.be', 'www.bilibili.com', 'open.spotify.com']);
+      if (!allowedHosts.has(url.hostname) || !['https:'].includes(url.protocol)) throw invalidBlocks('仅支持 Bilibili、YouTube 或 Spotify 的 HTTPS 嵌入');
+      node.attrs = { provider: url.hostname, url: url.toString() };
+    }
     if (node.marks) for (const mark of node.marks) { if (!blockMarks.has(mark?.type)) throw invalidBlocks('文章包含不支持的文本格式'); if (mark.type === 'link') { const href = String(mark.attrs?.href || ''); if (!/^https?:\/\//i.test(href)) throw invalidBlocks('链接仅支持 HTTP 或 HTTPS 地址'); } }
     if (node.content) { if (!Array.isArray(node.content)) throw invalidBlocks('文章块子内容无效'); node.content.forEach(walk); }
   };
@@ -57,6 +66,9 @@ function blocksToMarkdown(doc) {
     if (node.type === 'codeBlock') return `\`\`\`\n${children}\n\`\`\`\n\n`;
     if (node.type === 'hardBreak') return '\n';
     if (node.type === 'image') return `![${node.attrs.alt}](${node.attrs.src})\n\n`;
+    if (node.type === 'callout') return `> ${children.replace(/\n+/g, '\n> ').trim()}\n\n`;
+    if (node.type === 'details') return `> ${node.attrs.summary || '展开阅读'}\n> ${String(node.attrs.body || children).replace(/\n+/g, '\n> ').trim()}\n\n`;
+    if (node.type === 'embed') return `[受控嵌入](${node.attrs.url})\n\n`;
     return children;
   };
   return render(doc).trim();
@@ -85,6 +97,9 @@ function blocksToSafeHtml(doc) {
     if (node.type === 'codeBlock') return `<pre><code>${children}</code></pre>`;
     if (node.type === 'hardBreak') return '<br>';
     if (node.type === 'image') return `<img src="${escapeHtml(node.attrs.src)}" alt="${escapeHtml(node.attrs.alt)}">`;
+    if (node.type === 'callout') return `<aside data-callout="${escapeHtml(node.attrs.tone || 'info')}">${children}</aside>`;
+    if (node.type === 'details') return `<details><summary>${escapeHtml(node.attrs.summary || '展开阅读')}</summary><p>${escapeHtml(node.attrs.body || children)}</p></details>`;
+    if (node.type === 'embed') return `<p><a href="${escapeHtml(node.attrs.url)}" rel="nofollow noopener" target="_blank">查看受控嵌入内容</a></p>`;
     if (node.type === 'table') return `<table><tbody>${children}</tbody></table>`;
     if (node.type === 'tableRow') return `<tr>${children}</tr>`;
     if (node.type === 'tableHeader') return `<th>${children}</th>`;

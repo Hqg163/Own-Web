@@ -150,6 +150,17 @@ async function run() {
     method: 'POST', headers: { ...auth(author), 'content-type': 'application/json' },
     body: JSON.stringify({ title: '非法块', contentBlocks: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '危险链接', marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }] }] }] } })
   });
+  await expectStatus(baseUrl, '/api/posts', 400, {
+    method: 'POST', headers: { ...auth(author), 'content-type': 'application/json' },
+    body: JSON.stringify({ title: '非法嵌入', contentBlocks: { type: 'doc', content: [{ type: 'embed', attrs: { url: 'https://example.test/embed' } }] } })
+  });
+  const safeBlocks = { type: 'doc', content: [
+    { type: 'callout', attrs: { tone: 'note' }, content: [{ type: 'text', text: '安全提示' }] },
+    { type: 'details', attrs: { summary: '展开说明', body: '折叠内容' } },
+    { type: 'embed', attrs: { url: 'https://www.youtube.com/watch?v=abc123' } }
+  ] };
+  const safeBlocksPost = await expectStatus(baseUrl, '/api/posts', 201, { method: 'POST', headers: { ...auth(author), 'content-type': 'application/json' }, body: JSON.stringify({ title: '安全块审计', contentBlocks: safeBlocks }) });
+  await expectStatus(baseUrl, `/api/posts/${safeBlocksPost.post.id}`, 200, { headers: auth(author) }).then((body) => assert.match(body.post.content_html, /data-callout="note"/, '提示卡应生成安全 HTML'));
   const blockDoc = { type: 'doc', content: [
     { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '结构化内容' }] },
     { type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: '列名' }] }] }] }] }
