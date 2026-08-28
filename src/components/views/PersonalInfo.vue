@@ -1481,30 +1481,7 @@ export default {
 }
 
 /* 个人资料沿用工作台令牌；旧日期和密码流程保留，只统一呈现。 */
-.info-content,
-.info-content.light-mode,
-.info-content.dark-mode {
-  --border: var(--border);
-  --surface-raised: var(--surface-raised);
-  --bg: var(--surface-raised);
-  --surface-raised: var(--surface-raised);
-  --accent: var(--accent);
-  --accent: var(--accent);
-  --accent-soft: color-mix(in srgb, var(--accent), transparent 70%);
-  --text: var(--text);
-  --muted: var(--muted);
-  --subtle: var(--subtle);
-  --muted: var(--muted);
-  --border: var(--border);
-  --border: var(--border);
-  --accent: var(--accent);
-  --accent-strong: var(--accent-strong);
-  --surface-raised: var(--surface-raised);
-  --text: var(--text);
-  --border: var(--border);
-  --accent-soft: var(--accent-soft);
-  --surface: var(--surface);
-  --border: var(--border);
+.info-content {
   padding: 0;
   background: transparent;
   color: var(--text);

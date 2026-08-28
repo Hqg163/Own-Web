@@ -2119,7 +2119,7 @@ export default {
 }
 
 .delete-modal button:first-child:hover {
-  background: var(--danger-hover);
+  background: var(--danger-strong);
 }
 
 .delete-modal button:last-child {
