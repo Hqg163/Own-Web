@@ -30,6 +30,7 @@ let follower;
 let stranger;
 let posts = {};
 let privateTagId;
+const mediaFiles = [];
 
 const tokenFor = (user) => jwt.sign({ sub: user.id, email: user.email }, process.env.AUTH_SECRET, { expiresIn: '5m' });
 const auth = (user) => ({ authorization: `Bearer ${tokenFor(user)}` });
@@ -66,6 +67,15 @@ async function createPost(visibility, status = 'published') {
   return { id: result.insertId, slug, shareToken };
 }
 
+async function createPostMedia(post) {
+  const filename = `media-${post.id}-${suffix}.png`;
+  const absolutePath = path.join(path.dirname(uploadRoot), filename);
+  fs.writeFileSync(absolutePath, Buffer.from([137, 80, 78, 71]));
+  mediaFiles.push(absolutePath);
+  const [result] = await query('INSERT INTO post_media (owner_id,post_id,file_path,mime_type,alt_text) VALUES (?,?,?,?,?)', [author.id, post.id, filename, 'image/png', '访问审计媒体']);
+  return result.insertId;
+}
+
 async function startTestServer() {
   const app = express();
   app.use(express.json());
@@ -88,6 +98,7 @@ async function cleanUp() {
     await query('DELETE FROM users WHERE id IN (?,?,?)', [author?.id || 0, follower?.id || 0, stranger?.id || 0]);
   }
   if (privateTagId) await query('DELETE FROM tags WHERE id=?', [privateTagId]);
+  mediaFiles.forEach((file) => fs.rmSync(file, { force: true }));
   fs.rmSync(uploadRoot, { recursive: true, force: true });
   await db.promise().end();
 }
@@ -101,6 +112,8 @@ async function run() {
   posts.followers = await createPost('followers');
   posts.unlisted = await createPost('unlisted');
   posts.draft = await createPost('private', 'draft');
+  posts.privateMediaId = await createPostMedia(posts.private);
+  posts.unlistedMediaId = await createPostMedia(posts.unlisted);
   await query('INSERT INTO follows (follower_id,following_id) VALUES (?,?)', [follower.id, author.id]);
   const [tag] = await query('INSERT INTO tags (name,slug) VALUES (?,?)', [`私有审计 ${suffix}`.slice(0, 60), `private-${suffix}`.slice(0, 80)]);
   privateTagId = tag.insertId;
@@ -153,6 +166,10 @@ async function run() {
   await expectStatus(baseUrl, `/api/posts/${posts.followers.id}/comments`, 403, { headers: auth(stranger) });
   await expectStatus(baseUrl, `/api/posts/${posts.unlisted.id}/comments`, 404, { headers: auth(stranger) });
   await expectStatus(baseUrl, `/api/posts/${posts.unlisted.id}/comments?share=${posts.unlisted.shareToken}`, 200);
+  await expectStatus(baseUrl, `/api/public/media/${posts.privateMediaId}`, 403, { headers: auth(stranger) });
+  await expectStatus(baseUrl, `/api/public/media/${posts.privateMediaId}`, 200, { headers: auth(author) });
+  await expectStatus(baseUrl, `/api/public/media/${posts.unlistedMediaId}`, 404, { headers: auth(stranger) });
+  await expectStatus(baseUrl, `/api/public/media/${posts.unlistedMediaId}?share=${posts.unlisted.shareToken}`, 200);
   await expectStatus(baseUrl, `/api/posts/${posts.private.id}/like`, 403, { method: 'POST', headers: auth(stranger) });
   await expectStatus(baseUrl, `/api/posts/${posts.followers.id}/like`, 200, { method: 'POST', headers: auth(follower) });
   await expectStatus(baseUrl, `/api/posts/${posts.followers.id}/like`, 200, { method: 'POST', headers: auth(follower) });
