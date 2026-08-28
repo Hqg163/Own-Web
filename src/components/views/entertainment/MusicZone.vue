@@ -4281,7 +4281,26 @@ input:focus-visible {
 .music-zone .album-disc { border-color: var(--border); box-shadow: none; }
 .music-zone .album-disc img { filter: grayscale(.15); }
 .music-zone .fs-lyric-line { color: var(--muted); }
+.music-zone .fs-lyric-line:hover { color: var(--text); background: var(--surface-raised); }
+.music-zone .fs-lyric-line.past { color: var(--subtle); }
 .music-zone .fs-lyric-line.active { color: var(--accent); }
+.music-zone .fs-volume-control button { color: var(--text); }
+.music-zone .fs-volume-control input { background: var(--border); }
+.music-zone .fs-volume-control input::-webkit-slider-thumb { background: var(--accent); }
+.music-zone .fs-song-info p,
+.music-zone .time-current,
+.music-zone .time-total,
+.music-zone .mode-btn,
+.music-zone .next-lyric,
+.music-zone .next-lyric span,
+.music-zone .fs-no-lyrics { color: var(--muted); }
+.music-zone .mode-btn:hover { color: var(--accent); }
+.music-zone .nav-btn { border-color: var(--border); color: var(--text); }
+.music-zone .extra-controls button { background: var(--surface-raised); color: var(--text); }
+.music-zone .extra-controls button:hover,
+.music-zone .extra-controls button.active { background: var(--accent-soft); color: var(--accent); }
+.music-zone .fs-progress-bar { background: var(--border); }
+.music-zone .progress-handle { background: var(--surface-raised); box-shadow: var(--shadow); }
 .music-zone .fs-playlist-section,
 .music-zone .fs-playlist-content { border-color: var(--border); background: var(--surface); }
 .music-zone .fs-playlist-item { color: var(--text); }
@@ -4292,8 +4311,8 @@ input:focus-visible {
 .music-zone .fs-playlist-item.active .playlist-duration,
 .music-zone .fs-playlist-item.active .playlist-number { color: var(--accent); }
 .music-zone .fs-playlist-item.active .playing-indicator { color: var(--accent); }
-.music-zone .fs-play-btn { border-color: var(--accent); background: var(--accent); color: #fff; }
-.music-zone .fs-play-btn:hover { background: var(--accent-strong); color: #fff; }
+.music-zone .fs-play-btn { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.music-zone .fs-play-btn:hover { background: var(--accent-strong); color: var(--on-accent); }
 .music-zone .mode-btn { width: auto !important; padding: 0 var(--space-2) !important; }
 .music-zone .mode-icon { display: block; }
 .music-zone .modal-overlay,
@@ -4350,7 +4369,8 @@ input:focus-visible {
   .music-zone .music-tools { grid-column: 2 / -1; justify-content: flex-end; opacity: 1; }
   .music-zone .music-meta { display: none; }
   .music-zone .mini-content { padding: var(--space-2) var(--space-3); }
-  .music-zone .mini-extra { display: none; }
+  .music-zone .mini-extra { display: flex; align-items: center; gap: var(--space-2); }
+  .music-zone .mini-extra .volume-control { display: none; }
   .music-zone .fullscreen-music-player { overflow: auto; }
   .music-zone .fs-body { grid-template-columns: 1fr; padding: var(--space-4); }
   .music-zone .fs-playlist-section { display: none; }
