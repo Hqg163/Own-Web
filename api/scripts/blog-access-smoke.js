@@ -120,6 +120,20 @@ async function run() {
   await query('INSERT INTO post_tags (post_id,tag_id) VALUES (?,?)', [posts.private.id, privateTagId]);
 
   const baseUrl = await startTestServer();
+  const followersAudioForm = new FormData();
+  followersAudioForm.set('postId', String(posts.followers.id));
+  followersAudioForm.set('label', '关注者音频');
+  followersAudioForm.set('media', new Blob([Buffer.from('ID3')], { type: 'audio/mpeg' }), 'followers.mp3');
+  const followersAudio = await expectStatus(baseUrl, '/api/posts/media/attachment', 201, { method: 'POST', headers: auth(author), body: followersAudioForm });
+  const unlistedAudioForm = new FormData();
+  unlistedAudioForm.set('postId', String(posts.unlisted.id));
+  unlistedAudioForm.set('label', '仅链接音频');
+  unlistedAudioForm.set('media', new Blob([Buffer.from('ID3')], { type: 'audio/mpeg' }), 'unlisted.mp3');
+  const unlistedAudio = await expectStatus(baseUrl, '/api/posts/media/attachment', 201, { method: 'POST', headers: auth(author), body: unlistedAudioForm });
+  await expectStatus(baseUrl, followersAudio.media.url, 403, { headers: auth(stranger) });
+  await expectStatus(baseUrl, followersAudio.media.url, 200, { headers: auth(follower) });
+  await expectStatus(baseUrl, unlistedAudio.media.url, 404, { headers: auth(stranger) });
+  await expectStatus(baseUrl, `${unlistedAudio.media.url}?share=${posts.unlisted.shareToken}`, 200);
   await expectStatus(baseUrl, '/api/me/avatar', 401, { method: 'POST' });
   const avatarForm = new FormData();
   avatarForm.set('avatar', new Blob([Buffer.from([137, 80, 78, 71])], { type: 'image/png' }), 'avatar.png');
@@ -154,13 +168,43 @@ async function run() {
     method: 'POST', headers: { ...auth(author), 'content-type': 'application/json' },
     body: JSON.stringify({ title: '非法嵌入', contentBlocks: { type: 'doc', content: [{ type: 'embed', attrs: { url: 'https://example.test/embed' } }] } })
   });
+  await expectStatus(baseUrl, '/api/posts', 400, {
+    method: 'POST', headers: { ...auth(author), 'content-type': 'application/json' },
+    body: JSON.stringify({ title: '非法媒体块', contentBlocks: { type: 'doc', content: [{ type: 'audio', attrs: { src: 'https://example.test/audio.mp3', label: '不可信来源' } }] } })
+  });
+  const foreignAttachment = new FormData();
+  foreignAttachment.set('postId', String(posts.private.id));
+  foreignAttachment.set('label', '不应写入的音频');
+  foreignAttachment.set('media', new Blob([Buffer.from('ID3')], { type: 'audio/mpeg' }), 'blocked.mp3');
+  await expectStatus(baseUrl, '/api/posts/media/attachment', 403, { method: 'POST', headers: auth(stranger), body: foreignAttachment });
+  const ownAttachment = new FormData();
+  ownAttachment.set('postId', String(posts.private.id));
+  ownAttachment.set('label', '所有者音频');
+  ownAttachment.set('media', new Blob([Buffer.from('ID3')], { type: 'audio/mpeg' }), 'owned.mp3');
+  const uploadedAttachment = await expectStatus(baseUrl, '/api/posts/media/attachment', 201, { method: 'POST', headers: auth(author), body: ownAttachment });
+  assert.equal(uploadedAttachment.media.kind, 'audio', '音频上传应保留受控媒体类型');
+  await expectStatus(baseUrl, uploadedAttachment.media.url, 403, { headers: auth(stranger) });
+  await expectStatus(baseUrl, uploadedAttachment.media.url, 200, { headers: auth(author) });
+  const mismatchedAttachment = new FormData();
+  mismatchedAttachment.set('postId', String(posts.private.id));
+  mismatchedAttachment.set('label', '伪造音频');
+  mismatchedAttachment.set('media', new Blob([Buffer.from('<html>not media</html>')], { type: 'audio/mpeg' }), 'spoofed.mp3');
+  await expectStatus(baseUrl, '/api/posts/media/attachment', 400, { method: 'POST', headers: auth(author), body: mismatchedAttachment });
   const safeBlocks = { type: 'doc', content: [
     { type: 'callout', attrs: { tone: 'note' }, content: [{ type: 'text', text: '安全提示' }] },
     { type: 'details', attrs: { summary: '展开说明', body: '折叠内容' } },
     { type: 'embed', attrs: { url: 'https://www.youtube.com/watch?v=abc123' } }
   ] };
   const safeBlocksPost = await expectStatus(baseUrl, '/api/posts', 201, { method: 'POST', headers: { ...auth(author), 'content-type': 'application/json' }, body: JSON.stringify({ title: '安全块审计', contentBlocks: safeBlocks }) });
-  await expectStatus(baseUrl, `/api/posts/${safeBlocksPost.post.id}`, 200, { headers: auth(author) }).then((body) => assert.match(body.post.content_html, /data-callout="note"/, '提示卡应生成安全 HTML'));
+  const blockAttachment = new FormData();
+  blockAttachment.set('postId', String(safeBlocksPost.post.id));
+  blockAttachment.set('label', '文章内音频');
+  blockAttachment.set('media', new Blob([Buffer.from('ID3')], { type: 'audio/mpeg' }), 'article.mp3');
+  const articleAudio = await expectStatus(baseUrl, '/api/posts/media/attachment', 201, { method: 'POST', headers: auth(author), body: blockAttachment });
+  await expectStatus(baseUrl, `/api/posts/${safeBlocksPost.post.id}`, 403, { method: 'PUT', headers: { ...auth(author), 'content-type': 'application/json' }, body: JSON.stringify({ contentBlocks: { type: 'doc', content: [...safeBlocks.content, { type: 'audio', attrs: { src: uploadedAttachment.media.url, label: uploadedAttachment.media.label } }] } }) });
+  safeBlocks.content.push({ type: 'audio', attrs: { src: articleAudio.media.url, label: articleAudio.media.label } });
+  await expectStatus(baseUrl, `/api/posts/${safeBlocksPost.post.id}`, 200, { method: 'PUT', headers: { ...auth(author), 'content-type': 'application/json' }, body: JSON.stringify({ contentBlocks: safeBlocks }) });
+  await expectStatus(baseUrl, `/api/posts/${safeBlocksPost.post.id}`, 200, { headers: auth(author) }).then((body) => { assert.match(body.post.content_html, /data-callout="note"/, '提示卡应生成安全 HTML'); assert.match(body.post.content_html, /<audio controls/, '音频块应生成受控播放元素'); });
   const blockDoc = { type: 'doc', content: [
     { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '结构化内容' }] },
     { type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: '列名' }] }] }] }] }
