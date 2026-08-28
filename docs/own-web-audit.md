@@ -1,6 +1,6 @@
-# Own-Web 全站审计报告
+# Own-Web 全站第二轮审计与交付报告
 
-> 状态：实现完成，集中验收通过（2026-08-28）。本文档记录可复核的基线、改动、测试证据和未实现风险；deferred 项不会标记为已实现。
+> 复核日期：2026-08-29。实现、集中质量门禁和真实作者站点发布已经完成；独立匿名/第二账号阅读因当前环境没有第二会话而明确保持 Not Verified。本报告不把测试数据库或代码存在写成第二账号证据。
 
 ## A. Architecture Summary
 
@@ -21,102 +21,190 @@ Express API
 MySQL pool → migrations → blog/workspace tables
 ```
 
+API 在基础表/migrations 和 pool 初始化完成后才监听端口；测试 API 使用独立 `own_web_test`。真实文章使用当前已登录作者会话和真实站点数据库，不使用测试库替代。
+
 ## B. File Inventory
 
-关键 tracked source/config/script 已逐项核对：
+起始基线 `a245cf542e47acfd7241d926c97a03ad36aef8b7` 的完整 tracked-file inventory 共 95 项，来自 `git ls-files`：
 
-- 前端入口与共享层：`src/main.ts`、`src/App.vue`、`src/components/router/index.ts`、`src/components/layouts/Layout.vue`、`src/components/WorkspaceShell.vue`、`src/components/NavigationBar.vue`、`src/components/AppIcon.vue`、`src/components/UserAvatar.vue`、`src/services/http.ts`、`src/style.css`、`src/utils/lrc.ts`。
-- 公共博客与创作：`src/components/views/Home.vue`、`Explore.vue`、`PostDetail.vue`、`PostEditor.vue`、`Creation.vue`、`Profile.vue`、`Bookmarks.vue`、`About.vue`、`Notifications.vue`。
-- 私人工作台与账户：`Dashboard.vue`、`PersonalCenter.vue`、`PersonalInfo.vue`、`Settings.vue`、`StudyZone.vue`、`Entertainment.vue`、`entertainment/ImageZone.vue`、`MusicZone.vue`、`VideoZone.vue`、`Login.vue`、`Register.vue`。
-- 后端与迁移：`api/server.js`（认证、工作台、上传与启动）、`api/blog.js`（博客/发现/互动/编辑器 API）、`api/lib/content.js`（canonical 内容和安全派生）、`api/lib/security.js`（错误、限流、来源校验、文件签名）、`api/migrations.js`（增量迁移）。
-- 配置与运行：`package.json`、`api/package.json`、`vite.config.ts`、`vitest.config.ts`、`playwright.config.ts`、`playwright.visual.config.ts`、`tsconfig*.json`、`.env.example`、`.gitignore`。
-- 脚本与验收：`scripts/lrc-smoke.ts`、`api/scripts/*-smoke.js`、`tests/support/*`、`tests/unit/*`、`tests/api/*`、`tests/security/*`、`tests/e2e/*`、`tests/performance/*`、`tests/fixtures/extreme-article.md`。
-- 产品约束与交付：`AGENTS.md`、`.codex/DESIGN_SYSTEM.md`、`.codex/PRODUCT_BASELINE.md`、`README.md`、`docs/own-web-audit.md`。
+```text
+.codex/DESIGN_SYSTEM.md
+.codex/PRODUCT_BASELINE.md
+.codex/skills/own-web-feature-safety/SKILL.md
+.codex/skills/own-web-ui-consistency/SKILL.md
+.env.example
+.gitignore
+.vscode/extensions.json
+AGENTS.md
+README.md
+api/blog.js
+api/lib/content.js
+api/lib/security.js
+api/migrations.js
+api/package-lock.json
+api/package.json
+api/scripts/auth-account-smoke.js
+api/scripts/blog-access-smoke.js
+api/scripts/ensure-test-db.js
+api/scripts/media-access-smoke.js
+api/scripts/study-access-smoke.js
+api/server.js
+code.txt
+docs/blog-editor-benchmark.md
+docs/own-web-audit.md
+docs/second-pass-verification.md
+index.html
+package-lock.json
+package.json
+playwright.config.ts
+playwright.visual.config.ts
+prompt.txt
+public/favicon.svg
+public/vite.svg
+scripts/lrc-smoke.ts
+src/App.vue
+src/assets/vue.svg
+src/components/AppIcon.vue
+src/components/HelloWorld.vue
+src/components/NavigationBar.vue
+src/components/UserAvatar.vue
+src/components/WorkspaceShell.vue
+src/components/layouts/Layout.vue
+src/components/router/index.ts
+src/components/views/About.vue
+src/components/views/Bookmarks.vue
+src/components/views/Creation.vue
+src/components/views/Dashboard.vue
+src/components/views/Entertainment.vue
+src/components/views/Explore.vue
+src/components/views/Home.vue
+src/components/views/Login.vue
+src/components/views/Notifications.vue
+src/components/views/PersonalCenter.vue
+src/components/views/PersonalInfo.vue
+src/components/views/PostDetail.vue
+src/components/views/PostEditor.vue
+src/components/views/Profile.vue
+src/components/views/Register.vue
+src/components/views/Settings.vue
+src/components/views/StudyZone.vue
+src/components/views/entertainment/ImageZone.vue
+src/components/views/entertainment/MusicZone.vue
+src/components/views/entertainment/VideoZone.vue
+src/katex.d.ts
+src/main.ts
+src/services/http.ts
+src/style.css
+src/utils/editorLifecycle.ts
+src/utils/lrc.ts
+src/utils/mermaid.ts
+src/vite-env.d.ts
+tests/api/run-api-tests.ts
+tests/e2e/navigation-menu.spec.ts
+tests/e2e/real-articles.spec.ts
+tests/e2e/smoke.spec.ts
+tests/e2e/visual.spec.ts
+tests/fixtures/extreme-article.md
+tests/performance/lighthouse.cjs
+tests/security/security-regression.ts
+tests/support/cleanup-test-db.cjs
+tests/support/start-test-server.cjs
+tests/support/start-vite-preview.cjs
+tests/support/start-vite.cjs
+tests/support/test-db.cjs
+tests/unit/content-parity.test.ts
+tests/unit/content.test.ts
+tests/unit/editor-lifecycle.test.ts
+tests/unit/extreme-fixture.test.ts
+tests/unit/mermaid.test.ts
+tests/unit/navigation-menu.test.ts
+tsconfig.app.json
+tsconfig.json
+tsconfig.node.json
+vite.config.ts
+vitest.config.ts
+```
 
-调用关系为：路由视图 → `src/services/http.ts` → Express 路由 → 会话/owner/visibility 校验 → canonical 内容/上传安全模块 → MySQL pool；旧工作台路由继续走 `server.js`，博客路由走 `blog.js`，两者共享 session 和数据库但不共享公开/私有授权边界。
+本轮新增 tracked 交付物包括 `.github/workflows/quality.yml`、draft/music E2E、security unit、Playwright snapshot、showcase fixtures/assets/manifest；最终清单可由 `git ls-files` 重现。主要调用关系为：路由 → views/components → `src/services/http.ts` → Express blog/workspace/auth routes → MySQL pool；preview 和 published 都经过内容契约、协议 allowlist、DOM sanitization 和 Mermaid safe renderer。
 
 ## C. Initial Problems Found
 
-基线中确认的问题包括：单 MySQL 连接和监听前异步建表、Save Draft 被 scheduledAt 改写、Markdown/Blocks 渲染分叉、客户端 `marked` 与服务端自制渲染器不一致、autosave 修订过密、缺少取消收藏、封面/公式/代码/TOC/相关文章、公开查询使用 `SQL_CALC_FOUND_ROWS`、作者列表缺分页、taxonomy 依赖公开文章、上传校验不完整、缺少 Origin/Referer 防护与限流、Creation/移动端编辑器能力不足，以及全站测试入口缺失。
+本轮重新复现：空编辑器短暂输入/删除仍可能把 `dirty` 当持久化依据；autosave 新文章路由替换与失败 recovery 不完整；草稿删除缺 owner/status 和可访问确认；用户菜单缺 outside/Escape/路由/焦点闭环；Music fullscreen 浅色子元素对比度错误；Mermaid 需要安全渲染/fallback；Blocks/Markdown 扩展语义需要 parity；图片损坏/polyglot 覆盖不足；Study 390px 横向溢出；上一轮把测试数据库短文章夸大为四篇真实富文本文章。
 
 ## D. Changes Implemented
 
-### Implementation log
-
-- [x] 独立 `own_web_test` 配置、Vitest/Supertest/Playwright/axe/Lighthouse 入口和测试产物目录。
-- [x] MySQL pool、迁移完成后监听、启动定时发布补偿和 advisory lock。
-- [x] 统一博客错误 envelope、会话版本撤销、密码强度、邮箱规范化、Origin/Referer guard、安全响应头、分路径限流。
-- [x] canonical Blocks/Markdown 校验与安全派生；代码语言白名单、媒体属性、Bookmark Card、math、Mermaid、footnote。
-- [x] 取消收藏、revision 列表/恢复、editor taxonomy、作者分页、全文搜索、独立 count、Latest/Hot/Discover/Following 查询语义。
-- [x] 编辑器发布语义、autosave 状态、封面和媒体 dialog、代码/公式/图表工具、移动端正文优先布局。
-- [x] 阅读页统一 HTML、TOC/anchor/progress/copy-code/related/prev-next/author/share/OpenGraph。
-- [x] 首页卡片、Creation 过滤搜索排序分页、Profile 分页、Bookmarks 取消收藏。
-- [x] 私人工作台旧路由和兼容 userId 字段继续由服务端会话校验。
+- meaningful-content threshold（标题、摘要或正文任一项至少两个 Unicode 字符）；空编辑器不创建数据库行，已有文章继续 autosave，失败保留 recovery 并显示重试状态。
+- DELETE API 补齐 owner/status 校验；draft/scheduled 可删除，published 返回不可删除；删除、离开、恢复、模式切换使用可访问确认 dialog。
+- 用户菜单受控管理，处理 outside click、Escape 焦点恢复、路由和移动主导航互斥。
+- Music fullscreen 使用设计 token 覆盖浅色/深色播放状态、歌词、进度和 controls；长标题 ellipsis，移动端保留 fullscreen 入口。
+- Mermaid 采用受限 flowchart SVG：节点/边/文本/尺寸/时间限制，拒绝 click/script/HTML/危险链接，非法内容显示安全 source fallback。
+- 保持 Markdown/Blocks 双 canonical source；统一 callout/details/embed/bookmark/math/footnote/Mermaid 契约，preview/published 均走 sanitization 和安全媒体规则。
+- 上传校验补齐 MIME、magic bytes、尺寸、结束标记、脚本片段、polyglot/corrupt fixtures；保留 owner/visibility、CSRF、CORS、headers 和限流。
+- Study 移动布局补齐 `min-width: 0` 等约束；增加 unit/API/security/E2E/visual/performance、隔离库生命周期、tracked baselines 和 CI。
+- 四篇文章只通过真实 `/write`、`/posts/:id/edit` UI 创建/编辑/发布，文章保留；source、研究说明和摄影素材进入 `tests/fixtures/showcase/`。
 
 ## E. Blog Editor Comparison
 
-对标 Ghost Cards、WordPress Block Editor、Medium、DEV、Hashnode、Substack 后，本实现保留其结构化块、低干扰编辑、自动保存、预览、封面和定时发布等核心模式；未引入系列、协作、重量级分析等非必要 CMS 能力。外部参考链接见任务执行记录与项目 README。
+对照 Ghost Cards、WordPress Block Editor、Medium Story Editor、Hashnode Editor 和 DEV Editor 官方资料后，保留结构化 blocks、Markdown canonical mode、低干扰写作、autosave、preview、cover、schedule；改善移动端、代码/媒体、revision 和视觉基线；安全实现 math、diagram、bookmark/embed；Deferred 系列、协作、重量级分析与搜索。详细决策见 [blog-editor-benchmark.md](./blog-editor-benchmark.md)。
 
 ## F. Test Blogs
 
-四篇真实文章工作流由集中 E2E 阶段创建并在此登记：
+四篇真实站点文章均由当前作者 `用户69` 发布，状态 `published`、visibility `public`，不删除：
 
-1. Vue 3 响应式与调度（Visual/Blocks）。
-2. 从梯度下降到 Adam（Markdown/Blocks，含 KaTeX）。
-3. 京都街区观察（Visual/Blocks，含 cover/gallery）。
-4. 个人知识网站不应只是文件仓库（Markdown，含安全 embed/bookmark/details/footnote）。
+| ID | 标题 | 模式 | content_markdown 长度 | 实际节点 | URL |
+|---:|---|---|---:|---|---|
+| 158 | Vue 3 响应式与调度：一次更新为什么不会立刻触发十次渲染 | Blocks | 2284 | H2/H3、代码、表格、引用、Callout、Details、Mermaid | [URL](http://localhost:5173/posts/vue-3-响应式与调度-一次更新为什么不会立刻触发十次渲染) |
+| 159 | 从梯度下降到 Adam：优化器如何把不稳定的学习变成可控的步伐 | Markdown | 2516 | H2/H3、inline/block math 15 处、代码、表格、引用、footnote | [URL](http://localhost:5173/posts/未命名草稿-mtd5gy15) |
+| 160 | 京都街区观察：在一条街的阴影里重新认识旅行 | Blocks | 1929 | cover、4 个正文图片、gallery、figcaption、H2/H3、表格、引用 | [URL](http://localhost:5173/posts/京都街区观察-在一条街的阴影里重新认识旅行) |
+| 161 | 个人知识网站不应只是文件仓库 | Markdown | 1847 | Callout、Details、Bookmark Card、Safe Embed、表格、footnote、引用、列表 | [URL](http://localhost:5173/posts/个人知识网站不应只是文件仓库) |
 
-同时准备长文 fixture：10000+ 字符、100 headings、大代码块、宽表格、20 图片、长 URL、中英混合和特殊字符。
+每篇都完成 Create → Autosave → Save Draft → Reload → Continue → Preview → Publish → Re-open Editor → Modify → Republish；作者会话打开了四个真实公开 URL，并检查了 158 的 Mermaid、159 的 KaTeX、160 的 cover/gallery、161 的 bookmark/embed。自动化 `real-articles.spec.ts` 使用 `own_web_test`，不冒充真实站点证据。159 的 slug 保留首次 autosave 生成的 `未命名草稿-mtd5gy15`，列为 P2 内容质量问题。
+
+匿名独立窗口和用户提供的第二账号会话不存在；没有创建账号、登出作者或伪造会话，所以两项读者验收为 Not Verified。
+
+额外压力 fixture `tests/fixtures/extreme-article.md` 为 57,141 bytes、106 headings、2 个 code fences、20 个图片引用，覆盖长 URL、中英混合和特殊字符。
 
 ## G. Screenshots
 
-集中浏览器阶段生成到 `audit-artifacts/screenshots/`（该目录不提交）：Home、Explore、Technical Article、Mathematical Article、Visual Article、Editor、Creation、Profile、Dashboard，各覆盖桌面/移动端与 light/dark；独立视觉矩阵额外检查 1440、1280、1024、768、390px 五种宽度。文件命名示例：`desktop-technical-article.png`、`mobile-dark-visual-article.png`、`desktop-1440-darkhome.png`。
+真实作者站点截图写入本机 ignored 目录 `audit-artifacts/screenshots/`：`home-real.png`、`explore-real.png`、`technical-article-real.png`、`mathematical-article-real.png`、`visual-article-real.png`、`knowledge-article-real.png`、`editor-real.png`、`creation-real.png`、`profile-real.png`、`dashboard-real.png`。可提交、可重复的 Playwright baselines 位于 `tests/e2e/visual.spec.ts-snapshots/`，覆盖 Home、Explore、Login、Register、Creation、Editor、Settings、Dashboard 的 1440/1280/1024/768/390 和 light/dark；Music fullscreen baselines 位于 `tests/e2e/music-fullscreen.spec.ts-snapshots/`。视觉测试检查 bounds、横向溢出、动态字段 mask、dialog/toolbar 可见性。
 
 ## H. Tests
 
-命令入口：
+2026-08-29 从头运行 `npm run test:all`，全部通过：typecheck、build（仅 >500 kB chunk warning）、api:check、LRC、unit（7 files/14 tests）、API（own_web_test）、E2E（36）、security、visual（20）、performance（Lighthouse checks），以及 auth-account、study-access、media-access、blog-access 四项旧 smoke。`git diff --check` 通过。空草稿修复后又单独重跑 E2E 为 36/36。
 
-```text
-npm run typecheck
-npm run build
-npm run api:check
-npm run test:lrc
-npm run test:unit
-npm run test:api
-npm run test:e2e
-npm run test:security
-npm run test:visual
-npm run test:all
-```
-
-最终集中验收：`npm run test:all` 通过；其中默认 E2E 为 24/24，独立视觉矩阵为 30/30，unit 为 4/4，legacy account/study/media/blog smoke 全部通过；未删除断言、未 skip 关键测试、未 mock 整个后端。测试数据库固定为 `own_web_test`，测试用户和上传文件由生命周期脚本清理。
-
-集中验收期间修复了：保存状态早于路由持久化导致 reload 偶发丢失编辑上下文、MySQL 本地时区造成 Hot/Discover 年龄衰减溢出、fresh DB 媒体表晚于迁移创建、magic bytes 高位字节误按 UTF-8 比较、KaTeX/Lighthouse ESM interop、合法图片 MIME 未回写、旧 smoke 使用损坏 PNG fixture，以及移动端四篇真实文章串行工作流超过默认 30 秒测试时限等问题。
+覆盖空编辑器 A–I、autosave/recovery、草稿删除/IDOR、菜单 outside/Escape/keyboard/mobile、音乐三首混合标题与歌词状态、Preview/Published parity、Markdown/Blocks 节点、math/Mermaid/code/table/gallery/embed、auth/visibility/bookmark/like/comment/follow/report、XSS/SQL injection/CSRF/CORS/rate limit/headers/upload attacks，以及 Study、Mail、Images、Videos、Music、LRC、Profile、Dashboard 和旧 `/personal/*` 路由。测试数据与上传由生命周期清理；真实 showcase 不清理。
 
 ## I. Security
 
-覆盖注册/登录/注销、session revoke、owner/visibility/IDOR、CSRF Origin/Referer、CORS、rate limit、安全响应头、XSS、SQL injection、图片 magic bytes、SVG/polyglot、音视频/PDF/ZIP/DOC/DOCX 内容签名，以及私有媒体 protected stream。KaTeX 使用 `trust:false`、`maxSize`、`maxExpand`；Mermaid 数据只以 strict-safe 文本展示，不执行 click/script。
+服务端继续以 session、owner、visibility 和资源归属为准；旧 `userId` 仅作兼容输入并被服务端忽略/校验。已检查 session revoke、密码强度/邮箱规范化、CSRF Origin/Referer、CORS、响应头、分路径限流、XSS、SQL injection、IDOR、私有媒体流、SVG、magic bytes、尺寸、损坏文件和 polyglot。Embed 只允许 HTTPS provider allowlist，不抓取远端、不执行任意 HTML/JS；KaTeX `trust:false`；Mermaid 不启用 click/script。安全脚本、API 权限矩阵和旧 access smoke 均通过，未对生产用户库或私人媒体做破坏性测试。
 
 ## J. Performance / Accessibility
 
-浏览器验收覆盖 1440/1280/1024/768/390px、light/dark、键盘 Tab、对话框/工具栏可达性、表格/代码/公式溢出；生产 `vite preview` Lighthouse：performance 0.97、accessibility 1.00、LCP 2.1s、CLS 0.006、TBT 160ms；axe 自动扫描与键盘审查通过。`npm audit --omit=dev --prefix api` 为 0 vulnerabilities。
+Playwright 的 20 个视觉用例包含 overflow/bounds 检查，E2E 覆盖键盘焦点、Escape、dialog focus、移动布局和菜单关闭；Lighthouse 本地检查通过。脚本只报告 gate pass，没有生成可审计的 LCP/CLS/INP 数值，因此不虚构具体指标。PostEditor、Mermaid 等 bundle 的 >500 kB warning 列为 P2。
 
 ## K. Git Commits
 
-实现完成后按逻辑保留可审查提交（当前工作树尚未拆分提交，提交顺序如下）：
+本轮实际提交：
 
-```text
-test(audit): establish isolated database and test foundation
-refactor(api): stabilize startup pool and error model
-fix(security): harden auth origin rate limits and uploads
-refactor(blog): unify canonical content serialization
-feat(editor): add reliable rich content authoring
-feat(article): improve reading and rendering parity
-feat(blog): improve discovery taxonomy and creation workflows
-test(e2e): cover publishing permissions and real articles
-docs(audit): document findings tests and remaining risks
-```
+| Hash | Message | Purpose |
+|---|---|---|
+| `9481d61` | `fix(editor): harden draft lifecycle and Mermaid content` | 空草稿、recovery、内容契约和 Mermaid fallback |
+| `9d04c57` | `fix(security): harden uploads and test isolation` | 图片完整性、测试隔离和 API fixtures |
+| `340e029` | `fix(music): restore fullscreen playlist contrast` | 全屏播放列表主题 token、状态和移动入口 |
+| `209fc96` | `fix(workspace): prevent study mobile overflow` | Study 390px bounds 修复 |
+| `dfcc6bb` | `test(e2e): cover second-pass interaction regressions` | draft/menu/music E2E、视觉 baselines、安全 unit |
+| `9f418fd` | `feat(blog): publish persistent showcase fixtures` | 文章源文件、研究/素材 manifest；真实文章由 UI 发布并保留 |
+| `c21cfcf` | `ci: add reproducible quality gates` | PR/push 静态与集成门禁、nightly/dispatch 视觉性能任务 |
+| 待生成 | `docs(audit): correct second-pass verification results` | 最终审计证据、真实 URL、限制和 remaining issues |
+
+最终报告提交 hash 由 `git log -1 --format=%H` 取得；它是包含本文件的最后一个 `docs(audit)` 提交，避免在提交自身内容中伪造自引用 hash。
 
 ## L. Remaining Issues
 
-以下能力明确 deferred，未伪装成已实现：邮箱验证、密码重置邮件投递、series、advanced analytics、advanced recommendations、Elasticsearch、heavy job queue、cloud media processing、多作者协作。原因是本次任务锁定 Vue/Express/MySQL、轻量本地媒体和可逆迁移；后续建议分别引入邮件服务、队列/worker、搜索索引、媒体处理服务和协作模型，并补充威胁建模、成本与运维指标。
+P0/P1 本轮范围内的空草稿、autosave、草稿删除、菜单、音乐对比度、Mermaid、parity、上传安全、旧工作台和质量门禁已通过。剩余项：
+
+- P1 验收限制：没有第二账号会话，第二账号公开权限和匿名独立窗口阅读保持 Not Verified；提供现成第二会话后按四个 URL 重跑，不创建新文章。
+- P2：文章 159 的 `未命名草稿-mtd5gy15` slug；PostEditor/Mermaid >500 kB warning；逐篇 pixel baseline 和真实私有媒体视觉回归仍可扩展。
+- Deferred 且未实现：email verification、password reset email delivery、series、advanced analytics、advanced recommendations、Elasticsearch、heavy job queue、cloud media processing、多作者协作。
+
+Deferred 项目没有伪装成已实现能力；本轮也没有引入 Elasticsearch、重量级消息队列、云端媒体处理或破坏性数据库操作。
