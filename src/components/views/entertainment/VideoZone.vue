@@ -35,7 +35,7 @@
     <!-- 视频展示区域 -->
     <div class="videos-grid">
       <button
-        v-for="video in videos" 
+        v-for="video in videos"
         :key="video.id"
         type="button"
         class="video-card"
@@ -49,16 +49,16 @@
         <div v-if="isFiltering" class="selection-indicator">
           <AppIcon v-if="selectedVideos.includes(video.id)" name="check" :size="17" />
         </div>
-        
+
         <div class="video-thumbnail">
-          <img 
-            :src="getVideoCover(video)" 
+          <img
+            :src="getVideoCover(video)"
             :alt="video.title"
             v-if="!isPlayingPreview(video)"
           />
-          <video 
+          <video
             v-else
-            :src="getVideoUrl(video)" 
+            :src="getVideoUrl(video)"
             autoplay
             muted
             loop
@@ -70,7 +70,7 @@
           </div>
           <div class="play-icon" v-if="!isFiltering && !isPlayingPreview(video)"><AppIcon name="play" :size="24" /></div>
         </div>
-        
+
         <div class="video-info">
           <span class="video-title">{{ video.title }}</span>
         </div>
@@ -100,10 +100,10 @@
           </div>
         </div>
       </div>
-      
+
       <div class="player-body">
         <div class="main-player">
-          <video 
+          <video
             ref="mainVideo"
             :src="getVideoUrl(playingVideo)"
             controls
@@ -111,12 +111,12 @@
             @ended="onVideoEnded"
             :style="videoFilterStyle"
           ></video>
-          
+
           <div class="custom-controls">
             <button type="button" :aria-label="isPlaying ? '暂停视频' : '播放视频'" @click="togglePlay"><AppIcon :name="isPlaying ? 'pause' : 'play'" :size="19" /></button>
-            <input 
-              type="range" 
-              v-model="currentTime" 
+            <input
+              type="range"
+              v-model="currentTime"
               :max="duration"
               @input="seekVideo"
               class="progress-bar"
@@ -131,12 +131,12 @@
             <button type="button" aria-label="全屏播放" @click="toggleFullscreen"><AppIcon name="maximize" :size="19" /></button>
           </div>
         </div>
-        
+
         <div class="playlist-sidebar">
           <h4>播放列表</h4>
           <div class="playlist-items">
             <button
-              v-for="v in videos" 
+              v-for="v in videos"
               :key="v.id"
               type="button"
               :class="['playlist-item', { active: playingVideo && playingVideo.id === v.id }]"
@@ -196,28 +196,28 @@
           {{ processingVideo ? '处理中...' : '导出视频' }}
         </button>
       </div>
-      
+
       <div class="editor-body">
         <!-- 左侧：视频预览区 -->
         <div class="editor-left">
           <div class="editor-preview">
-            <video 
-              ref="editorVideo" 
-              :src="getVideoUrl(editingVideo)" 
+            <video
+              ref="editorVideo"
+              :src="getVideoUrl(editingVideo)"
               controls
               @loadedmetadata="onVideoLoaded"
               :style="editorFilterStyle"
             ></video>
-            
+
             <!-- 水印预览层 -->
             <div v-if="watermark.enabled" class="watermark-preview" :style="watermarkStyle">
               {{ watermark.text }}
             </div>
-            
+
             <!-- 打码预览层 -->
             <div v-if="mosaic.enabled" class="mosaic-preview" :style="mosaicStyle"></div>
           </div>
-          
+
           <!-- 时间轴 -->
           <div class="editor-timeline">
             <div class="timeline-header">
@@ -246,7 +246,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- 右侧：工具面板 -->
         <div class="editor-tools-panel">
           <!-- 基础剪辑 -->
@@ -263,50 +263,50 @@
               </button>
             </div>
           </div>
-          
+
           <!-- 画面调节 -->
           <div class="tool-section">
             <h4><AppIcon name="sliders" :size="17" />画面调节</h4>
-            
+
             <div class="adjust-item">
               <label>亮度</label>
               <input type="range" v-model.number="videoAdjustments.brightness" min="0" max="200" />
               <span>{{ videoAdjustments.brightness }}%</span>
             </div>
-            
+
             <div class="adjust-item">
               <label>对比度</label>
               <input type="range" v-model.number="videoAdjustments.contrast" min="0" max="200" />
               <span>{{ videoAdjustments.contrast }}%</span>
             </div>
-            
+
             <div class="adjust-item">
               <label>饱和度</label>
               <input type="range" v-model.number="videoAdjustments.saturation" min="0" max="200" />
               <span>{{ videoAdjustments.saturation }}%</span>
             </div>
-            
+
             <div class="adjust-item">
               <label>模糊</label>
               <input type="range" v-model.number="videoAdjustments.blur" min="0" max="20" step="0.5" />
               <span>{{ videoAdjustments.blur }}px</span>
             </div>
-            
+
             <div class="adjust-item">
               <label>色相</label>
               <input type="range" v-model.number="videoAdjustments.hue" min="0" max="360" />
               <span>{{ videoAdjustments.hue }}°</span>
             </div>
-            
+
             <button type="button" @click="resetAdjustments" class="btn-reset">重置画面</button>
           </div>
-          
+
           <!-- 滤镜效果 -->
           <div class="tool-section">
             <h4><AppIcon name="video" :size="17" />滤镜效果</h4>
             <div class="filter-grid">
-              <button 
-                v-for="filter in videoFilters" 
+              <button
+                v-for="filter in videoFilters"
                 :key="filter.name"
                 :class="['filter-btn', { active: currentFilter === filter.name }]"
                 @click="applyFilter(filter.name)"
@@ -316,7 +316,7 @@
               </button>
             </div>
           </div>
-          
+
           <!-- 水印功能 -->
           <div class="tool-section">
             <h4><AppIcon name="droplet" :size="17" />水印</h4>
@@ -330,8 +330,8 @@
                 <div class="watermark-position">
                   <label>位置</label>
                   <div class="position-grid">
-                    <button 
-                      v-for="pos in ['top-left', 'top-right', 'center', 'bottom-left', 'bottom-right']" 
+                    <button
+                      v-for="pos in ['top-left', 'top-right', 'center', 'bottom-left', 'bottom-right']"
                       :key="pos"
                       :class="['pos-btn', { active: watermark.position === pos }]"
                       @click="watermark.position = pos"
@@ -357,7 +357,7 @@
               </div>
             </div>
           </div>
-          
+
           <!-- 打码功能 -->
           <div class="tool-section">
             <h4><AppIcon name="grid" :size="17" />打码/马赛克</h4>
@@ -395,7 +395,7 @@
               </div>
             </div>
           </div>
-          
+
           <!-- 旋转与翻转 -->
           <div class="tool-section">
             <h4><AppIcon name="rotate-cw" :size="17" />旋转与翻转</h4>
@@ -418,7 +418,7 @@
               </button>
             </div>
           </div>
-          
+
           <!-- 倍速与音量 -->
           <div class="tool-section">
             <h4><AppIcon name="volume" :size="17" />速度与音量</h4>
@@ -492,7 +492,7 @@
           <h3><AppIcon name="upload" :size="20" />上传视频</h3>
           <button class="close-icon" type="button" aria-label="关闭上传窗口" @click="showUpload = false"><AppIcon name="close" :size="18" /></button>
         </div>
-        
+
         <div class="upload-modal-body">
           <!-- 视频标题 -->
           <div class="form-row">
@@ -502,15 +502,15 @@
               <span class="optional">（可选）</span>
             </label>
             <div class="input-wrapper">
-              <input 
-                v-model="uploadForm.title" 
+              <input
+                v-model="uploadForm.title"
                 placeholder="默认为文件名"
                 class="form-input"
               />
               <span class="input-hint">不填写将使用原始文件名</span>
             </div>
           </div>
-          
+
           <!-- 文件选择 -->
           <div class="form-row">
             <label class="form-label">
@@ -519,8 +519,8 @@
               <span class="required">*</span>
             </label>
             <div class="file-upload-area" @click="triggerFileInput" @drop.prevent="handleFileDrop" @dragover.prevent>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 ref="fileInput"
                 accept="video/*"
                 @change="handleFileSelect"
@@ -541,7 +541,7 @@
               </div>
             </div>
           </div>
-          
+
           <!-- 上传进度 -->
           <div v-if="uploadProgress > 0 && uploadProgress < 100" class="upload-progress">
             <div class="progress-bar-container">
@@ -550,11 +550,11 @@
             <span class="progress-text">{{ uploadProgress }}%</span>
           </div>
         </div>
-        
+
         <div class="upload-modal-footer">
           <button class="btn-secondary" type="button" @click="showUpload = false">取消</button>
-          <button 
-            class="btn-primary upload-submit-btn" 
+          <button
+            class="btn-primary upload-submit-btn"
             :disabled="!uploadForm.file || uploading"
             @click="uploadVideo"
           >
@@ -582,14 +582,14 @@ export default {
       themeClass: localStorage.getItem('theme') === 'dark' ? 'dark-mode' : 'light-mode',
       userId: null,
       videos: [],
-      
+
       // 筛选
       isFiltering: false,
       selectedVideos: [],
-      
+
       // 悬停预览
       hoverVideo: null,
-      
+
       // 播放
       playingVideo: null,
       isPlaying: false,
@@ -598,11 +598,11 @@ export default {
       playbackRate: 1,
       showOptions: false,
       showVideoDuration: null,
-      
+
       // 属性
       showProperties: false,
       currentVideoProperties: {},
-      
+
       // 剪辑器
       showEditor: false,
       editingVideo: null,
@@ -611,7 +611,7 @@ export default {
       videoDuration: 0,
       showSaveOptions: false,
       processingVideo: false,
-      
+
       // 视频调节参数
       videoAdjustments: {
         brightness: 100,
@@ -625,7 +625,7 @@ export default {
         flipH: false,
         flipV: false
       },
-      
+
       // 滤镜
       currentFilter: 'none',
       videoFilters: [
@@ -638,7 +638,7 @@ export default {
         { name: 'dramatic', label: '戏剧', css: 'contrast(150%) saturate(120%)' },
         { name: 'cinema', label: '电影', css: 'contrast(120%) brightness(90%) saturate(110%)' }
       ],
-      
+
       // 水印设置
       watermark: {
         enabled: false,
@@ -648,7 +648,7 @@ export default {
         opacity: 50,
         color: '#ffffff'
       },
-      
+
       // 打码设置
       mosaic: {
         enabled: false,
@@ -658,13 +658,13 @@ export default {
         height: 20,
         blur: 10
       },
-      
+
       // 导出选项
       exportOptions: {
         quality: 'original',
         format: 'mp4'
       },
-      
+
       // 上传
       showUpload: false,
       uploadForm: { title: '', file: null },
@@ -673,7 +673,7 @@ export default {
 
       // 删除确认
       showDeleteConfirm: false,
-      
+
       toast: { show: false, message: '', type: 'success' },
       themeHandler: null
     }
@@ -770,7 +770,7 @@ export default {
       }
       window.addEventListener('theme-changed', this.themeHandler)
     },
-    
+
     async loadVideos() {
       try {
         const res = await axios.get(`/api/entertainment/videos/${this.userId}`)
@@ -779,11 +779,11 @@ export default {
         this.showToast('加载视频失败', 'error')
       }
     },
-    
+
     getVideoUrl(video) {
       return `/api/entertainment/video-file/${video.id}`
     },
-    
+
     getVideoCover(video) {
       // 使用默认封面或视频首帧
       if (video.cover_path) {
@@ -792,25 +792,25 @@ export default {
       // 返回一个默认的视频封面占位图（SVG）
       return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180'%3E%3Crect width='320' height='180' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23666' font-size='20'%3E视频封面%3C/text%3E%3C/svg%3E`
     },
-    
+
     isPlayingPreview(video) {
       return this.hoverVideo === video.id && !this.isFiltering
     },
-    
+
     goBack() {
       this.$router.push('/personal/entertainment')
     },
-    
+
     startFilter() {
       this.isFiltering = true
       this.selectedVideos = []
     },
-    
+
     cancelFilter() {
       this.isFiltering = false
       this.selectedVideos = []
     },
-    
+
     handleVideoClick(video) {
       if (this.isFiltering) {
         const idx = this.selectedVideos.indexOf(video.id)
@@ -823,7 +823,7 @@ export default {
         this.playVideo(video)
       }
     },
-    
+
     playVideo(video) {
       this.playingVideo = video
       this.showOptions = false
@@ -835,7 +835,7 @@ export default {
         }
       })
     },
-    
+
     closePlayer() {
       if (this.$refs.mainVideo) {
         this.$refs.mainVideo.pause()
@@ -843,7 +843,7 @@ export default {
       this.playingVideo = null
       this.isPlaying = false
     },
-    
+
     togglePlay() {
       const video = this.$refs.mainVideo
       if (video.paused) {
@@ -854,28 +854,28 @@ export default {
         this.isPlaying = false
       }
     },
-    
+
     updateProgress() {
       const video = this.$refs.mainVideo
       this.currentTime = video.currentTime
       this.duration = video.duration
     },
-    
+
     seekVideo() {
       this.$refs.mainVideo.currentTime = this.currentTime
     },
-    
+
     changeSpeed() {
       this.$refs.mainVideo.playbackRate = parseFloat(this.playbackRate)
     },
-    
+
     toggleFullscreen() {
       const video = this.$refs.mainVideo
       if (video.requestFullscreen) {
         video.requestFullscreen()
       }
     },
-    
+
     onVideoEnded() {
       this.isPlaying = false
       // 播放下一首
@@ -884,14 +884,14 @@ export default {
         this.playVideo(this.videos[currentIdx + 1])
       }
     },
-    
+
     formatTime(seconds) {
       if (!seconds) return '0:00'
       const mins = Math.floor(seconds / 60)
       const secs = Math.floor(seconds % 60)
       return `${mins}:${secs.toString().padStart(2, '0')}`
     },
-    
+
     formatFileSize(bytes) {
       if (!bytes) return '未知'
       const units = ['B', 'KB', 'MB', 'GB']
@@ -903,19 +903,19 @@ export default {
       }
       return size.toFixed(2) + ' ' + units[unitIndex]
     },
-    
+
     formatDate(dateStr) {
       if (!dateStr) return '未知'
       const date = new Date(dateStr)
       return date.toLocaleString('zh-CN')
     },
-    
+
     showVideoProperties() {
       this.currentVideoProperties = this.playingVideo
       this.showProperties = true
       this.showOptions = false
     },
-    
+
     downloadVideo() {
       if (this.playingVideo) {
         const link = document.createElement('a')
@@ -926,7 +926,7 @@ export default {
       }
       this.showOptions = false
     },
-    
+
     // ========== 视频编辑器方法 ==========
     openVideoEditor() {
       this.editingVideo = this.playingVideo
@@ -934,13 +934,13 @@ export default {
       this.showOptions = false
       this.resetAllEditorSettings()
     },
-    
+
     closeEditor() {
       this.showEditor = false
       this.editingVideo = null
       this.resetAllEditorSettings()
     },
-    
+
     resetAllEditorSettings() {
       this.clipStart = 0
       this.clipEnd = 0
@@ -975,13 +975,13 @@ export default {
         blur: 10
       }
     },
-    
+
     onVideoLoaded() {
       const video = this.$refs.editorVideo
       this.videoDuration = video.duration
       this.clipEnd = video.duration
     },
-    
+
     previewClip() {
       const video = this.$refs.editorVideo
       video.currentTime = this.clipStart
@@ -993,15 +993,15 @@ export default {
         }
       }, duration)
     },
-    
+
     splitClip() {
       this.showToast('视频分割尚未接入后端处理，本次未生成文件', 'error')
     },
-    
+
     trimVideo() {
       this.showToast(`已设置预览范围：${this.formatTime(this.clipStart)} - ${this.formatTime(this.clipEnd)}；导出尚未实现`, 'error')
     },
-    
+
     resetAdjustments() {
       this.videoAdjustments.brightness = 100
       this.videoAdjustments.contrast = 100
@@ -1010,20 +1010,20 @@ export default {
       this.videoAdjustments.hue = 0
       this.showToast('画面参数已重置')
     },
-    
+
     getCurrentFilterCss() {
       const adj = this.videoAdjustments
       let filter = `brightness(${adj.brightness}%) contrast(${adj.contrast}%) saturate(${adj.saturation}%)`
       if (adj.blur > 0) filter += ` blur(${adj.blur}px)`
       if (adj.hue > 0) filter += ` hue-rotate(${adj.hue}deg)`
-      
+
       const selectedFilter = this.videoFilters.find(f => f.name === this.currentFilter)
       if (selectedFilter && selectedFilter.name !== 'none') {
         filter += ' ' + selectedFilter.css
       }
       return filter
     },
-    
+
     getTransformCss() {
       let transform = ''
       if (this.videoAdjustments.rotate) transform += `rotate(${this.videoAdjustments.rotate}deg) `
@@ -1031,17 +1031,17 @@ export default {
       if (this.videoAdjustments.flipV) transform += 'scaleY(-1) '
       return transform || 'none'
     },
-    
+
     applyFilter(filterName) {
       this.currentFilter = filterName
       this.showToast(`已应用滤镜：${this.videoFilters.find(f => f.name === filterName)?.label || filterName}`)
     },
-    
+
     rotateVideo(deg) {
       this.videoAdjustments.rotate = (this.videoAdjustments.rotate + deg) % 360
       this.showToast(`旋转 ${this.videoAdjustments.rotate}°`)
     },
-    
+
     flipVideo(direction) {
       if (direction === 'horizontal') {
         this.videoAdjustments.flipH = !this.videoAdjustments.flipH
@@ -1051,25 +1051,25 @@ export default {
         this.showToast(this.videoAdjustments.flipV ? '已垂直翻转' : '取消垂直翻转')
       }
     },
-    
+
     saveWithReplace() {
       this.showToast('视频导出接口尚未实现，原视频未被修改', 'error')
     },
-    
+
     saveAsNew() {
       this.showToast('视频导出接口尚未实现，未创建新视频', 'error')
     },
-    
+
     // ========== 上传相关方法 ==========
     triggerFileInput() {
       this.$refs.fileInput.click()
     },
-    
+
     handleFileSelect(event) {
       const file = event.target.files[0]
       this.processSelectedFile(file)
     },
-    
+
     handleFileDrop(event) {
       const file = event.dataTransfer.files[0]
       if (file && file.type.startsWith('video/')) {
@@ -1078,7 +1078,7 @@ export default {
         this.showToast('请拖入视频文件', 'error')
       }
     },
-    
+
     processSelectedFile(file) {
       if (!file) return
       if (!file.type.startsWith('video/')) {
@@ -1087,7 +1087,7 @@ export default {
       }
       this.uploadForm.file = file
     },
-    
+
     removeSelectedFile() {
       this.uploadForm.file = null
       this.uploadProgress = 0
@@ -1095,18 +1095,18 @@ export default {
         this.$refs.fileInput.value = ''
       }
     },
-    
+
     async uploadVideo() {
       if (!this.uploadForm.file) return
-      
+
       this.uploading = true
       this.uploadProgress = 0
-      
+
       const formData = new FormData()
       formData.append('video', this.uploadForm.file)
       formData.append('userId', this.userId)
       formData.append('title', this.uploadForm.title)
-      
+
       try {
         await axios.post('/api/entertainment/videos', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -1127,11 +1127,11 @@ export default {
         this.uploading = false
       }
     },
-    
+
     confirmDelete() {
       this.showDeleteConfirm = true
     },
-    
+
     async executeDelete() {
       try {
         await axios.delete('/api/entertainment/videos', {
@@ -1145,7 +1145,7 @@ export default {
         this.showToast('删除失败', 'error')
       }
     },
-    
+
     showToast(message, type = 'success') {
       this.toast = { show: true, message, type }
       setTimeout(() => this.toast.show = false, 3000)
@@ -1161,29 +1161,7 @@ export default {
   padding: 20px;
 }
 
-.light-mode {
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  color: #333;
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --border-color: #e5e7eb;
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
-  --accent-color: #3b82f6;
-  --danger-color: #ef4444;
-}
-
-.dark-mode {
-  background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
-  color: #e2e8f0;
-  --bg-primary: #1f2937;
-  --bg-secondary: #2d3748;
-  --border-color: #374151;
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --accent-color: #60a5fa;
-  --danger-color: #f87171;
-}
+.light-mode, .dark-mode { background: var(--bg); color: var(--text); }
 
 .zone-header { margin-bottom: 20px; }
 
@@ -1192,17 +1170,17 @@ export default {
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: var(--text-primary);
+  color: var(--text);
   cursor: pointer;
   font-size: 15px;
 }
 
 .zone-description {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 24px;
@@ -1210,15 +1188,15 @@ export default {
 
 .zone-description h3 {
   margin: 0 0 15px 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 20px;
   padding-bottom: 10px;
-  border-bottom: 2px solid var(--accent-color);
+  border-bottom: 2px solid var(--accent);
 }
 
 .zone-description p {
   margin: 8px 0;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 14px;
 }
 
@@ -1228,14 +1206,14 @@ export default {
   align-items: center;
   margin-bottom: 20px;
   padding: 15px;
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
 }
 
 .selection-status {
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .action-btns {
@@ -1252,19 +1230,19 @@ export default {
 }
 
 .filter-btn, .upload-btn {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
 }
 
 .delete-btn {
-  background: var(--danger-color);
+  background: var(--danger);
   color: white;
 }
 
 .cancel-btn {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .action-btn:disabled {
@@ -1279,7 +1257,7 @@ export default {
 }
 
 .video-card {
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 12px;
   overflow: hidden;
   border: 2px solid transparent;
@@ -1293,11 +1271,11 @@ export default {
 }
 
 .video-card.selectable {
-  border: 2px dashed var(--border-color);
+  border: 2px dashed var(--border);
 }
 
 .video-card.selected {
-  border-color: var(--danger-color);
+  border-color: var(--danger);
 }
 
 .selection-indicator {
@@ -1308,7 +1286,7 @@ export default {
   height: 24px;
   border-radius: 50%;
   border: 2px solid #9ca3af;
-  background: var(--bg-primary);
+  background: var(--surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1316,8 +1294,8 @@ export default {
 }
 
 .video-card.selected .selection-indicator {
-  background: var(--danger-color);
-  border-color: var(--danger-color);
+  background: var(--danger);
+  border-color: var(--danger);
   color: white;
 }
 
@@ -1377,7 +1355,7 @@ export default {
 
 .video-title {
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 /* 视频播放器 */
@@ -1433,7 +1411,7 @@ export default {
   position: absolute;
   top: 100%;
   right: 0;
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   min-width: 120px;
@@ -1445,13 +1423,13 @@ export default {
   padding: 12px 16px;
   background: transparent;
   border: none;
-  color: var(--text-primary);
+  color: var(--text);
   text-align: left;
   cursor: pointer;
 }
 
 .options-menu button:hover {
-  background: var(--bg-secondary);
+  background: var(--bg);
 }
 
 .player-body {
@@ -1502,7 +1480,7 @@ export default {
   -webkit-appearance: none;
   width: 12px;
   height: 12px;
-  background: var(--accent-color);
+  background: var(--accent);
   border-radius: 50%;
   cursor: pointer;
 }
@@ -1523,17 +1501,17 @@ export default {
 
 .playlist-sidebar {
   flex: 1;
-  background: var(--bg-primary);
-  border-left: 1px solid var(--border-color);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
   padding: 20px;
   overflow-y: auto;
 }
 
 .playlist-sidebar h4 {
   margin: 0 0 15px 0;
-  color: var(--text-primary);
+  color: var(--text);
   padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .playlist-items {
@@ -1552,7 +1530,7 @@ export default {
 }
 
 .playlist-item:hover, .playlist-item.active {
-  background: var(--bg-secondary);
+  background: var(--bg);
 }
 
 .playlist-item img {
@@ -1570,7 +1548,7 @@ export default {
 }
 
 .playlist-title {
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 13px;
   font-weight: 500;
   overflow: hidden;
@@ -1579,7 +1557,7 @@ export default {
 }
 
 .playlist-duration {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 12px;
   margin-top: 4px;
 }
@@ -1591,7 +1569,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--bg-primary);
+  background: var(--surface);
   z-index: 1100;
   display: flex;
   flex-direction: column;
@@ -1602,18 +1580,18 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 15px 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .editor-header h3 {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 18px;
 }
 
 .save-btn {
   padding: 10px 24px;
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1623,7 +1601,7 @@ export default {
 }
 
 .save-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent-strong);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
@@ -1684,27 +1662,27 @@ export default {
 
 .editor-timeline {
   padding: 20px;
-  background: var(--bg-secondary);
+  background: var(--bg);
   border-radius: 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
 }
 
 .timeline-header {
   display: flex;
   justify-content: space-between;
   margin-bottom: 12px;
-  color: var(--text-primary);
+  color: var(--text);
   font-weight: 500;
 }
 
 .timeline-time {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 14px;
 }
 
 .timeline-track {
   height: 50px;
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 8px;
   position: relative;
   margin-bottom: 15px;
@@ -1715,7 +1693,7 @@ export default {
   position: absolute;
   top: 0;
   height: 100%;
-  background: var(--accent-color);
+  background: var(--accent);
   opacity: 0.4;
 }
 
@@ -1741,24 +1719,24 @@ export default {
 
 .time-input-group label {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .time-input-group input {
   padding: 10px 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: var(--surface);
+  color: var(--text);
   font-size: 15px;
   width: 100%;
 }
 
 .btn-preview {
   padding: 10px 20px;
-  background: var(--success-color);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1773,8 +1751,8 @@ export default {
 
 .editor-tools-panel {
   flex: 1;
-  background: var(--bg-secondary);
-  border-left: 1px solid var(--border-color);
+  background: var(--bg);
+  border-left: 1px solid var(--border);
   padding: 20px;
   overflow-y: auto;
   max-height: calc(100vh - 70px);  /* 添加最大高度 */
@@ -1784,7 +1762,7 @@ export default {
 .tool-section {
   margin-bottom: 25px;
   padding-bottom: 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .tool-section:last-child {
@@ -1793,7 +1771,7 @@ export default {
 
 .tool-section h4 {
   margin: 0 0 15px 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -1811,16 +1789,16 @@ export default {
   align-items: center;
   gap: 6px;
   padding: 15px 10px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .tool-btn:hover {
-  border-color: var(--accent-color);
+  border-color: var(--accent);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
@@ -1843,14 +1821,14 @@ export default {
 .adjust-item label {
   width: 60px;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .adjust-item input[type="range"] {
   flex: 1;
   height: 6px;
   -webkit-appearance: none;
-  background: var(--bg-tertiary);
+  background: var(--surface-raised);
   border-radius: 3px;
   outline: none;
 }
@@ -1859,7 +1837,7 @@ export default {
   -webkit-appearance: none;
   width: 16px;
   height: 16px;
-  background: var(--accent-color);
+  background: var(--accent);
   border-radius: 50%;
   cursor: pointer;
 }
@@ -1868,7 +1846,7 @@ export default {
   width: 50px;
   text-align: right;
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--text);
   font-family: monospace;
 }
 
@@ -1876,8 +1854,8 @@ export default {
   width: 100%;
   padding: 10px;
   background: transparent;
-  border: 1px dashed var(--border-color);
-  color: var(--text-secondary);
+  border: 1px dashed var(--border);
+  color: var(--muted);
   border-radius: 8px;
   cursor: pointer;
   margin-top: 10px;
@@ -1885,8 +1863,8 @@ export default {
 }
 
 .btn-reset:hover {
-  border-color: var(--accent-color);
-  color: var(--accent-color);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .filter-grid {
@@ -1901,7 +1879,7 @@ export default {
   align-items: center;
   gap: 6px;
   padding: 10px 5px;
-  background: var(--bg-primary);
+  background: var(--surface);
   border: 2px solid transparent;
   border-radius: 10px;
   cursor: pointer;
@@ -1909,28 +1887,28 @@ export default {
 }
 
 .filter-grid .filter-btn:hover {
-  border-color: var(--accent-color);
+  border-color: var(--accent);
 }
 
 .filter-grid .filter-btn.active {
-  border-color: var(--accent-color);
-  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .filter-preview {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--accent-soft);
   border-radius: 6px;
 }
 
 .filter-grid .filter-btn span {
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .watermark-controls, .mosaic-controls {
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 10px;
   padding: 15px;
 }
@@ -1940,14 +1918,14 @@ export default {
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  color: var(--text-primary);
+  color: var(--text);
   margin-bottom: 15px;
 }
 
 .checkbox-label input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: var(--accent-color);
+  accent-color: var(--accent);
 }
 
 .watermark-settings, .mosaic-settings {
@@ -1958,17 +1936,17 @@ export default {
 
 .watermark-settings input[type="text"] {
   padding: 10px 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--bg);
+  color: var(--text);
   font-size: 14px;
 }
 
 .watermark-position label {
   display: block;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--muted);
   margin-bottom: 8px;
 }
 
@@ -1980,18 +1958,18 @@ export default {
 
 .pos-btn {
   padding: 8px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--muted);
   transition: all 0.3s;
 }
 
 .pos-btn:hover, .pos-btn.active {
-  border-color: var(--accent-color);
-  color: var(--accent-color);
+  border-color: var(--accent);
+  color: var(--accent);
   background: rgba(59, 130, 246, 0.1);
 }
 
@@ -2003,13 +1981,13 @@ export default {
 
 .color-picker label {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .color-picker input[type="color"] {
   width: 50px;
   height: 35px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
 }
@@ -2034,15 +2012,15 @@ export default {
 
 .option-group label {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .option-group select {
   padding: 10px 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--bg);
+  color: var(--text);
   font-size: 14px;
 }
 
@@ -2059,16 +2037,16 @@ export default {
   align-items: center;
   gap: 8px;
   padding: 20px;
-  background: var(--bg-secondary);
-  border: 2px solid var(--border-color);
+  background: var(--bg);
+  border: 2px solid var(--border);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .save-mode-buttons button:hover {
-  border-color: var(--accent-color);
+  border-color: var(--accent);
   transform: translateY(-2px);
 }
 
@@ -2086,37 +2064,37 @@ export default {
 }
 
 .save-mode-buttons button small {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 12px;
 }
 
 .replace-btn:hover {
   background: rgba(239, 68, 68, 0.1);
-  border-color: var(--danger-color) !important;
+  border-color: var(--danger) !important;
 }
 
 .new-btn:hover {
   background: rgba(16, 185, 129, 0.1);
-  border-color: var(--success-color) !important;
+  border-color: var(--accent) !important;
 }
 
 .btn-cancel-export {
   width: 100%;
   padding: 12px;
   background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  color: var(--muted);
   border-radius: 8px;
   cursor: pointer;
 }
 
 .btn-cancel-export:hover {
-  background: var(--bg-secondary);
+  background: var(--bg);
 }
 
 /* ========== 删除确认弹窗 ========== */
 .delete-modal p {
-  color: var(--text-secondary);
+  color: var(--muted);
   margin-bottom: 20px;
 }
 
@@ -2136,7 +2114,7 @@ export default {
 }
 
 .delete-modal button:first-child {
-  background: var(--danger-color);
+  background: var(--danger);
   color: white;
 }
 
@@ -2145,9 +2123,9 @@ export default {
 }
 
 .delete-modal button:last-child {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 /* ========== 模态框基础样式 ========== */
@@ -2169,7 +2147,7 @@ export default {
 .properties-modal,
 .save-options-modal,
 .delete-modal {
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 16px;
   padding: 24px;
   max-width: 400px;
@@ -2183,7 +2161,7 @@ export default {
 .save-options-modal h3,
 .delete-modal h3 {
   margin: 0 0 20px 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 18px;
 }
 
@@ -2191,7 +2169,7 @@ export default {
   display: flex;
   justify-content: space-between;
   padding: 12px 0;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .property-item:last-child {
@@ -2199,12 +2177,12 @@ export default {
 }
 
 .property-item label {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 14px;
 }
 
 .property-item span {
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 14px;
   font-weight: 500;
 }
@@ -2213,7 +2191,7 @@ export default {
   width: 100%;
   padding: 12px;
   margin-top: 20px;
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -2231,7 +2209,7 @@ export default {
 .upload-modal-redesign {
   max-width: 520px;
   width: 90%;
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -2242,7 +2220,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 20px 25px;
-  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%);
+  background: var(--accent);
   color: white;
 }
 
@@ -2303,7 +2281,7 @@ export default {
   gap: 8px;
   margin-bottom: 10px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 15px;
 }
 
@@ -2312,13 +2290,13 @@ export default {
 }
 
 .optional {
-  color: var(--text-tertiary);
+  color: var(--subtle);
   font-weight: normal;
   font-size: 13px;
 }
 
 .required {
-  color: var(--danger-color);
+  color: var(--danger);
 }
 
 .input-wrapper {
@@ -2328,17 +2306,17 @@ export default {
 .form-input {
   width: 100%;
   padding: 14px 16px;
-  border: 2px solid var(--border-color);
+  border: 2px solid var(--border);
   border-radius: 12px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: var(--surface);
+  color: var(--text);
   font-size: 15px;
   transition: all 0.3s;
 }
 
 .form-input:focus {
   outline: none;
-  border-color: var(--accent-color);
+  border-color: var(--accent);
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 }
 
@@ -2346,21 +2324,21 @@ export default {
   display: block;
   margin-top: 6px;
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--subtle);
 }
 
 .file-upload-area {
-  border: 2px dashed var(--border-color);
+  border: 2px dashed var(--border);
   border-radius: 16px;
   padding: 40px 20px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s;
-  background: var(--bg-secondary);
+  background: var(--bg);
 }
 
 .file-upload-area:hover {
-  border-color: var(--accent-color);
+  border-color: var(--accent);
   background: rgba(59, 130, 246, 0.05);
 }
 
@@ -2383,14 +2361,14 @@ export default {
 .upload-text {
   margin: 0;
   font-size: 16px;
-  color: var(--text-primary);
+  color: var(--text);
   font-weight: 500;
 }
 
 .upload-subtext {
   margin: 0;
   font-size: 13px;
-  color: var(--text-tertiary);
+  color: var(--subtle);
 }
 
 .file-selected {
@@ -2399,7 +2377,7 @@ export default {
   gap: 15px;
   padding: 20px;
   background: rgba(16, 185, 129, 0.1);
-  border: 2px solid var(--success-color);
+  border: 2px solid var(--accent);
   border-radius: 12px;
 }
 
@@ -2415,14 +2393,14 @@ export default {
 .file-name {
   margin: 0 0 4px 0;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
   word-break: break-all;
 }
 
 .file-size {
   margin: 0;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .remove-file {
@@ -2434,14 +2412,14 @@ export default {
   background: rgba(239, 68, 68, 0.1);
   border: none;
   border-radius: 50%;
-  color: var(--danger-color);
+  color: var(--danger);
   font-size: 18px;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .remove-file:hover {
-  background: var(--danger-color);
+  background: var(--danger);
   color: white;
 }
 
@@ -2451,28 +2429,28 @@ export default {
   gap: 15px;
   margin-top: 20px;
   padding: 15px;
-  background: var(--bg-secondary);
+  background: var(--bg);
   border-radius: 10px;
 }
 
 .progress-bar-container {
   flex: 1;
   height: 8px;
-  background: var(--bg-tertiary);
+  background: var(--surface-raised);
   border-radius: 4px;
   overflow: hidden;
 }
 
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-color) 0%, var(--accent-hover) 100%);
+  background: var(--accent);
   border-radius: 4px;
   transition: width 0.3s;
 }
 
 .progress-text {
   font-weight: 600;
-  color: var(--accent-color);
+  color: var(--accent);
   min-width: 45px;
   text-align: right;
 }
@@ -2481,8 +2459,8 @@ export default {
   display: flex;
   gap: 12px;
   padding: 20px 25px;
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
 }
 
 .upload-modal-footer button {
@@ -2497,18 +2475,18 @@ export default {
 }
 
 .btn-secondary {
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color) !important;
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--border) !important;
 }
 
 .btn-secondary:hover {
-  background: var(--border-color);
-  color: var(--text-primary);
+  background: var(--border);
+  color: var(--text);
 }
 
 .upload-submit-btn {
-  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%);
+  background: var(--accent);
   color: white;
   display: flex;
   align-items: center;
@@ -2516,12 +2494,7 @@ export default {
   gap: 8px;
 }
 
-/* 白天模式：开始上传按钮改为浅色背景和深色文字 */
-.light-mode .upload-submit-btn {
-  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
-  color: #0369a1;
-  border: 1px solid #7dd3fc;
-}
+.light-mode .upload-submit-btn { background: var(--accent); color: #fff; border: 1px solid var(--accent); }
 
 .upload-submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
@@ -2552,14 +2525,14 @@ export default {
     flex-direction: column;
     overflow: auto;  /* 改为 auto */
   }
-  
+
   .editor-left {
     min-height: 50vh;  /* 添加最小高度 */
   }
-  
+
   .editor-tools-panel {
     border-left: none;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--border);
     max-height: none;     /* 移除限制 */
     height: auto;
     min-width: auto;
@@ -2570,21 +2543,21 @@ export default {
   .player-body {
     flex-direction: column;
   }
-  
+
   .playlist-sidebar {
     max-height: 200px;
     border-left: none;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--border);
   }
-  
+
   .filter-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .save-mode-buttons {
     grid-template-columns: 1fr;
   }
-  
+
   .videos-grid {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   }
