@@ -37,11 +37,11 @@
     <!-- 音乐列表区域 -->
     <div class="music-list-container" :class="{ 'with-lyrics': showLyricsSidebar }">
       <div class="music-list">
-        <div 
-          v-for="(music, index) in musicList" 
+        <div
+          v-for="(music, index) in musicList"
           :key="music.id"
-          :class="['music-row', { 
-            'selectable': isFiltering, 
+          :class="['music-row', {
+            'selectable': isFiltering,
             'selected': selectedMusic.includes(music.id),
             'playing': currentMusic && currentMusic.id === music.id,
             'paused': currentMusic && currentMusic.id === music.id && !isPlaying
@@ -51,9 +51,9 @@
           <div v-if="isFiltering" class="row-selection-indicator">
             <AppIcon v-if="selectedMusic.includes(music.id)" name="check" :size="17" />
           </div>
-          
+
           <span class="row-number" v-if="!isFiltering">{{ index + 1 }}</span>
-          
+
           <div class="music-cover" @click.stop="playMusic(music)">
             <img :src="getMusicCover(music)" :alt="music.title" />
             <div class="play-overlay">
@@ -67,26 +67,26 @@
               <span></span><span></span><span></span>
             </div>
           </div>
-          
+
           <div class="music-details" @click.stop="playMusic(music)">
             <span class="music-name" :title="music.title">{{ music.title }}</span>
             <span class="music-separator"> -- </span>
             <span class="music-artist" :title="music.artist">{{ music.artist || '未知歌手' }}</span>
             <span v-if="music.album" class="music-album">《{{ music.album }}》</span>
           </div>
-          
+
           <div class="music-tools" v-if="!isFiltering">
             <button
               type="button"
-              class="tool-btn play-pause-btn" 
+              class="tool-btn play-pause-btn"
               @click.stop="togglePlayMusic(music)"
               :aria-label="isPlaying && currentMusic && currentMusic.id === music.id ? '暂停' : '播放'"
             >
               <AppIcon :name="isPlaying && currentMusic && currentMusic.id === music.id ? 'pause' : 'play'" :size="18" />
             </button>
             <button class="tool-btn more-btn" type="button" @click.stop="showMusicInfo(music)" aria-label="歌曲更多信息"><AppIcon name="more" :size="18" /></button>
-            <button 
-              class="tool-btn lyrics-btn" 
+            <button
+              class="tool-btn lyrics-btn"
               @click.stop="toggleLyricsSidebar(music)"
               :class="{ active: showLyricsSidebar && currentMusic && currentMusic.id === music.id }"
               aria-label="显示歌词侧栏"
@@ -96,13 +96,13 @@
             <button class="tool-btn download-btn" type="button" @click.stop="downloadMusic(music)" aria-label="下载歌曲"><AppIcon name="download" :size="18" /></button>
             <button class="tool-btn delete-tool" type="button" @click.stop="deleteSingleMusic(music)" aria-label="删除歌曲"><AppIcon name="trash" :size="18" /></button>
           </div>
-          
+
           <div class="music-meta">
             <span class="music-quality" v-if="music.file_type === '.flac' || music.file_type === '.wav'">无损</span>
             <span class="music-duration">{{ formatDuration(music.duration) }}</span>
           </div>
         </div>
-        
+
         <div v-if="musicList.length === 0" class="empty-music-list">
           <div class="empty-icon"><AppIcon name="music" :size="30" /></div>
           <p>暂无歌曲，点击上传按钮添加音乐</p>
@@ -122,18 +122,18 @@
           </div>
           <button class="close-lyrics-btn" type="button" aria-label="关闭歌词侧栏" @click="showLyricsSidebar = false"><AppIcon name="close" :size="18" /></button>
         </div>
-        
+
         <div class="lyrics-scroll-wrapper" ref="lyricsWrapper" @scroll="onLyricsScroll" @wheel="pauseLyricsFollow" @touchstart="pauseLyricsFollow" @pointerdown="pauseLyricsFollow">
           <div class="lyrics-content">
-            <div 
-              v-for="(line, index) in parsedLyrics" 
+            <div
+              v-for="(line, index) in parsedLyrics"
               :key="index"
               :class="['lyrics-line', { active: isCurrentLyric(index) }]"
               @click="seekToLyric(line.time)"
             >
               {{ line.text }}
             </div>
-            
+
             <div v-if="!currentMusic" class="no-lyrics-playing">
               <p>请选择一首歌曲播放</p>
             </div>
@@ -143,7 +143,7 @@
             </div>
           </div>
         </div>
-        
+
         <div class="lyrics-controls">
           <button @click="adjustLyricsOffset(-0.5)" title="歌词提前0.5秒">−0.5s</button>
           <span>歌词偏移: {{ lyricsOffset.toFixed(1) }}s</span>
@@ -163,7 +163,7 @@
             <div class="progress-buffer" :style="{ width: bufferedPercent + '%' }"></div>
           </div>
         </div>
-        
+
         <div class="mini-content">
           <div class="mini-info" @click="openFullscreenPlayer">
             <div class="mini-cover-wrapper">
@@ -177,7 +177,7 @@
               <span class="mini-artist">{{ currentMusic.artist }}</span>
             </div>
           </div>
-          
+
           <div class="mini-controls">
             <button class="mode-btn-mini" type="button" @click="togglePlayMode" :aria-label="playModeTitle">
               <AppIcon :name="playModeIcon" :size="18" />
@@ -189,7 +189,7 @@
             <button type="button" @click="nextMusic" :disabled="!canGoNext" class="nav-btn" aria-label="下一首"><AppIcon name="skip-forward" :size="18" /></button>
             <button class="playlist-btn-mini" type="button" @click="toggleMiniPlaylist" aria-label="播放列表"><AppIcon name="list" :size="18" /></button>
           </div>
-          
+
           <div class="mini-extra">
             <div class="volume-control">
               <button type="button" @click="toggleMute" :aria-label="isMuted ? '取消静音' : '静音'"><AppIcon :name="isMuted || volume === 0 ? 'volume-x' : 'volume'" :size="18" /></button>
@@ -198,10 +198,10 @@
             <button class="fullscreen-btn" type="button" @click="openFullscreenPlayer" aria-label="全屏模式"><AppIcon name="maximize" :size="18" /></button>
           </div>
         </div>
-        
+
         <div v-if="showMiniPlaylist" class="mini-playlist">
-          <div 
-            v-for="m in musicList" 
+          <div
+            v-for="m in musicList"
             :key="m.id"
             :class="['mini-playlist-item', { active: currentMusic && currentMusic.id === m.id }]"
             @click="playMusic(m)"
@@ -222,7 +222,7 @@
       <div v-if="fullscreenPlayer" class="fullscreen-music-player" role="dialog" aria-modal="true" aria-label="全屏音乐播放器">
         <div class="fs-background" :style="fsBackgroundStyle"></div>
         <div class="fs-background-overlay"></div>
-        
+
         <div class="fs-header">
           <button class="back-btn" type="button" @click="closeFullscreenPlayer">
             <AppIcon name="arrow-left" :size="17" />
@@ -237,7 +237,7 @@
             <input type="range" v-model="volume" min="0" max="100" @input="changeVolume" />
           </div>
         </div>
-        
+
         <div class="fs-body">
           <div class="fs-album-section">
             <div class="album-disc" :class="{ playing: isPlaying }">
@@ -246,11 +246,11 @@
             </div>
             <div class="album-glow"></div>
           </div>
-          
+
           <!-- 全屏歌词区域 - 已修复 -->
           <div class="fs-lyrics-section">
-            <div 
-              class="lyrics-scroll-wrapper" 
+            <div
+              class="lyrics-scroll-wrapper"
               ref="fsLyricsWrapper"
               @scroll="onFsLyricsScroll"
               @wheel="pauseLyricsFollow"
@@ -258,10 +258,10 @@
               @pointerdown="pauseLyricsFollow"
             >
               <div class="lyrics-content">
-                <div 
-                  v-for="(line, index) in parsedLyrics" 
+                <div
+                  v-for="(line, index) in parsedLyrics"
                   :key="index"
-                  :class="['fs-lyric-line', { 
+                  :class="['fs-lyric-line', {
                     active: isCurrentLyric(index),
                     past: index < currentLyricIndex
                   }]"
@@ -269,7 +269,7 @@
                 >
                   <span class="lyric-text">{{ line.text }}</span>
                 </div>
-                
+
                 <div v-if="parsedLyrics.length === 0" class="fs-no-lyrics">
                   <div class="no-lyrics-icon"><AppIcon name="music" :size="30" /></div>
                   <p>暂无歌词</p>
@@ -277,14 +277,14 @@
                 </div>
               </div>
             </div>
-            
+
             <div class="next-lyric" v-if="parsedLyrics.length > 0 && currentLyricIndex < parsedLyrics.length - 1">
               <span>下一句：</span>
               {{ parsedLyrics[currentLyricIndex + 1]?.text || '' }}
             </div>
             <button v-if="!lyricsAutoScroll" type="button" class="return-lyrics-btn fs-return-lyrics-btn" @click="resumeLyricsFollow"><AppIcon name="arrow-down" :size="16" />回到当前歌词</button>
           </div>
-          
+
           <div class="fs-playlist-section" :class="{ collapsed: !showFsPlaylist }">
             <button class="playlist-toggle-btn" type="button" @click="showFsPlaylist = !showFsPlaylist" :aria-label="showFsPlaylist ? '收起播放列表' : '展开播放列表'">
               <AppIcon :name="showFsPlaylist ? 'arrow-right' : 'arrow-left'" :size="17" />
@@ -292,10 +292,10 @@
             <div v-if="showFsPlaylist" class="fs-playlist-content">
               <h4>播放列表 ({{ musicList.length }})</h4>
               <div class="fs-playlist-scroll">
-                <div 
-                  v-for="(m, idx) in musicList" 
+                <div
+                  v-for="(m, idx) in musicList"
                   :key="m.id"
-                  :class="['fs-playlist-item', { 
+                  :class="['fs-playlist-item', {
                     active: currentMusic && currentMusic.id === m.id,
                     played: playedHistory.includes(m.id)
                   }]"
@@ -316,13 +316,13 @@
             </div>
           </div>
         </div>
-        
+
         <div class="fs-controls">
           <div class="fs-song-info">
             <h3>{{ currentMusic.title }}</h3>
             <p>{{ currentMusic.artist }} <span v-if="currentMusic.album">· {{ currentMusic.album }}</span></p>
           </div>
-          
+
           <div class="fs-progress-section">
             <span class="time-current">{{ formatTime(currentTime) }}</span>
             <div class="fs-progress-bar" @click="seekFromFsClick" ref="fsProgressBar">
@@ -334,13 +334,13 @@
             </div>
             <span class="time-total">{{ formatTime(totalDuration) }}</span>
           </div>
-          
+
           <div class="fs-buttons">
             <button class="mode-btn" type="button" @click="togglePlayMode" :aria-label="playModeTitle">
               <AppIcon class="mode-icon" :name="playModeIcon" :size="18" />
               <span class="mode-text">{{ playModeTitle }}</span>
             </button>
-            
+
             <div class="main-controls">
               <button type="button" @click="prevMusic" :disabled="!canGoPrev" class="nav-btn large" aria-label="上一首">
                 <AppIcon name="skip-back" :size="23" />
@@ -352,10 +352,10 @@
                 <AppIcon name="skip-forward" :size="23" />
               </button>
             </div>
-            
+
             <div class="extra-controls">
-              <button 
-                :class="['lyrics-toggle-btn', { active: showLyricsSidebar }]" 
+              <button
+                :class="['lyrics-toggle-btn', { active: showLyricsSidebar }]"
                 type="button"
                 @click="toggleLyricsSidebar(currentMusic)"
                 aria-label="切换歌词侧栏"
@@ -454,7 +454,7 @@
           <div :class="['step', { active: uploadStep === 2, done: uploadStep > 2 }]">2.选择文件</div>
           <div :class="['step', { active: uploadStep === 3 }]">3.完成</div>
         </div>
-        
+
         <div v-if="uploadStep === 1" class="step-content">
           <div class="form-group">
             <label>歌曲名 <span class="required">*</span></label>
@@ -479,9 +479,9 @@
             <button @click="closeUpload">取消</button>
           </div>
         </div>
-        
+
         <div v-if="uploadStep === 2" class="step-content">
-          <div class="file-drop-zone" 
+          <div class="file-drop-zone"
                :class="{ dragging: isDragging }"
                @dragover.prevent="isDragging = true"
                @dragleave="isDragging = false"
@@ -494,7 +494,7 @@
               <span class="file-hint">支持 MP3, FLAC, WAV, AAC 等格式</span>
             </div>
           </div>
-          
+
           <div class="file-info" v-if="uploadForm.file">
             <div class="info-item">
               <span>大小：</span>
@@ -505,13 +505,13 @@
               <span>{{ uploadForm.file.type }}</span>
             </div>
           </div>
-          
+
           <div class="actions">
             <button class="secondary-btn" @click="uploadStep = 1">上一步</button>
             <button class="primary-btn" :disabled="!uploadForm.file" @click="uploadMusic">开始上传</button>
           </div>
         </div>
-        
+
         <div v-if="uploadStep === 3" class="step-content center">
           <div class="upload-success">
             <div class="success-icon"><AppIcon name="check" :size="28" /></div>
@@ -523,7 +523,7 @@
             <button @click="uploadAnother">继续上传</button>
           </div>
         </div>
-        
+
         <div v-if="isUploading" class="upload-progress">
           <div class="progress-bar">
             <div class="progress-fill" :style="{ width: uploadProgress + '%' }"></div>
@@ -534,8 +534,8 @@
     </div>
 
     <!-- 音频元素 -->
-    <audio 
-      ref="audioPlayer" 
+    <audio
+      ref="audioPlayer"
       @timeupdate="updateTime"
       @ended="onMusicEnded"
       @loadedmetadata="onMetadataLoaded"
@@ -546,7 +546,7 @@
 
     <!-- Toast -->
     <div v-if="toast.show" class="toast modern" :class="toast.type">{{ toast.message }}</div>
-    
+
     <!-- 快捷键提示 -->
     <div v-if="showShortcuts" class="shortcuts-overlay" @click="showShortcuts = false">
       <div class="shortcuts-modal" role="dialog" aria-modal="true" aria-label="键盘快捷键">
@@ -565,7 +565,7 @@
         <button @click="showShortcuts = false">知道了</button>
       </div>
     </div>
-    
+
     <button class="shortcuts-hint-btn" type="button" @click="showShortcuts = true" aria-label="键盘快捷键"><AppIcon name="keyboard" :size="18" /></button>
   </div>
 </template>
@@ -582,7 +582,7 @@ export default {
     return {
       userId: null,
       musicList: [],
-      
+
       // 播放状态
       currentMusic: null,
       isPlaying: false,
@@ -595,7 +595,7 @@ export default {
       isMuted: false,
       previousVolume: 80,
       playedHistory: [],
-      
+
       // 歌词
       currentLyrics: '',
       parsedLyrics: [],
@@ -608,11 +608,11 @@ export default {
       lyricsProgrammaticScroll: false,
       lyricsSyncFrame: null,
       lyricsResizeObserver: null,
-      
+
       // 筛选
       isFiltering: false,
       selectedMusic: [],
-      
+
       // UI状态
       fullscreenPlayer: false,
       showFsPlaylist: true,
@@ -629,11 +629,11 @@ export default {
       showAddLyrics: false,
       newLyricsText: '',
       showShortcuts: false,
-      
+
       // 表单
       uploadForm: { title: '', artist: '', album: '', releaseDate: '', file: null },
       errors: {},
-      
+
       toast: { show: false, message: '', type: 'success' }
     }
   },
@@ -716,23 +716,23 @@ export default {
       const saved = localStorage.getItem('musicVolume')
       if (saved !== null) this.volume = parseInt(saved)
     },
-    
+
     saveVolumeSetting() {
       localStorage.setItem('musicVolume', this.volume)
     },
-    
+
     setupKeyboardShortcuts() {
       document.addEventListener('keydown', this.handleKeyDown)
     },
-    
+
     removeKeyboardShortcuts() {
       document.removeEventListener('keydown', this.handleKeyDown)
     },
-    
+
     handleKeyDown(e) {
       const target = e.target
       if (target?.closest?.('input, textarea, select, [contenteditable="true"]')) return
-      
+
       switch(e.code) {
         case 'Space':
           e.preventDefault()
@@ -775,7 +775,7 @@ export default {
           break
       }
     },
-    
+
     async loadMusic() {
       try {
         const res = await axios.get(`/api/entertainment/music/${this.userId}`)
@@ -784,13 +784,13 @@ export default {
         this.showToast('加载音乐失败', 'error')
       }
     },
-    
+
     getMusicCover(music) {
       if (!music) return ''
       if (music.cover_path) return music.cover_path
       return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'%3E%3Crect width='300' height='300' fill='%23e7e8e4'/%3E%3Ccircle cx='150' cy='150' r='89' fill='none' stroke='%234d6177' stroke-width='5'/%3E%3Ccircle cx='150' cy='150' r='28' fill='%234d6177'/%3E%3Cpath d='M137 113v75l55-16' fill='none' stroke='%234d6177' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"
     },
-    
+
     generateColorsFromString(str) {
       let hash = 0
       for (let i = 0; i < str.length; i++) {
@@ -800,7 +800,7 @@ export default {
       const c2 = (c1 + 40) % 360
       return [this.hslToHex(c1, 70, 50), this.hslToHex(c2, 70, 40)]
     },
-    
+
     hslToHex(h, s, l) {
       l /= 100
       const a = s * Math.min(l, 1 - l) / 100
@@ -811,11 +811,11 @@ export default {
       }
       return `${f(0)}${f(8)}${f(4)}`
     },
-    
+
     getMusicUrl(music) {
       return `/api/entertainment/music-file/${music.id}`
     },
-    
+
     formatDuration(duration) {
       if (!duration) return '0:00'
       if (typeof duration === 'string' && duration.includes(':')) {
@@ -831,7 +831,7 @@ export default {
       const s = seconds % 60
       return `${m}:${s.toString().padStart(2, '0')}`
     },
-    
+
     formatFileSize(bytes) {
       if (!bytes) return '0 B'
       const units = ['B', 'KB', 'MB', 'GB']
@@ -842,53 +842,53 @@ export default {
       }
       return size.toFixed(2) + ' ' + units[unitIndex]
     },
-    
+
     formatTime(seconds) {
       if (!seconds || isNaN(seconds)) return '0:00'
       const m = Math.floor(seconds / 60)
       const s = Math.floor(seconds % 60)
       return `${m}:${s.toString().padStart(2, '0')}`
     },
-    
+
     playMusic(music, addToHistory = true) {
       if (!music) return
-      
+
       if (this.currentMusic && this.currentMusic.id === music.id) {
         this.togglePlay()
         return
       }
-      
+
       this.currentMusic = music
       const audio = this.$refs.audioPlayer
-      
+
       if (addToHistory && !this.playedHistory.includes(music.id)) {
         this.playedHistory.push(music.id)
       }
-      
+
       this.incrementPlayCount(music.id)
-      
+
       audio.src = this.getMusicUrl(music)
       audio.load()
-      
+
       audio.oncanplaythrough = () => {
         audio.play()
         this.isPlaying = true
         this.loadLyrics(music)
       }
     },
-    
+
     async incrementPlayCount(musicId) {
       try {
         await axios.post(`/api/entertainment/music/${musicId}/play`, { userId: this.userId })
       } catch (e) {}
     },
-    
+
     togglePlay() {
       if (!this.currentMusic) {
         if (this.musicList.length > 0) this.playMusic(this.musicList[0])
         return
       }
-      
+
       const audio = this.$refs.audioPlayer
       if (audio.paused) {
         audio.play()
@@ -898,7 +898,7 @@ export default {
         this.isPlaying = false
       }
     },
-    
+
     togglePlayMusic(music) {
       if (this.currentMusic && this.currentMusic.id === music.id) {
         this.togglePlay()
@@ -906,13 +906,13 @@ export default {
         this.playMusic(music)
       }
     },
-    
+
     prevMusic() {
       if (!this.currentMusic || this.musicList.length === 0) return
-      
+
       let prevIdx
       const currentIdx = this.musicList.findIndex(m => m.id === this.currentMusic.id)
-      
+
       if (this.playMode === 'random') {
         if (this.playedHistory.length > 1) {
           this.playedHistory.pop()
@@ -931,16 +931,16 @@ export default {
           }
         }
       }
-      
+
       this.playMusic(this.musicList[prevIdx])
     },
-    
+
     nextMusic() {
       if (!this.currentMusic || this.musicList.length === 0) return
-      
+
       let nextIdx
       const currentIdx = this.musicList.findIndex(m => m.id === this.currentMusic.id)
-      
+
       if (this.playMode === 'random') {
         nextIdx = Math.floor(Math.random() * this.musicList.length)
         let attempts = 0
@@ -958,17 +958,17 @@ export default {
           }
         }
       }
-      
+
       this.playMusic(this.musicList[nextIdx])
     },
-    
+
     togglePlayMode() {
       const modes = ['sequence', 'random', 'single']
       const currentIdx = modes.indexOf(this.playMode)
       this.playMode = modes[(currentIdx + 1) % modes.length]
       this.showToast(`已切换到${this.playModeTitle}`)
     },
-    
+
     onMusicEnded() {
       if (this.playMode === 'single') {
         this.$refs.audioPlayer.currentTime = 0
@@ -977,15 +977,15 @@ export default {
         this.nextMusic()
       }
     },
-    
+
     // ========== 歌词处理 ==========
     loadLyrics(music) {
       if (!music) return
-      
+
       this.currentLyricIndex = -1
       this.lyricsOffset = 0
       this.lyricsAutoScroll = true
-      
+
       if (music.lyrics) {
         this.currentLyrics = music.lyrics
         this.parseLyrics(music.lyrics)
@@ -999,7 +999,7 @@ export default {
         }
       }
       this.lyricsOffset = this.lrcOffset + (Number(music.lyrics_offset_ms) || 0) / 1000
-      
+
       if (this.parsedLyrics.length > 0) {
         this.$nextTick(() => {
           this.observeLyricsWrappers()
@@ -1007,7 +1007,7 @@ export default {
         })
       }
     },
-    
+
     parseLyrics(lyricsText) {
       const parsed = parseLrc(lyricsText || '')
       this.parsedLyrics = parsed.lines
@@ -1066,12 +1066,12 @@ export default {
     onLyricsScroll() {
       if (!this.lyricsProgrammaticScroll) this.pauseLyricsFollow()
     },
-    
+
     onFsLyricsScroll(e) {
       e.stopPropagation()
       this.onLyricsScroll()
     },
-    
+
     seekToLyric(time) {
       if (time === undefined) return
       const adjustedTime = time + this.lyricsOffset
@@ -1079,13 +1079,13 @@ export default {
       this.currentTime = adjustedTime
       this.resumeLyricsFollow()
     },
-    
+
     adjustLyricsOffset(delta) {
       this.lyricsOffset = Math.max(-30, Math.min(30, this.lyricsOffset + delta))
       this.scheduleLyricsSync(this.currentTime, true)
       this.queueLyricsOffsetSave()
     },
-    
+
     resetLyricsOffset() {
       this.lyricsOffset = this.lrcOffset
       this.scheduleLyricsSync(this.currentTime, true)
@@ -1110,33 +1110,33 @@ export default {
         this.showToast('歌词偏移未能保存，请稍后重试', 'error')
       }
     },
-    
+
     // ========== 音频事件 ==========
-    
+
     updateTime() {
       const audio = this.$refs.audioPlayer
       this.currentTime = audio.currentTime
     },
-    
+
     onMetadataLoaded() {
       this.totalDuration = this.$refs.audioPlayer.duration
     },
-    
+
     onProgress() {
       const audio = this.$refs.audioPlayer
       if (audio.buffered.length > 0) {
         this.bufferedTime = audio.buffered.end(audio.buffered.length - 1)
       }
     },
-    
+
     onBuffering() {
       this.isBuffering = true
     },
-    
+
     onPlaying() {
       this.isBuffering = false
     },
-    
+
     seekFromClick(e) {
       const rect = e.currentTarget.getBoundingClientRect()
       const percent = (e.clientX - rect.left) / rect.width
@@ -1144,7 +1144,7 @@ export default {
       this.$refs.audioPlayer.currentTime = newTime
       this.currentTime = newTime
     },
-    
+
     seekFromFsClick(e) {
       const rect = this.$refs.fsProgressBar.getBoundingClientRect()
       const percent = (e.clientX - rect.left) / rect.width
@@ -1152,7 +1152,7 @@ export default {
       this.$refs.audioPlayer.currentTime = newTime
       this.currentTime = newTime
     },
-    
+
     toggleMute() {
       const audio = this.$refs.audioPlayer
       if (this.isMuted) {
@@ -1165,27 +1165,27 @@ export default {
       }
       this.saveVolumeSetting()
     },
-    
+
     changeVolume() {
       this.saveVolumeSetting()
       if (this.volume > 0 && this.isMuted) this.isMuted = false
     },
-    
+
     // ========== 导航和UI ==========
-    
+
     goBack() {
       this.$router.push('/personal/entertainment')
     },
-    
+
     // 关键修复：打开全屏播放器
     openFullscreenPlayer() {
       if (!this.currentMusic) return
-      
+
       this.fullscreenPlayer = true
       document.body.style.overflow = 'hidden'
-      
+
       this.lyricsAutoScroll = true
-      
+
       this.$nextTick(() => {
         const wrapper = this.$refs.fsLyricsWrapper
         if (wrapper) wrapper.scrollTop = 0
@@ -1193,13 +1193,13 @@ export default {
         requestAnimationFrame(() => this.scheduleLyricsSync(this.currentTime, true))
       })
     },
-    
+
     closeFullscreenPlayer() {
       this.fullscreenPlayer = false
       this.showFsPlaylist = true
       document.body.style.overflow = ''
     },
-    
+
     toggleLyricsSidebar(music) {
       if (!music) return
       if (this.showLyricsSidebar && this.currentMusic && this.currentMusic.id === music.id) {
@@ -1214,21 +1214,21 @@ export default {
         })
       }
     },
-    
+
     toggleMiniPlaylist() {
       this.showMiniPlaylist = !this.showMiniPlaylist
     },
-    
+
     startFilter() {
       this.isFiltering = true
       this.selectedMusic = []
     },
-    
+
     cancelFilter() {
       this.isFiltering = false
       this.selectedMusic = []
     },
-    
+
     handleMusicClick(music) {
       if (this.isFiltering) {
         const idx = this.selectedMusic.indexOf(music.id)
@@ -1241,12 +1241,12 @@ export default {
         this.playMusic(music)
       }
     },
-    
+
     showMusicInfo(music) {
       this.infoModalData = { ...music, play_count: music.play_count || 0 }
       this.showInfoModal = true
     },
-    
+
     async downloadMusic(music) {
       try {
         const response = await axios.get(this.getMusicUrl(music), { responseType: 'blob' })
@@ -1264,23 +1264,23 @@ export default {
         this.showToast('下载失败', 'error')
       }
     },
-    
+
     deleteSingleMusic(music) {
       this.selectedMusic = [music.id]
       this.showDeleteConfirm = true
     },
-    
+
     confirmDelete() {
       if (this.selectedMusic.length === 0) return
       this.showDeleteConfirm = true
     },
-    
+
     async executeDelete() {
       try {
         await axios.delete('/api/entertainment/music', {
           data: { userId: this.userId, musicIds: this.selectedMusic }
         })
-        
+
         if (this.currentMusic && this.selectedMusic.includes(this.currentMusic.id)) {
           const remainingMusic = this.musicList.filter(m => !this.selectedMusic.includes(m.id))
           if (remainingMusic.length > 0) {
@@ -1292,7 +1292,7 @@ export default {
             this.isPlaying = false
           }
         }
-        
+
         this.showToast(`成功删除 ${this.selectedMusic.length} 首歌曲`)
         this.showDeleteConfirm = false
         this.loadMusic()
@@ -1301,26 +1301,26 @@ export default {
         this.showToast('删除失败', 'error')
       }
     },
-    
+
     validateTitle() {
       this.errors.title = this.uploadForm.title.trim() ? '' : '请输入歌曲名'
     },
-    
+
     validateArtist() {
       this.errors.artist = this.uploadForm.artist.trim() ? '' : '请输入歌手名'
     },
-    
+
     handleFileSelect(event) {
       const file = event.target.files[0]
       this.processFile(file)
     },
-    
+
     handleFileDrop(e) {
       this.isDragging = false
       const file = e.dataTransfer.files[0]
       this.processFile(file)
     },
-    
+
     processFile(file) {
       if (!file) return
       if (!file.type.startsWith('audio/')) {
@@ -1331,9 +1331,9 @@ export default {
         this.showToast('文件大小不能超过100MB', 'error')
         return
       }
-      
+
       this.uploadForm.file = file
-      
+
       const audio = new Audio()
       audio.preload = 'metadata'
       audio.src = URL.createObjectURL(file)
@@ -1341,13 +1341,13 @@ export default {
         URL.revokeObjectURL(audio.src)
       }
     },
-    
+
     async uploadMusic() {
       if (!this.uploadForm.file) return
-      
+
       this.isUploading = true
       this.uploadProgress = 0
-      
+
       const formData = new FormData()
       formData.append('music', this.uploadForm.file)
       formData.append('userId', this.userId)
@@ -1355,7 +1355,7 @@ export default {
       formData.append('artist', this.uploadForm.artist.trim())
       formData.append('album', this.uploadForm.album.trim())
       formData.append('releaseDate', this.uploadForm.releaseDate)
-      
+
       try {
         await axios.post('/api/entertainment/music', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -1363,7 +1363,7 @@ export default {
             this.uploadProgress = Math.round((progressEvent.loaded * 100) / progressEvent.total)
           }
         })
-        
+
         this.uploadStep = 3
         this.loadMusic()
       } catch (err) {
@@ -1371,7 +1371,7 @@ export default {
         this.isUploading = false
       }
     },
-    
+
     closeUpload() {
       this.showUpload = false
       this.uploadStep = 1
@@ -1380,28 +1380,28 @@ export default {
       this.isUploading = false
       this.uploadProgress = 0
     },
-    
+
     closeUploadAndRefresh() {
       this.closeUpload()
       this.loadMusic()
     },
-    
+
     uploadAnother() {
       this.uploadStep = 1
       this.uploadForm = { title: '', artist: '', album: '', releaseDate: '', file: null }
       this.isUploading = false
       this.uploadProgress = 0
     },
-    
+
     async saveLyrics() {
       if (!this.newLyricsText.trim() || !this.currentMusic) return
-      
+
       try {
         await axios.put(`/api/entertainment/music/${this.currentMusic.id}/lyrics`, {
           lyrics: this.newLyricsText,
           lyricsOffsetMs: 0
         })
-        
+
         localStorage.setItem(`lyrics_${this.currentMusic.id}`, this.newLyricsText)
         this.currentLyrics = this.newLyricsText
         this.parseLyrics(this.newLyricsText)
@@ -1412,7 +1412,7 @@ export default {
         this.showToast(err.response?.data?.error || '歌词保存失败，请稍后重试', 'error')
       }
     },
-    
+
     showToast(message, type = 'success') {
       this.toast = { show: true, message, type }
       setTimeout(() => this.toast.show = false, 3000)
@@ -1424,19 +1424,6 @@ export default {
 <style scoped>
 .music-zone {
   /* Transitional aliases keep legacy selectors tied to the shared token system. */
-  --bg-primary: var(--surface);
-  --bg-secondary: var(--bg);
-  --bg-tertiary: var(--surface-raised);
-  --border-color: var(--border);
-  --text-primary: var(--text);
-  --text-secondary: var(--muted);
-  --text-tertiary: var(--subtle);
-  --accent-color: var(--accent);
-  --accent-light: var(--accent-soft);
-  --accent-gradient: var(--accent);
-  --danger-color: var(--danger);
-  --success-color: var(--accent);
-  --shadow-lg: var(--shadow);
   min-height: 100vh;
   padding: 20px;
   padding-bottom: 120px;
@@ -1454,10 +1441,10 @@ export default {
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
@@ -1467,39 +1454,39 @@ export default {
 
 .back-btn:hover {
   transform: translateX(-4px);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--accent-color);
+  box-shadow: var(--shadow);
+  border-color: var(--accent);
 }
 
 /* 描述区域 */
 .zone-description {
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 16px;
   padding: 24px;
   margin-bottom: 24px;
   box-shadow: var(--shadow);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
 }
 
 .zone-description h3 {
   margin: 0 0 16px 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 24px;
   font-weight: 700;
   display: flex;
   align-items: center;
   gap: 12px;
   padding-bottom: 12px;
-  border-bottom: 2px solid var(--accent-color);
+  border-bottom: 2px solid var(--accent);
 }
 
 .zone-description p {
   margin: 8px 0;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 14px;
   line-height: 1.6;
   padding-left: 8px;
-  border-left: 3px solid var(--accent-light);
+  border-left: 3px solid var(--accent-soft);
 }
 
 /* 操作栏 */
@@ -1509,15 +1496,15 @@ export default {
   align-items: center;
   margin-bottom: 20px;
   padding: 16px 20px;
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 12px;
   box-shadow: var(--shadow);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
 }
 
 .list-header h4 {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 18px;
   font-weight: 600;
   display: flex;
@@ -1527,9 +1514,9 @@ export default {
 
 .selection-indicator-text {
   font-size: 14px;
-  color: var(--text-tertiary);
+  color: var(--subtle);
   font-weight: 400;
-  background: var(--bg-secondary);
+  background: var(--bg);
   padding: 4px 12px;
   border-radius: 20px;
 }
@@ -1553,7 +1540,7 @@ export default {
 }
 
 .filter-btn, .upload-btn {
-  background: var(--accent-gradient);
+  background: var(--accent);
   color: white;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
@@ -1564,7 +1551,7 @@ export default {
 }
 
 .delete-btn {
-  background: var(--danger-color);
+  background: var(--danger);
   color: white;
 }
 
@@ -1575,9 +1562,9 @@ export default {
 }
 
 .cancel-btn {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 /* 音乐列表容器 */
@@ -1593,10 +1580,10 @@ export default {
 
 .music-list {
   flex: 1;
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 16px;
   box-shadow: var(--shadow);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   overflow: hidden;
 }
 
@@ -1605,7 +1592,7 @@ export default {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: all 0.3s;
   gap: 12px;
@@ -1617,20 +1604,20 @@ export default {
 }
 
 .music-row:hover {
-  background: var(--bg-secondary);
+  background: var(--bg);
 }
 
 .music-row.playing {
-  background: var(--accent-light);
+  background: var(--accent-soft);
 }
 
 .music-row.playing .music-name {
-  color: var(--accent-color);
+  color: var(--accent);
   font-weight: 600;
 }
 
 .music-row.paused .music-name {
-  color: var(--accent-color);
+  color: var(--accent);
   opacity: 0.7;
 }
 
@@ -1640,13 +1627,13 @@ export default {
 
 .music-row.selected {
   background: rgba(239, 68, 68, 0.1);
-  border-left: 4px solid var(--danger-color);
+  border-left: 4px solid var(--danger);
 }
 
 .row-number {
   width: 28px;
   text-align: center;
-  color: var(--text-tertiary);
+  color: var(--subtle);
   font-size: 14px;
   font-weight: 500;
 }
@@ -1655,7 +1642,7 @@ export default {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 2px solid var(--text-tertiary);
+  border: 2px solid var(--subtle);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1665,8 +1652,8 @@ export default {
 }
 
 .music-row.selected .row-selection-indicator {
-  background: var(--danger-color);
-  border-color: var(--danger-color);
+  background: var(--danger);
+  border-color: var(--danger);
   color: white;
 }
 
@@ -1707,7 +1694,6 @@ export default {
   font-size: 20px;
   opacity: 0;
   transition: opacity 0.3s;
-  backdrop-filter: blur(2px);
 }
 
 .music-row:hover .play-overlay,
@@ -1725,7 +1711,7 @@ export default {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, #333, #666, #333);
+  background: var(--surface-raised);
   position: relative;
 }
 
@@ -1737,7 +1723,7 @@ export default {
   transform: translate(-50%, -50%);
   width: 12px;
   height: 12px;
-  background: var(--accent-color);
+  background: var(--accent);
   border-radius: 50%;
 }
 
@@ -1763,7 +1749,7 @@ export default {
 .playing-waves span {
   width: 3px;
   height: 12px;
-  background: var(--accent-color);
+  background: var(--accent);
   border-radius: 2px;
   animation: wave 1s ease-in-out infinite;
 }
@@ -1789,7 +1775,7 @@ export default {
 
 .music-name {
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1797,12 +1783,12 @@ export default {
 }
 
 .music-separator {
-  color: var(--text-tertiary);
+  color: var(--subtle);
   flex-shrink: 0;
 }
 
 .music-artist {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
@@ -1810,7 +1796,7 @@ export default {
 }
 
 .music-album {
-  color: var(--text-tertiary);
+  color: var(--subtle);
   font-size: 13px;
   white-space: nowrap;
   flex-shrink: 0;
@@ -1833,8 +1819,8 @@ export default {
   height: 34px;
   border-radius: 50%;
   border: none;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  background: var(--surface-raised);
+  color: var(--text);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1844,18 +1830,18 @@ export default {
 }
 
 .tool-btn:hover {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
   transform: scale(1.1);
 }
 
 .tool-btn.active {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
 }
 
 .tool-btn.delete-tool:hover {
-  background: var(--danger-color);
+  background: var(--danger);
 }
 
 .play-pause-btn {
@@ -1876,8 +1862,8 @@ export default {
 
 .music-quality {
   padding: 2px 8px;
-  background: var(--accent-light);
-  color: var(--accent-color);
+  background: var(--accent-soft);
+  color: var(--accent);
   border-radius: 4px;
   font-size: 10px;
   font-weight: 600;
@@ -1885,7 +1871,7 @@ export default {
 }
 
 .music-duration {
-  color: var(--text-tertiary);
+  color: var(--subtle);
   font-size: 13px;
   font-family: 'SF Mono', monospace;
   min-width: 40px;
@@ -1896,7 +1882,7 @@ export default {
 .empty-music-list {
   text-align: center;
   padding: 80px 20px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .empty-icon {
@@ -1912,7 +1898,7 @@ export default {
 
 .upload-empty-btn {
   padding: 12px 32px;
-  background: var(--accent-gradient);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1929,10 +1915,10 @@ export default {
 /* 歌词侧边栏 */
 .lyrics-sidebar {
   flex: 1;
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 16px;
   box-shadow: var(--shadow);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1944,8 +1930,8 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
 }
 
 .lyrics-song-info {
@@ -1963,7 +1949,7 @@ export default {
 
 .lyrics-song-info h5 {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 15px;
   font-weight: 600;
   max-width: 150px;
@@ -1973,7 +1959,7 @@ export default {
 }
 
 .lyrics-song-info span {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -1982,15 +1968,15 @@ export default {
   height: 32px;
   border-radius: 50%;
   border: none;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  background: var(--surface-raised);
+  color: var(--muted);
   cursor: pointer;
   font-size: 16px;
   transition: all 0.3s;
 }
 
 .close-lyrics-btn:hover {
-  background: var(--danger-color);
+  background: var(--danger);
   color: white;
 }
 
@@ -2041,7 +2027,7 @@ export default {
 
 .lyrics-line {
   padding: 12px 8px;
-  color: var(--text-secondary);
+  color: var(--muted);
   cursor: pointer;
   transition: all 0.3s;
   border-radius: 8px;
@@ -2052,28 +2038,28 @@ export default {
 }
 
 .lyrics-line:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--bg);
+  color: var(--text);
 }
 
 .lyrics-line.active {
-  color: var(--accent-color);
+  color: var(--accent);
   font-size: 18px;
   font-weight: 600;
-  background: var(--accent-light);
+  background: var(--accent-soft);
   transform: scale(1.02);
 }
 
 .no-lyrics, .no-lyrics-playing {
   padding: 60px 20px;
-  color: var(--text-tertiary);
+  color: var(--subtle);
   text-align: center;
 }
 
 .add-lyrics-btn {
   margin-top: 16px;
   padding: 8px 20px;
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 20px;
@@ -2087,29 +2073,29 @@ export default {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
 }
 
 .lyrics-controls button {
   padding: 6px 12px;
-  background: var(--bg-tertiary);
+  background: var(--surface-raised);
   border: none;
   border-radius: 6px;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 12px;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .lyrics-controls button:hover {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
 }
 
 .lyrics-controls span {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--muted);
   min-width: 80px;
   text-align: center;
 }
@@ -2120,20 +2106,20 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border-color);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
   z-index: 100;
   transition: all 0.3s;
 }
 
 .mini-player.is-playing {
-  border-top-color: var(--accent-color);
+  border-top-color: var(--accent);
 }
 
 .mini-progress {
   height: 3px;
-  background: var(--bg-secondary);
+  background: var(--bg);
   cursor: pointer;
   position: relative;
 }
@@ -2146,7 +2132,7 @@ export default {
 
 .progress-fill {
   height: 100%;
-  background: var(--accent-gradient);
+  background: var(--accent);
   transition: width 0.1s linear;
   position: relative;
 }
@@ -2174,7 +2160,7 @@ export default {
   top: 0;
   left: 0;
   height: 100%;
-  background: var(--bg-tertiary);
+  background: var(--surface-raised);
   opacity: 0.5;
   z-index: -1;
 }
@@ -2228,7 +2214,7 @@ export default {
 
 .mini-visualizer span {
   width: 3px;
-  background: var(--accent-color);
+  background: var(--accent);
   border-radius: 2px;
   animation: visualizer 0.8s ease-in-out infinite;
 }
@@ -2247,7 +2233,7 @@ export default {
 
 .mini-title {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
@@ -2255,7 +2241,7 @@ export default {
 }
 
 .mini-artist {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -2271,7 +2257,7 @@ export default {
 .mini-controls button {
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 20px;
   cursor: pointer;
   transition: all 0.3s;
@@ -2280,8 +2266,8 @@ export default {
 }
 
 .mini-controls button:hover:not(:disabled) {
-  color: var(--accent-color);
-  background: var(--accent-light);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .mini-controls button:disabled {
@@ -2292,7 +2278,7 @@ export default {
 .main-play-btn {
   width: 48px !important;
   height: 48px;
-  background: var(--accent-color) !important;
+  background: var(--accent) !important;
   color: white !important;
   font-size: 20px !important;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
@@ -2321,7 +2307,7 @@ export default {
 .volume-control button {
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 18px;
   cursor: pointer;
 }
@@ -2330,7 +2316,7 @@ export default {
   width: 80px;
   height: 4px;
   -webkit-appearance: none;
-  background: var(--bg-tertiary);
+  background: var(--surface-raised);
   border-radius: 2px;
   outline: none;
 }
@@ -2339,7 +2325,7 @@ export default {
   -webkit-appearance: none;
   width: 12px;
   height: 12px;
-  background: var(--accent-color);
+  background: var(--accent);
   border-radius: 50%;
   cursor: pointer;
 }
@@ -2348,17 +2334,17 @@ export default {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--muted);
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .fullscreen-btn:hover {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
-  border-color: var(--accent-color);
+  border-color: var(--accent);
 }
 
 .mini-playlist {
@@ -2367,11 +2353,11 @@ export default {
   right: 24px;
   width: 320px;
   max-height: 400px;
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 12px 12px 0 0;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
   overflow-y: auto;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-bottom: none;
 }
 
@@ -2382,11 +2368,11 @@ export default {
   padding: 12px 16px;
   cursor: pointer;
   transition: background 0.3s;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .mini-playlist-item:hover, .mini-playlist-item.active {
-  background: var(--accent-light);
+  background: var(--accent-soft);
 }
 
 .mini-playlist-item img {
@@ -2405,7 +2391,7 @@ export default {
 
 .mini-playlist-item .item-title {
   font-size: 14px;
-  color: var(--text-primary);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2413,12 +2399,12 @@ export default {
 
 .mini-playlist-item .item-artist {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .mini-playlist-item .item-duration {
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--subtle);
   font-family: monospace;
 }
 
@@ -2446,12 +2432,7 @@ export default {
   background-position: center;
   filter: blur(60px) brightness(0.3);
   transform: scale(1.2);
-  animation: bg-pulse 10s ease-in-out infinite;
-}
 
-@keyframes bg-pulse {
-  0%, 100% { transform: scale(1.2); }
-  50% { transform: scale(1.25); }
 }
 
 .fs-background-overlay {
@@ -2476,7 +2457,6 @@ export default {
   background: rgba(255, 255, 255, 0.1);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
 }
 
 .fs-header-center {
@@ -2488,7 +2468,7 @@ export default {
 
 .fs-mode-badge {
   padding: 4px 16px;
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
   border-radius: 20px;
   font-size: 12px;
@@ -2587,17 +2567,12 @@ export default {
   position: absolute;
   width: 400px;
   height: 400px;
-  background: var(--accent-color);
+  background: var(--accent);
   border-radius: 50%;
   filter: blur(100px);
   opacity: 0.3;
   z-index: -1;
-  animation: glow-pulse 3s ease-in-out infinite;
-}
 
-@keyframes glow-pulse {
-  0%, 100% { opacity: 0.3; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.1); }
 }
 
 /* 关键修复：全屏歌词区域 */
@@ -2620,20 +2595,6 @@ export default {
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.2) transparent;
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    black 10%,
-    black 90%,
-    transparent 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    black 10%,
-    black 90%,
-    transparent 100%
-  );
 }
 
 .fs-lyrics-section .lyrics-scroll-wrapper::-webkit-scrollbar {
@@ -2687,14 +2648,14 @@ export default {
   font-weight: 600;
   transform: scale(1.05);
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  background: var(--accent-soft);
 }
 
 .fs-lyric-line.active .lyric-text {
-  background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  background: transparent;
+
+
+
 }
 
 .next-lyric {
@@ -2726,7 +2687,7 @@ export default {
 .add-lyrics-btn-large {
   margin-top: 24px;
   padding: 16px 32px;
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 30px;
@@ -2771,7 +2732,6 @@ export default {
   flex: 1;
   background: rgba(0, 0, 0, 0.3);
   border-radius: 12px;
-  backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2808,7 +2768,7 @@ export default {
 }
 
 .fs-playlist-item.active {
-  background: var(--accent-color);
+  background: var(--accent);
 }
 
 .fs-playlist-item.played {
@@ -2886,7 +2846,7 @@ export default {
   position: relative;
   z-index: 10;
   padding: 32px;
-  background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
+  background: var(--surface);
 }
 
 .fs-song-info {
@@ -2944,7 +2904,7 @@ export default {
 
 .fs-progress-bar .progress-fill {
   height: 100%;
-  background: var(--accent-gradient);
+  background: var(--accent);
   border-radius: 3px;
   position: relative;
   transition: width 0.1s linear;
@@ -3021,8 +2981,8 @@ export default {
 }
 
 .nav-btn:hover:not(:disabled) {
-  border-color: var(--accent-color);
-  background: var(--accent-color);
+  border-color: var(--accent);
+  background: var(--accent);
   transform: scale(1.1);
 }
 
@@ -3059,7 +3019,7 @@ export default {
 }
 
 .fs-play-btn.playing {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
 }
 
@@ -3081,7 +3041,7 @@ export default {
 }
 
 .extra-controls button:hover, .extra-controls button.active {
-  background: var(--accent-color);
+  background: var(--accent);
 }
 
 .slide-up-enter-active, .slide-up-leave-active {
@@ -3112,7 +3072,6 @@ export default {
   align-items: center;
   justify-content: center;
   z-index: 1100;
-  backdrop-filter: blur(8px);
   padding: 20px;
 }
 
@@ -3121,13 +3080,13 @@ export default {
 }
 
 .info-modal.modern, .delete-modal.modern, .upload-modal.modern {
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 24px;
   width: 100%;
   max-width: 480px;
   overflow: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
 }
 
 .info-header {
@@ -3149,7 +3108,7 @@ export default {
   left: 0;
   right: 0;
   height: 100px;
-  background: linear-gradient(to top, var(--bg-primary), transparent);
+  background: var(--surface);
 }
 
 .info-header-text {
@@ -3182,7 +3141,7 @@ export default {
   display: flex;
   justify-content: space-between;
   padding: 12px 0;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .info-row:last-child {
@@ -3190,12 +3149,12 @@ export default {
 }
 
 .info-row label {
-  color: var(--text-tertiary);
+  color: var(--subtle);
   font-size: 14px;
 }
 
 .info-row span {
-  color: var(--text-primary);
+  color: var(--text);
   font-weight: 500;
   font-size: 14px;
 }
@@ -3266,16 +3225,16 @@ export default {
 }
 
 .info-actions button:not(.primary-btn) {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--bg);
+  color: var(--text);
 }
 
 .info-actions button:not(.primary-btn):hover {
-  background: var(--bg-tertiary);
+  background: var(--surface-raised);
 }
 
 .primary-btn {
-  background: var(--accent-gradient);
+  background: var(--accent);
   color: white;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
@@ -3295,7 +3254,7 @@ export default {
   width: 80px;
   height: 80px;
   margin: 24px auto 16px;
-  background: var(--danger-color);
+  background: var(--danger);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -3314,18 +3273,18 @@ export default {
 .delete-modal h3 {
   margin: 0 0 8px 0;
   text-align: center;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 20px;
 }
 
 .delete-modal p {
   text-align: center;
-  color: var(--text-secondary);
+  color: var(--muted);
   margin: 0 0 8px 0;
 }
 
 .delete-warning {
-  color: var(--danger-color) !important;
+  color: var(--danger) !important;
   font-size: 13px;
   font-weight: 500;
 }
@@ -3339,7 +3298,7 @@ export default {
 .danger-btn {
   flex: 1;
   padding: 14px;
-  background: var(--danger-color);
+  background: var(--danger);
   color: white;
   border: none;
   border-radius: 12px;
@@ -3356,23 +3315,23 @@ export default {
 }
 
 .lyrics-input-modal {
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 24px;
   width: 100%;
   max-width: 560px;
   padding: 32px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
 }
 
 .lyrics-input-modal h3 {
   margin: 0 0 8px 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 22px;
 }
 
 .lyrics-input-modal .hint {
-  color: var(--text-tertiary);
+  color: var(--subtle);
   font-size: 13px;
   margin: 0 0 16px 0;
 }
@@ -3381,10 +3340,10 @@ export default {
   width: 100%;
   min-height: 300px;
   padding: 16px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--bg);
+  color: var(--text);
   font-size: 14px;
   line-height: 1.8;
   resize: vertical;
@@ -3393,8 +3352,8 @@ export default {
 
 .lyrics-input-modal textarea:focus {
   outline: none;
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px var(--accent-light);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .lyrics-input-modal .actions {
@@ -3422,7 +3381,7 @@ export default {
   left: 60px;
   right: 60px;
   height: 2px;
-  background: var(--border-color);
+  background: var(--border);
   z-index: 0;
 }
 
@@ -3434,7 +3393,7 @@ export default {
   position: relative;
   z-index: 1;
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--subtle);
   font-weight: 500;
 }
 
@@ -3443,33 +3402,33 @@ export default {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--bg-tertiary);
+  background: var(--surface-raised);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-weight: 600;
   border: 2px solid transparent;
 }
 
 .step.active {
-  color: var(--accent-color);
+  color: var(--accent);
 }
 
 .step.active::before {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
-  box-shadow: 0 0 0 4px var(--accent-light);
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 .step.done {
-  color: var(--success-color);
+  color: var(--accent);
 }
 
 .step.done::before {
   content: '✓';
-  background: var(--success-color);
+  background: var(--accent);
   color: white;
 }
 
@@ -3488,53 +3447,53 @@ export default {
 .form-group label {
   display: block;
   margin-bottom: 8px;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 14px;
   font-weight: 500;
 }
 
 .form-group label .required {
-  color: var(--danger-color);
+  color: var(--danger);
   margin-left: 2px;
 }
 
 .form-group input {
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--bg);
+  color: var(--text);
   font-size: 15px;
   transition: all 0.3s;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px var(--accent-light);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .error-msg {
   display: block;
   margin-top: 6px;
-  color: var(--danger-color);
+  color: var(--danger);
   font-size: 12px;
 }
 
 .file-drop-zone {
-  border: 2px dashed var(--border-color);
+  border: 2px dashed var(--border);
   border-radius: 16px;
   padding: 40px;
   text-align: center;
   transition: all 0.3s;
   cursor: pointer;
-  background: var(--bg-secondary);
+  background: var(--bg);
 }
 
 .file-drop-zone.dragging {
-  border-color: var(--accent-color);
-  background: var(--accent-light);
+  border-color: var(--accent);
+  background: var(--accent-soft);
   transform: scale(1.02);
 }
 
@@ -3549,25 +3508,25 @@ export default {
 
 .drop-content p {
   margin: 0 0 8px 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 16px;
   font-weight: 500;
 }
 
 .drop-content .selected-file {
-  color: var(--accent-color);
+  color: var(--accent);
   font-weight: 600;
 }
 
 .file-hint {
-  color: var(--text-tertiary);
+  color: var(--subtle);
   font-size: 13px;
 }
 
 .file-info {
   margin-top: 20px;
   padding: 16px;
-  background: var(--bg-secondary);
+  background: var(--bg);
   border-radius: 12px;
 }
 
@@ -3579,11 +3538,11 @@ export default {
 }
 
 .info-item span:first-child {
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .info-item span:last-child {
-  color: var(--text-primary);
+  color: var(--text);
   font-weight: 500;
 }
 
@@ -3595,7 +3554,7 @@ export default {
   width: 80px;
   height: 80px;
   margin: 0 auto 24px;
-  background: var(--success-color);
+  background: var(--accent);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -3613,13 +3572,13 @@ export default {
 
 .upload-success h4 {
   margin: 0 0 8px 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 20px;
 }
 
 .upload-success p {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .upload-progress {
@@ -3628,7 +3587,7 @@ export default {
 
 .progress-bar {
   height: 8px;
-  background: var(--bg-tertiary);
+  background: var(--surface-raised);
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 12px;
@@ -3636,7 +3595,7 @@ export default {
 
 .progress-bar .progress-fill {
   height: 100%;
-  background: var(--accent-gradient);
+  background: var(--accent);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -3644,16 +3603,16 @@ export default {
 .upload-progress span {
   display: block;
   text-align: center;
-  color: var(--accent-color);
+  color: var(--accent);
   font-weight: 600;
   font-size: 14px;
 }
 
 .secondary-btn {
   padding: 14px 24px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 12px;
   font-size: 15px;
   font-weight: 600;
@@ -3662,7 +3621,7 @@ export default {
 }
 
 .secondary-btn:hover {
-  background: var(--bg-tertiary);
+  background: var(--surface-raised);
 }
 
 .toast {
@@ -3686,20 +3645,19 @@ export default {
 }
 
 .toast.modern {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  backdrop-filter: blur(10px);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .toast.success {
-  background: var(--success-color);
+  background: var(--accent);
   color: white;
   border: none;
 }
 
 .toast.error {
-  background: var(--danger-color);
+  background: var(--danger);
   color: white;
   border: none;
 }
@@ -3715,22 +3673,21 @@ export default {
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  backdrop-filter: blur(8px);
 }
 
 .shortcuts-modal {
-  background: var(--bg-primary);
+  background: var(--surface);
   border-radius: 24px;
   padding: 32px;
   max-width: 400px;
   width: 90%;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
 }
 
 .shortcuts-modal h3 {
   margin: 0 0 24px 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 20px;
   text-align: center;
 }
@@ -3747,27 +3704,27 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: var(--bg-secondary);
+  background: var(--bg);
   border-radius: 8px;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 14px;
 }
 
 .shortcut-list kbd {
   padding: 4px 12px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   border-radius: 6px;
   font-family: 'SF Mono', monospace;
   font-size: 13px;
-  color: var(--accent-color);
+  color: var(--accent);
   font-weight: 600;
 }
 
 .shortcuts-modal button {
   width: 100%;
   padding: 14px;
-  background: var(--accent-gradient);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 12px;
@@ -3789,9 +3746,9 @@ export default {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
   font-size: 20px;
   font-weight: 700;
   cursor: pointer;
@@ -3801,41 +3758,41 @@ export default {
 }
 
 .shortcuts-hint-btn:hover {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
   transform: scale(1.1);
-  border-color: var(--accent-color);
+  border-color: var(--accent);
 }
 
 @media (max-width: 1200px) {
   .music-list-container.with-lyrics {
     flex-direction: column;
   }
-  
+
   .lyrics-sidebar {
     max-height: 400px;
   }
-  
+
   .fs-body {
     flex-direction: column;
     align-items: center;
     gap: 24px;
   }
-  
+
   .fs-album-section {
     flex: none;
   }
-  
+
   .album-disc {
     width: 280px;
     height: 280px;
   }
-  
+
   .fs-lyrics-section {
     max-width: 100%;
     width: 100%;
   }
-  
+
   .fs-playlist-section {
     position: fixed;
     right: 0;
@@ -3844,7 +3801,7 @@ export default {
     width: 300px;
     z-index: 100;
   }
-  
+
   .fs-playlist-section.collapsed {
     width: 40px;
   }
@@ -3855,30 +3812,30 @@ export default {
     padding: 12px;
     padding-bottom: 140px;
   }
-  
+
   .zone-description h3 {
     font-size: 20px;
   }
-  
+
   .action-bar {
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
   }
-  
+
   .action-btns {
     justify-content: center;
   }
-  
+
   .music-row {
     padding: 10px 12px;
   }
-  
+
   .music-cover {
     width: 44px;
     height: 44px;
   }
-  
+
   .music-tools {
     opacity: 1;
     position: static;
@@ -3890,95 +3847,95 @@ export default {
     width: 100%;
     justify-content: flex-end;
   }
-  
+
   .tool-btn {
     width: 32px;
     height: 32px;
   }
-  
+
   .mini-content {
     padding: 8px 16px;
     gap: 12px;
   }
-  
+
   .mini-info {
     gap: 12px;
   }
-  
+
   .mini-cover-wrapper {
     width: 48px;
     height: 48px;
   }
-  
+
   .mini-controls {
     gap: 12px;
   }
-  
+
   .main-play-btn {
     width: 44px !important;
     height: 44px;
   }
-  
+
   .mini-extra {
     display: none;
   }
-  
+
   .fs-header {
     padding: 16px;
   }
-  
+
   .fs-album-section {
     padding: 20px 0;
   }
-  
+
   .album-disc {
     width: 240px;
     height: 240px;
   }
-  
+
   .album-glow {
     width: 260px;
     height: 260px;
   }
-  
+
   .fs-controls {
     padding: 20px;
   }
-  
+
   .fs-buttons {
     gap: 24px;
   }
-  
+
   .nav-btn {
     width: 48px;
     height: 48px;
     font-size: 20px;
   }
-  
+
   .nav-btn.large {
     width: 56px;
     height: 56px;
   }
-  
+
   .fs-play-btn {
     width: 64px;
     height: 64px;
     font-size: 24px;
   }
-  
+
   .fs-song-info h3 {
     font-size: 20px;
   }
-  
+
   .fs-lyric-line {
     font-size: 14px;
     padding: 12px 16px;
   }
-  
+
   .fs-lyric-line.active {
     font-size: 20px;
   }
-  
+
   .info-modal.modern,
   .delete-modal.modern,
   .upload-modal.modern,
@@ -3987,7 +3944,7 @@ export default {
     max-height: 90vh;
     overflow-y: auto;
   }
-  
+
   .upload-steps::before {
     left: 40px;
     right: 40px;
@@ -3998,63 +3955,63 @@ export default {
   .zone-description {
     padding: 16px;
   }
-  
+
   .zone-description p {
     font-size: 13px;
   }
-  
+
   .music-details {
     flex-wrap: wrap;
   }
-  
+
   .music-separator {
     display: none;
   }
-  
+
   .music-artist {
     width: 100%;
     margin-top: 2px;
   }
-  
+
   .music-album {
     display: none;
   }
-  
+
   .music-meta {
     flex-direction: column;
     align-items: flex-end;
     gap: 4px;
   }
-  
+
   .mini-playlist {
     width: 100%;
     right: 0;
     left: 0;
     border-radius: 12px 12px 0 0;
   }
-  
+
   .album-disc {
     width: 200px;
     height: 200px;
   }
-  
+
   .disc-center {
     width: 60px;
     height: 60px;
   }
-  
+
   .fs-buttons {
     gap: 16px;
   }
-  
+
   .mode-btn .mode-text {
     display: none;
   }
-  
+
   .extra-controls {
     gap: 8px;
   }
-  
+
   .shortcuts-hint-btn {
     bottom: 120px;
     right: 16px;
@@ -4070,21 +4027,21 @@ export default {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: var(--bg);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
+  background: var(--surface-raised);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-tertiary);
+  background: var(--subtle);
 }
 
 ::selection {
-  background: var(--accent-color);
+  background: var(--accent);
   color: white;
 }
 
@@ -4095,7 +4052,7 @@ button:disabled {
 
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid var(--accent-color);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -4106,7 +4063,7 @@ input:focus-visible {
   .back-btn {
     display: none !important;
   }
-  
+
   .music-zone {
     padding-bottom: 20px;
   }
@@ -4116,18 +4073,6 @@ input:focus-visible {
 .music-zone,
 .music-zone.light-mode,
 .music-zone.dark-mode {
-  --bg-primary: var(--bg);
-  --bg-secondary: var(--surface);
-  --bg-tertiary: var(--surface-raised);
-  --border-color: var(--border);
-  --text-primary: var(--text);
-  --text-secondary: var(--muted);
-  --text-tertiary: var(--subtle);
-  --accent-color: var(--accent);
-  --accent-light: var(--accent-soft);
-  --accent-gradient: var(--accent);
-  --danger-color: var(--danger);
-  --success-color: var(--accent);
   min-height: 0;
   padding: 0 0 104px;
   background: transparent;
@@ -4343,7 +4288,7 @@ input:focus-visible {
 .music-zone .mode-btn { width: auto !important; padding: 0 var(--space-2) !important; }
 .music-zone .mode-icon { display: block; }
 .music-zone .modal-overlay,
-.music-zone .shortcuts-overlay { z-index: 1100; background: rgb(20 25 23 / 48%); backdrop-filter: blur(2px); }
+.music-zone .shortcuts-overlay { z-index: 1100; background: rgb(20 25 23 / 56%); }
 .music-zone .info-modal.modern,
 .music-zone .lyrics-input-modal,
 .music-zone .delete-modal.modern,
