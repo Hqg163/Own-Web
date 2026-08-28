@@ -102,8 +102,9 @@ app.use(cors({
   credentials: true
 }));
 app.use('/api', originGuard(allowedOrigins));
-app.use('/api/login', createRateLimiter({ windowMs: 15 * 60 * 1000, limit: 20, message: '登录尝试过于频繁，请稍后重试' }));
-app.use('/api/register', createRateLimiter({ windowMs: 60 * 60 * 1000, limit: 10, message: '注册请求过于频繁，请稍后重试' }));
+const authRateLimitScale = process.env.NODE_ENV === 'test' ? Number(process.env.TEST_AUTH_RATE_LIMIT_SCALE || 10) : 1;
+app.use('/api/login', createRateLimiter({ windowMs: 15 * 60 * 1000, limit: 20 * authRateLimitScale, message: '登录尝试过于频繁，请稍后重试' }));
+app.use('/api/register', createRateLimiter({ windowMs: 60 * 60 * 1000, limit: 10 * authRateLimitScale, message: '注册请求过于频繁，请稍后重试' }));
 app.use('/api/reports', createRateLimiter({ windowMs: 10 * 60 * 1000, limit: 15 }));
 app.use(bodyParser.json({ limit: '3mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '3mb' }));

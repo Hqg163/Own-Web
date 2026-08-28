@@ -21,7 +21,7 @@ async function waitForApi(api: string) {
 
 async function main() {
   await ensureDatabase()
-  const child = spawn(process.execPath, [path.join(process.cwd(), 'api', 'server.js')], { stdio:'inherit', env:{ ...process.env, NODE_ENV:'test', DB_NAME:databaseName, PORT:String(port), CORS_ORIGIN:origin, TEST_UPLOAD_ROOT:'api/test-uploads' } })
+  const child = spawn(process.execPath, [path.join(process.cwd(), 'api', 'server.js')], { stdio:'inherit', env:{ ...process.env, NODE_ENV:'test', TEST_AUTH_RATE_LIMIT_SCALE:'10', DB_NAME:databaseName, PORT:String(port), CORS_ORIGIN:origin, TEST_UPLOAD_ROOT:'api/test-uploads' } })
   const api = `http://127.0.0.1:${port}`
   try {
     await waitForApi(api)

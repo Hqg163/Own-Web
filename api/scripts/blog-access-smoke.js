@@ -25,6 +25,7 @@ const db = mysql.createConnection({
 });
 const query = db.promise().query.bind(db.promise());
 const uploadRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'own-web-blog-access-'));
+const validPng = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000000020001e221bc330000000049454e44ae426082', 'hex');
 let server;
 let author;
 let follower;
@@ -71,7 +72,7 @@ async function createPost(visibility, status = 'published') {
 async function createPostMedia(post) {
   const filename = `media-${post.id}-${suffix}.png`;
   const absolutePath = path.join(path.dirname(uploadRoot), filename);
-  fs.writeFileSync(absolutePath, Buffer.from('89504e470d0a1a0a0000000d494844520000000100000001', 'hex'));
+  fs.writeFileSync(absolutePath, validPng);
   mediaFiles.push(absolutePath);
   const [result] = await query('INSERT INTO post_media (owner_id,post_id,file_path,mime_type,alt_text) VALUES (?,?,?,?,?)', [author.id, post.id, filename, 'image/png', '访问审计媒体']);
   return result.insertId;
@@ -137,7 +138,7 @@ async function run() {
   await expectStatus(baseUrl, `${unlistedAudio.media.url}?share=${posts.unlisted.shareToken}`, 200);
   await expectStatus(baseUrl, '/api/me/avatar', 401, { method: 'POST' });
   const avatarForm = new FormData();
-  avatarForm.set('avatar', new Blob([Buffer.from('89504e470d0a1a0a0000000d494844520000000100000001', 'hex')], { type: 'image/png' }), 'avatar.png');
+  avatarForm.set('avatar', new Blob([validPng], { type: 'image/png' }), 'avatar.png');
   const avatarResult = await expectStatus(baseUrl, '/api/me/avatar', 201, { method: 'POST', headers: auth(author), body: avatarForm });
   assert.equal(avatarResult.avatarUrl, `/api/public/avatars/${author.id}`, '头像上传应返回公开读取 URL');
   await expectStatus(baseUrl, `/api/public/avatars/${author.id}`, 200);
@@ -205,7 +206,7 @@ async function run() {
   const galleryImageForm = new FormData();
   galleryImageForm.set('postId', String(safeBlocksPost.post.id));
   galleryImageForm.set('altText', '图库审计图片');
-  galleryImageForm.set('image', new Blob([Buffer.from('89504e470d0a1a0a0000000d494844520000000100000001', 'hex')], { type: 'image/png' }), 'gallery.png');
+  galleryImageForm.set('image', new Blob([validPng], { type: 'image/png' }), 'gallery.png');
   const galleryImage = await expectStatus(baseUrl, '/api/posts/media', 201, { method: 'POST', headers: auth(author), body: galleryImageForm });
   await expectStatus(baseUrl, `/api/posts/${safeBlocksPost.post.id}`, 403, { method: 'PUT', headers: { ...auth(author), 'content-type': 'application/json' }, body: JSON.stringify({ contentBlocks: { type: 'doc', content: [...safeBlocks.content, { type: 'audio', attrs: { src: uploadedAttachment.media.url, label: uploadedAttachment.media.label } }] } }) });
   safeBlocks.content.push({ type: 'gallery', attrs: { items: [{ src: galleryImage.media.url, alt: galleryImage.media.altText }] } }, { type: 'audio', attrs: { src: articleAudio.media.url, label: articleAudio.media.label } });
@@ -245,7 +246,7 @@ async function run() {
   const form = new FormData();
   form.set('postId', String(posts.private.id));
   form.set('altText', '访问审计图片');
-  form.set('image', new Blob([Buffer.from('89504e470d0a1a0a0000000d494844520000000100000001', 'hex')], { type: 'image/png' }), 'audit.png');
+  form.set('image', new Blob([validPng], { type: 'image/png' }), 'audit.png');
   await expectStatus(baseUrl, '/api/posts/media', 403, { method: 'POST', headers: auth(stranger), body: form });
   console.log('blog-access-smoke: passed');
 }
