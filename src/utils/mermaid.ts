@@ -16,6 +16,7 @@ function fallback(source: string, reason: string): SafeMermaidResult {
 
 /** Render a deliberately small, safe flowchart subset without evaluating Mermaid input. */
 export function renderSafeMermaid(source: string): SafeMermaidResult {
+  const startedAt = Date.now()
   const value = String(source || '').trim()
   if (!value) return fallback(value, 'empty')
   if (value.length > MAX_SOURCE_LENGTH) return fallback(value, 'source-too-large')
@@ -31,12 +32,16 @@ export function renderSafeMermaid(source: string): SafeMermaidResult {
     return nodes.size <= MAX_NODES
   }
   for (const line of lines.slice(1)) {
+    if (Date.now() - startedAt > 50) return fallback(value, 'render-timeout')
     const match = line.match(/^([A-Za-z0-9_-]+)(?:\[([^\]]*)\]|\(([^)]*)\)|\{([^}]*)\})?\s*--?>\s*([A-Za-z0-9_-]+)(?:\[([^\]]*)\]|\(([^)]*)\)|\{([^}]*)\})?\s*$/)
     if (!match || edges.length >= MAX_EDGES) return fallback(value, 'unsupported-edge')
+    const labels = [match[2], match[3], match[4], match[6], match[7], match[8]].filter(Boolean)
+    if (labels.some((label) => String(label).length > 80)) return fallback(value, 'label-too-long')
     if (!addNode(match[1]!, match[2] || match[3] || match[4]) || !addNode(match[5]!, match[6] || match[7] || match[8])) return fallback(value, 'diagram-too-large')
     edges.push([match[1]!.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40), match[5]!.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40)])
   }
   if (!edges.length) return fallback(value, 'no-supported-edges')
+  if (Date.now() - startedAt > 50) return fallback(value, 'render-timeout')
   const width = 720
   const rowHeight = 86
   const nodeWidth = 220
@@ -53,7 +58,7 @@ export function renderSafeMermaid(source: string): SafeMermaidResult {
 }
 
 export function enhanceMermaid(root: HTMLElement) {
-  root.querySelectorAll<HTMLElement>('pre[data-mermaid]').forEach((pre) => {
+  root.querySelectorAll<HTMLElement>('pre[data-mermaid], pre.mermaid').forEach((pre) => {
     const source = pre.dataset.mermaid === 'true' ? pre.textContent || '' : pre.dataset.mermaid || pre.textContent || ''
     const result = renderSafeMermaid(source)
     const wrapper = document.createElement('div')

@@ -3,6 +3,9 @@ const MAX_NODE_COUNT = 1000;
 const MAX_TEXT_LENGTH = 20000;
 const SAFE_CODE_LANGUAGES = new Set(['text', 'plaintext', 'javascript', 'typescript', 'json', 'html', 'css', 'bash', 'shell', 'sql', 'python', 'java', 'go', 'rust', 'vue', 'markdown', 'yaml']);
 const SAFE_EMBED_HOSTS = new Set(['www.youtube.com', 'youtu.be', 'www.bilibili.com', 'open.spotify.com']);
+const MAX_MERMAID_LINES = 120;
+const MAX_MERMAID_NODES = 50;
+const MAX_MERMAID_EDGES = 80;
 const NODE_TYPES = new Set([
   'doc', 'paragraph', 'heading', 'text', 'hardBreak', 'bulletList', 'orderedList', 'taskList', 'listItem',
   'blockquote', 'horizontalRule', 'codeBlock', 'image', 'gallery', 'attachment', 'audio', 'video', 'table',
@@ -36,6 +39,25 @@ function safeEmbedUrl(value) {
   if (!normalized) return null;
   const url = new URL(normalized);
   return url.protocol === 'https:' && SAFE_EMBED_HOSTS.has(url.hostname) ? normalized : null;
+}
+
+function safeMermaidSource(value) {
+  const source = String(value || '').trim();
+  if (!source || source.length > 12000 || /<|\b(click|callback|javascript|data|script|href|classDef|style)\b/i.test(source)) return null;
+  const lines = source.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length > MAX_MERMAID_LINES || !/^(flowchart|graph)\s+(TD|TB|LR|RL|BT)\b/i.test(lines[0] || '')) return null;
+  const nodes = new Set();
+  const edgePattern = /^([A-Za-z0-9_-]+)(?:\[([^\]]*)\]|\(([^)]*)\)|\{([^}]*)\})?\s*--?>\s*([A-Za-z0-9_-]+)(?:\[([^\]]*)\]|\(([^)]*)\)|\{([^}]*)\})?\s*$/;
+  for (const line of lines.slice(1)) {
+    const match = line.match(edgePattern);
+    if (!match || lines.length > MAX_MERMAID_EDGES + 1) return null;
+    const labels = [match[2], match[3], match[4], match[6], match[7], match[8]].filter(Boolean);
+    if (labels.some((label) => String(label).length > 80)) return null;
+    nodes.add(match[1]); nodes.add(match[5]);
+    if (nodes.size > MAX_MERMAID_NODES) return null;
+  }
+  if (!nodes.size) return null;
+  return source;
 }
 
 function normalizeBlocks(value) {
@@ -84,8 +106,8 @@ function normalizeBlocks(value) {
       node.attrs.value = value;
     }
     if (node.type === 'mermaid') {
-      const value = String(node.attrs.value || '').trim();
-      if (!value || value.length > 12000 || /<|\b(click|callback|javascript|data|script|href|classDef|style)\b/i.test(value)) throw invalid('Mermaid 图表内容无效');
+      const value = safeMermaidSource(node.attrs.value);
+      if (!value) throw invalid('Mermaid 图表内容无效');
       node.attrs.value = value;
     }
     if (['embed', 'bookmarkCard'].includes(node.type)) {
@@ -147,7 +169,12 @@ function renderMarkdown(markdown) {
       index += 1;
       while (index < lines.length && !/^```\s*$/.test(lines[index])) code.push(lines[index++]);
       if (index < lines.length) index += 1;
-      if ((fence[1] || '').toLowerCase() === 'mermaid') html.push(`<pre class="mermaid" data-mermaid="${escapeHtml(code.join('\n'))}"><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+      if ((fence[1] || '').toLowerCase() === 'mermaid') {
+        const source = code.join('\n');
+        const safeSource = safeMermaidSource(source);
+        if (safeSource) html.push(`<pre class="mermaid" data-mermaid="${escapeHtml(safeSource)}"><code>${escapeHtml(safeSource)}</code></pre>`);
+        else html.push(`<pre class="mermaid-fallback" data-mermaid-error="true"><code>${escapeHtml(source.replace(/javascript:/gi, 'blocked-protocol:').replace(/data:/gi, 'blocked-data:').replace(/<\/?(script|iframe)[^>]*>/gi, '[blocked-html]'))}</code></pre>`);
+      }
       else html.push(`<pre data-language="${language}"><code>${escapeHtml(code.join('\n'))}</code></pre>`);
       continue;
     }
@@ -239,9 +266,9 @@ function blocksToMarkdown(doc) {
     if (node.type === 'image') return `![${node.attrs.alt}](${node.attrs.src})\n\n`;
     if (node.type === 'gallery') return node.attrs.items.map((item) => `![${item.alt}](${item.src})`).join('\n\n') + '\n\n';
     if (['attachment', 'audio', 'video'].includes(node.type)) return `[${node.attrs.label}](${node.attrs.src})\n\n`;
-    if (node.type === 'callout') return `> ${children.replace(/\n+/g, '\n> ').trim()}\n\n`;
-    if (node.type === 'details') return `> ${node.attrs.summary || '展开阅读'}\n> ${String(node.attrs.body || children).replace(/\n+/g, '\n> ').trim()}\n\n`;
-    if (node.type === 'embed' || node.type === 'bookmarkCard') return `[${node.attrs.title || '受控链接'}](${node.attrs.url})\n\n`;
+    if (node.type === 'callout') return `:::callout ${node.attrs.tone || 'info'}\n${children.replace(/\n+/g, '\n').trim()}\n:::\n\n`;
+    if (node.type === 'details') return `:::details ${node.attrs.summary || '展开阅读'}\n${String(node.attrs.body || children).replace(/\n+/g, '\n').trim()}\n:::\n\n`;
+    if (node.type === 'embed' || node.type === 'bookmarkCard') return `@[${node.type === 'embed' ? 'embed' : 'bookmark'}](${node.attrs.url})${node.attrs.title ? ` ${node.attrs.title}` : ''}\n\n`;
     if (node.type === 'mathInline') return `\\(${node.attrs.value}\\)`;
     if (node.type === 'mathBlock') return `$$\n${node.attrs.value}\n$$\n\n`;
     if (node.type === 'mermaid') return `\`\`\`mermaid\n${node.attrs.value}\n\`\`\`\n\n`;
@@ -286,7 +313,8 @@ function blocksToSafeHtml(doc) {
     if (node.type === 'video') return `<figure><video controls src="${escapeHtml(node.attrs.src)}"></video><figcaption>${escapeHtml(node.attrs.label)}</figcaption></figure>`;
     if (node.type === 'callout') return `<aside data-callout="${escapeHtml(node.attrs.tone || 'info')}">${children}</aside>`;
     if (node.type === 'details') return `<details><summary>${escapeHtml(node.attrs.summary || '展开阅读')}</summary><p>${escapeHtml(node.attrs.body || children)}</p></details>`;
-    if (node.type === 'embed' || node.type === 'bookmarkCard') return `<a data-bookmark-card href="${escapeHtml(node.attrs.url)}" rel="nofollow noopener" target="_blank"><strong>${escapeHtml(node.attrs.title || '受控链接')}</strong><span>${escapeHtml(node.attrs.description || node.attrs.url)}</span></a>`;
+    if (node.type === 'embed') return `<a data-embed href="${escapeHtml(node.attrs.url)}" rel="nofollow noopener" target="_blank"><strong>${escapeHtml(node.attrs.title || '受控嵌入')}</strong><span>${escapeHtml(node.attrs.description || node.attrs.url)}</span></a>`;
+    if (node.type === 'bookmarkCard') return `<a data-bookmark-card href="${escapeHtml(node.attrs.url)}" rel="nofollow noopener" target="_blank"><strong>${escapeHtml(node.attrs.title || '受控链接')}</strong><span>${escapeHtml(node.attrs.description || node.attrs.url)}</span></a>`;
     if (node.type === 'mathInline') return `<span class="math-inline" data-math="${escapeHtml(node.attrs.value)}">${escapeHtml(node.attrs.value)}</span>`;
     if (node.type === 'mathBlock') return `<div class="math-block" data-math="${escapeHtml(node.attrs.value)}">${escapeHtml(node.attrs.value)}</div>`;
     if (node.type === 'mermaid') return `<pre class="mermaid" data-mermaid="${escapeHtml(node.attrs.value)}"><code>${escapeHtml(node.attrs.value)}</code></pre>`;
@@ -306,5 +334,5 @@ function plainTextFromMarkdown(markdown) {
 
 module.exports = {
   MAX_DOCUMENT_BYTES, SAFE_CODE_LANGUAGES, SAFE_EMBED_HOSTS, escapeHtml, safeHttpUrl, safeEmbedUrl,
-  validateBlocks: normalizeBlocks, parseStoredBlocks, renderMarkdown, blocksToMarkdown, blocksToSafeHtml, plainTextFromMarkdown
+  validateBlocks: normalizeBlocks, parseStoredBlocks, renderMarkdown, blocksToMarkdown, blocksToSafeHtml, plainTextFromMarkdown, safeMermaidSource
 };

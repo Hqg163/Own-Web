@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { blocksToSafeHtml, renderMarkdown, validateBlocks } from '../../api/lib/content.js'
+import { blocksToMarkdown, blocksToSafeHtml, renderMarkdown, safeMermaidSource, validateBlocks } from '../../api/lib/content.js'
 
 const richBlocks = {
   type:'doc',
@@ -27,12 +27,23 @@ const richBlocks = {
 describe('Preview/Published content contract', () => {
   it('keeps every rich node represented in the canonical server HTML', () => {
     const html = blocksToSafeHtml(validateBlocks(richBlocks))
-    for (const marker of ['<h2', '<p', '<strong', '<a ', '<blockquote', '<ul', '<ol', '<pre', '<table', '<figure', 'data-gallery', 'data-callout', '<details', 'data-bookmark-card', 'data-math', 'data-mermaid', 'data-footnote']) expect(html).toContain(marker)
+    for (const marker of ['<h2', '<p', '<strong', '<a ', '<blockquote', '<ul', '<ol', '<pre', '<table', '<figure', 'data-gallery', 'data-callout', '<details', 'data-bookmark-card', 'data-embed', 'data-math', 'data-mermaid', 'data-footnote']) expect(html).toContain(marker)
+    const markdown = blocksToMarkdown(validateBlocks(richBlocks))
+    expect(markdown).toContain(':::callout')
+    expect(markdown).toContain(':::details')
+    expect(markdown).toContain('@[bookmark]')
+    expect(markdown).toContain('@[embed]')
   })
 
   it('keeps Markdown extensions aligned with the same semantic markers', () => {
     const html = renderMarkdown('# 标题\n\n:::callout\n提示\n:::\n\n:::details 详情\n折叠\n:::\n\n```mermaid\nflowchart TD\nA --> B\n```\n\n\\(x^2\\)\n\n[^note]: 脚注\n\n@[bookmark](https://www.youtube.com/watch?v=abc)')
     for (const marker of ['<h1', 'data-callout', '<details', 'data-mermaid', 'data-math', 'data-footnote', 'data-bookmark-card']) expect(html).toContain(marker)
   })
-})
 
+  it('uses the same constrained Mermaid contract for API content', () => {
+    expect(safeMermaidSource('flowchart TD\nA[开始] --> B[结束]')).toContain('flowchart TD')
+    expect(safeMermaidSource('flowchart TD\nclick A "javascript:alert(1)"')).toBeNull()
+    expect(safeMermaidSource('sequenceDiagram\nA->>B: hello')).toBeNull()
+    expect(safeMermaidSource(`flowchart TD\n${'A --> B\n'.repeat(81)}`)).toBeNull()
+  })
+})
