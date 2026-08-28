@@ -1,0 +1,20 @@
+[
+  {
+    "file": "kyoto-lane-cover.png",
+    "role": "cover",
+    "alt": "雨后京都街道的木质屋檐与反光路面",
+    "caption": "清晨街道的光影"
+  },
+  {
+    "file": "kyoto-door.png",
+    "role": "body/gallery",
+    "alt": "雨后町家木门、石阶与折叠雨伞",
+    "caption": "屋檐下的细节"
+  },
+  {
+    "file": "kyoto-blue-hour.png",
+    "role": "body/gallery",
+    "alt": "蓝调时刻安静的京都侧街与暖色灯笼",
+    "caption": "雨后的街角"
+  }
+]
