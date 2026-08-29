@@ -68,6 +68,12 @@ async function main() {
     assert.equal(publicPost.status, 200)
     const publicList = await request(api).get('/api/public/posts').query({ q:'Hello' })
     assert.equal(publicList.status, 200); assert.ok('total' in publicList.body)
+    const commentCreated = await reader.post(`/api/posts/${id}/comments`).set('Origin', origin).send({ content:'第三轮评论点赞回归' })
+    assert.equal(commentCreated.status, 201)
+    const commentId = commentCreated.body.comment.id
+    const commentLike = await owner.post(`/api/comments/${commentId}/like`).set('Origin', origin)
+    assert.equal(commentLike.status, 200)
+    assert.equal(commentLike.body.liked, true)
     const injection = await request(api).get('/api/public/posts').query({ q:"' OR 1=1 --" })
     assert.equal(injection.status, 200); assert.equal(Array.isArray(injection.body.items), true)
     const forbiddenEdit = await reader.put(`/api/posts/${id}`).set('Origin', origin).send({ title:'越权修改', status:'draft' })

@@ -71,10 +71,13 @@ async function createPost(visibility, status = 'published') {
 
 async function createPostMedia(post) {
   const filename = `media-${post.id}-${suffix}.png`;
-  const absolutePath = path.join(path.dirname(uploadRoot), filename);
+  const relativePath = path.join('posts', String(author.id), filename);
+  const absolutePath = path.join(uploadRoot, relativePath);
+  const storedPath = path.relative(path.dirname(uploadRoot), absolutePath).replace(/\\/g, '/');
+  fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
   fs.writeFileSync(absolutePath, validPng);
   mediaFiles.push(absolutePath);
-  const [result] = await query('INSERT INTO post_media (owner_id,post_id,file_path,mime_type,alt_text) VALUES (?,?,?,?,?)', [author.id, post.id, filename, 'image/png', '访问审计媒体']);
+  const [result] = await query('INSERT INTO post_media (owner_id,post_id,file_path,mime_type,alt_text) VALUES (?,?,?,?,?)', [author.id, post.id, storedPath, 'image/png', '访问审计媒体']);
   return result.insertId;
 }
 

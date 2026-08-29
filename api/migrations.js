@@ -137,6 +137,44 @@ async function runMigrations(db) {
     await addColumn(db, 'post_revisions', 'content_source', "VARCHAR(32) NOT NULL DEFAULT 'editor'");
     await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260828_content_safety_v1']);
   }
+
+  const [commentsDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260829_comments_v2']);
+  if (!commentsDone.length) {
+    await addColumn(db, 'users', 'deleted_at', 'DATETIME NULL');
+    await addColumn(db, 'comments', 'root_comment_id', 'BIGINT NULL');
+    await addColumn(db, 'comments', 'reply_to_comment_id', 'BIGINT NULL');
+    await addColumn(db, 'comments', 'like_count', 'INT UNSIGNED NOT NULL DEFAULT 0');
+    await query('UPDATE comments SET root_comment_id = CASE WHEN parent_id IS NULL THEN id ELSE parent_id END WHERE root_comment_id IS NULL');
+    await query('UPDATE comments SET reply_to_comment_id = parent_id WHERE parent_id IS NOT NULL AND reply_to_comment_id IS NULL');
+    if (!await indexExists(db, 'comments', 'idx_comments_root_sort')) await query('CREATE INDEX idx_comments_root_sort ON comments (post_id, root_comment_id, created_at, id)');
+    if (!await indexExists(db, 'comments', 'idx_comments_reply_sort')) await query('CREATE INDEX idx_comments_reply_sort ON comments (root_comment_id, created_at, id)');
+    await query(`CREATE TABLE IF NOT EXISTS comment_likes (
+      comment_id BIGINT NOT NULL, user_id INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(comment_id, user_id),
+      FOREIGN KEY(comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS comment_media (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY, owner_id INT NOT NULL, comment_id BIGINT NULL,
+      file_path VARCHAR(500) NOT NULL, mime_type VARCHAR(100) NOT NULL,
+      file_size BIGINT UNSIGNED NOT NULL, alt_text VARCHAR(255) NOT NULL DEFAULT \'评论图片\',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(owner_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+      KEY idx_comment_media_comment (comment_id, created_at),
+      KEY idx_comment_media_pending (owner_id, comment_id, created_at)
+    )`);
+    await query('UPDATE posts p SET comment_count=(SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id AND c.deleted_at IS NULL)');
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260829_comments_v2']);
+  }
+}
+
+async function indexExists(db, table, indexName) {
+  const [rows] = await db.promise().query(
+    `SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1`,
+    [table, indexName]
+  );
+  return rows.length > 0;
 }
 
 function createShareToken() { return crypto.randomBytes(32).toString('hex'); }

@@ -18,6 +18,20 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => 
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 }[char]));
 
+function safeMathValue(value) {
+  const source = String(value ?? '').replace(/\r\n?/g, '\n').trim();
+  if (!source || source.length > 2000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(source)) return null;
+  if (/\\(?:htmlClass|htmlId|htmlStyle|htmlData|href|url|includeGraphics|class|style|command|def|gdef|newcommand|renewcommand|let|futurelet|csname|special|write|input|include)\b/i.test(source)) return null;
+  return source;
+}
+
+function mathNodeHtml(kind, value) {
+  const block = kind === 'block';
+  const className = block ? 'math-block' : 'math-inline';
+  const marker = block ? 'data-math-block' : 'data-math-inline';
+  return `<${block ? 'div' : 'span'} class="${className}" ${marker}="true" data-math="${escapeHtml(value)}">${escapeHtml(value)}</${block ? 'div' : 'span'}>`;
+}
+
 function invalid(message, fields) {
   return Object.assign(new Error(message), { status: 400, code: 'INVALID_CONTENT', fields });
 }
@@ -101,9 +115,12 @@ function normalizeBlocks(value) {
     if (node.type === 'callout' && !['info', 'note', 'warning', 'success'].includes(String(node.attrs.tone || 'info'))) throw invalid('提示卡类型无效');
     if (node.type === 'details' && (String(node.attrs.summary || '').trim().length > 120 || String(node.attrs.body || '').length > 5000)) throw invalid('折叠内容无效');
     if (['mathInline', 'mathBlock'].includes(node.type)) {
-      const value = String(node.attrs.value || node.text || '').trim();
-      if (!value || value.length > 2000 || /\\(?:htmlClass|htmlId|href|includeGraphics|class|style)/i.test(value)) throw invalid('公式内容无效');
-      node.attrs.value = value;
+      const value = safeMathValue(node.attrs.value || node.text);
+      if (!value) throw invalid('公式内容无效');
+      node.attrs = { value };
+      delete node.text;
+      delete node.marks;
+      delete node.content;
     }
     if (node.type === 'mermaid') {
       const value = safeMermaidSource(node.attrs.value);
@@ -143,14 +160,18 @@ function parseStoredBlocks(value) {
 }
 
 function inlineMarkdown(value) {
-  let html = escapeHtml(value);
   const placeholders = [];
   const hold = (content) => { const key = `\u0000${placeholders.length}\u0000`; placeholders.push(content); return key; };
-  html = html.replace(/!\[([^\]]*)\]\((\/api\/public\/media\/\d+(?:\?share=[a-f0-9]{64})?)\)/g, (_m, alt, src) => hold(`<img src="${src}" alt="${escapeHtml(alt)}">`));
-  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi, (_m, label, href) => hold(`<a href="${href}" rel="nofollow noopener" target="_blank">${label}</a>`));
+  let source = String(value ?? '');
+  source = source.replace(/`([^`\n]+)`/g, (_m, code) => hold(`<code>${escapeHtml(code)}</code>`));
+  source = source.replace(/!\[([^\]]*)\]\((\/api\/public\/media\/\d+(?:\?share=[a-f0-9]{64})?)\)/g, (_m, alt, src) => hold(`<img src="${src}" alt="${escapeHtml(alt)}">`));
+  source = source.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi, (_m, label, href) => hold(`<a href="${escapeHtml(href)}" rel="nofollow noopener" target="_blank">${escapeHtml(label)}</a>`));
+  source = source.replace(/\\\(([^\n]+?)\\\)/g, (_m, formula) => {
+    const safeValue = safeMathValue(formula);
+    return safeValue ? hold(mathNodeHtml('inline', safeValue)) : _m;
+  });
+  let html = escapeHtml(source);
   html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/~~([^~]+)~~/g, '<s>$1</s>').replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-  html = html.replace(/\\\(([^\n]+?)\\\)/g, (_m, value) => hold(`<span class="math-inline" data-math="${escapeHtml(value)}">${escapeHtml(value)}</span>`));
-  html = html.replace(/\$\$([\s\S]+?)\$\$/g, (_m, value) => hold(`<div class="math-block" data-math="${escapeHtml(value.trim())}">${escapeHtml(value.trim())}</div>`));
   html = html.replace(/\[\^([a-z0-9_-]{1,30})\]/gi, '<sup data-footnote-ref="$1">$1</sup>');
   return html.replace(/\u0000(\d+)\u0000/g, (_m, index) => placeholders[Number(index)]);
 }
@@ -177,6 +198,25 @@ function renderMarkdown(markdown) {
       }
       else html.push(`<pre data-language="${language}"><code>${escapeHtml(code.join('\n'))}</code></pre>`);
       continue;
+    }
+    if (/^\s*\$\$/.test(line)) {
+      const singleLine = line.match(/^\s*\$\$([\s\S]+?)\$\$\s*$/);
+      const start = index;
+      let value = singleLine ? singleLine[1] : null;
+      if (!singleLine && /^\s*\$\$\s*$/.test(line)) {
+        const formula = [];
+        index += 1;
+        while (index < lines.length && !/^\s*\$\$\s*$/.test(lines[index])) formula.push(lines[index++]);
+        if (index < lines.length) { value = formula.join('\n'); index += 1; }
+        else { value = null; index = start; }
+      }
+      if (value !== null) {
+        const safeValue = safeMathValue(value);
+        if (safeValue) html.push(mathNodeHtml('block', safeValue));
+        else html.push(`<p>${escapeHtml(lines.slice(start, index + (singleLine ? 1 : 0)).join('\n')).replace(/\n/g, '<br>')}</p>`);
+        if (singleLine) index += 1;
+        continue;
+      }
     }
     const callout = line.match(/^:::callout(?:\s+(info|note|warning|success))?\s*$/i);
     if (callout) {
@@ -315,8 +355,8 @@ function blocksToSafeHtml(doc) {
     if (node.type === 'details') return `<details><summary>${escapeHtml(node.attrs.summary || '展开阅读')}</summary><p>${escapeHtml(node.attrs.body || children)}</p></details>`;
     if (node.type === 'embed') return `<a data-embed href="${escapeHtml(node.attrs.url)}" rel="nofollow noopener" target="_blank"><strong>${escapeHtml(node.attrs.title || '受控嵌入')}</strong><span>${escapeHtml(node.attrs.description || node.attrs.url)}</span></a>`;
     if (node.type === 'bookmarkCard') return `<a data-bookmark-card href="${escapeHtml(node.attrs.url)}" rel="nofollow noopener" target="_blank"><strong>${escapeHtml(node.attrs.title || '受控链接')}</strong><span>${escapeHtml(node.attrs.description || node.attrs.url)}</span></a>`;
-    if (node.type === 'mathInline') return `<span class="math-inline" data-math="${escapeHtml(node.attrs.value)}">${escapeHtml(node.attrs.value)}</span>`;
-    if (node.type === 'mathBlock') return `<div class="math-block" data-math="${escapeHtml(node.attrs.value)}">${escapeHtml(node.attrs.value)}</div>`;
+    if (node.type === 'mathInline') return mathNodeHtml('inline', node.attrs.value);
+    if (node.type === 'mathBlock') return mathNodeHtml('block', node.attrs.value);
     if (node.type === 'mermaid') return `<pre class="mermaid" data-mermaid="${escapeHtml(node.attrs.value)}"><code>${escapeHtml(node.attrs.value)}</code></pre>`;
     if (node.type === 'footnote') return `<aside data-footnote><sup>${escapeHtml(node.attrs.label || '注')}</sup> ${escapeHtml(node.attrs.text || '')}</aside>`;
     if (node.type === 'table') return `<div class="table-wrap"><table>${children}</table></div>`;
@@ -334,5 +374,5 @@ function plainTextFromMarkdown(markdown) {
 
 module.exports = {
   MAX_DOCUMENT_BYTES, SAFE_CODE_LANGUAGES, SAFE_EMBED_HOSTS, escapeHtml, safeHttpUrl, safeEmbedUrl,
-  validateBlocks: normalizeBlocks, parseStoredBlocks, renderMarkdown, blocksToMarkdown, blocksToSafeHtml, plainTextFromMarkdown, safeMermaidSource
+  safeMathValue, validateBlocks: normalizeBlocks, parseStoredBlocks, renderMarkdown, blocksToMarkdown, blocksToSafeHtml, plainTextFromMarkdown, safeMermaidSource
 };

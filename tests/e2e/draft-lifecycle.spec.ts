@@ -36,6 +36,36 @@ test.describe('draft lifecycle', () => {
     expect(postCreates).toHaveLength(0)
   })
 
+  test('deletes an owned draft from Creation after confirmation without resetting list query', async ({ page }, testInfo) => {
+    await login(page, testInfo)
+    const title = '创作中心删除回归草稿'
+    await page.goto('/write')
+    await page.getByLabel('标题').fill(title)
+    await page.locator('.tiptap').fill('用于验证创作中心删除入口的正文。')
+    await page.getByRole('button', { name: '保存草稿' }).click()
+    await expect.poll(() => page.url()).toMatch(/\/posts\/\d+\/edit/)
+
+    await page.goto(`/creation?filter=draft&q=${encodeURIComponent(title)}&sort=title&page=1`)
+    const row = page.locator('.articles article').filter({ hasText: title })
+    await expect(row).toBeVisible()
+    await row.getByRole('button', { name: '删除草稿' }).click()
+    const dialog = page.getByRole('dialog', { name: '删除草稿' })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: '取消' }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(row).toBeVisible()
+
+    await row.getByRole('button', { name: '删除草稿' }).click()
+    await dialog.getByRole('button', { name: '删除草稿', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(page.getByRole('status')).toContainText('草稿已删除')
+    await expect(row).toHaveCount(0)
+    await expect.poll(() => {
+      const params = new URL(page.url()).searchParams
+      return [params.get('filter'), params.get('q'), params.get('sort'), params.get('page')]
+    }).toEqual(['draft', title, 'title', '1'])
+  })
+
   test('autosaves meaningful content, keeps it after reload, and discards only an owned draft', async ({ page }, testInfo) => {
     await login(page, testInfo)
     await page.goto('/write')

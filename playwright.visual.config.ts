@@ -12,6 +12,8 @@ export default defineConfig({
   testDir:'./tests/e2e',
   testMatch:'visual.spec.ts',
   timeout:30_000,
+  // Visual auth fixtures share the same isolated API/database process.
+  workers:1,
   reporter:[['list'],['html',{ outputFolder:'audit-artifacts/visual-report', open:'never' }]],
   use:{ baseURL:'http://127.0.0.1:5173', trace:'retain-on-failure', screenshot:'only-on-failure' },
   projects:viewports.flatMap(([name, viewport]) => [

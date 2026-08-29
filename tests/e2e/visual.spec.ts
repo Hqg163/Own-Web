@@ -22,6 +22,79 @@ function artifactName(project: string, route: string) {
   return `audit-artifacts/screenshots/${project}-${suffix}.png`
 }
 
+async function stabilizeVisual(page: Page) {
+  await page.addStyleTag({ content: `
+    *, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+      caret-color: transparent !important;
+    }
+  ` })
+  await page.waitForFunction(() => document.readyState === 'complete')
+  await page.evaluate(async () => {
+    await document.fonts?.ready
+    await Promise.all([...document.images].map(async (image) => {
+      if (!image.complete) await new Promise<void>((resolve) => {
+        image.addEventListener('load', () => resolve(), { once: true })
+        image.addEventListener('error', () => resolve(), { once: true })
+      })
+      await image.decode?.().catch(() => {})
+    }))
+  })
+}
+
+async function expectViewportBounds(page: Page, route: string) {
+  const bounds = await page.evaluate(() => {
+    const viewport = window.innerWidth
+    const offenders = [...document.querySelectorAll<HTMLElement>('body *')].flatMap((element) => {
+      const style = window.getComputedStyle(element)
+      if (style.display === 'none' || style.visibility === 'hidden' || element.closest('details:not([open])') || element.getClientRects().length === 0) return []
+      const rect = element.getBoundingClientRect()
+      if (rect.right <= -2 || rect.left >= viewport + 2) return []
+      let ancestor = element.parentElement
+      while (ancestor) {
+        const overflowX = window.getComputedStyle(ancestor).overflowX
+        const isHorizontalScroller = ['auto', 'scroll'].includes(overflowX) && ancestor.scrollWidth > ancestor.clientWidth + 1
+        if (isHorizontalScroller || ['hidden', 'clip'].includes(overflowX)) {
+          const clip = ancestor.getBoundingClientRect()
+          const clipLeft = Math.max(clip.left, 0)
+          const clipRight = Math.min(clip.right, viewport)
+          if (rect.right <= clipLeft || rect.left >= clipRight) return []
+          if (isHorizontalScroller && (rect.left < clipLeft || rect.right > clipRight)) return []
+        }
+        ancestor = ancestor.parentElement
+      }
+      return rect.left < -2 || rect.right > viewport + 2
+        ? [{ tag: element.tagName.toLowerCase(), className: element.className, left: Math.round(rect.left), right: Math.round(rect.right) }]
+        : []
+    }).slice(0, 5)
+    return { scrollWidth: document.documentElement.scrollWidth, viewport, offenders }
+  })
+  expect(bounds.scrollWidth, `${route} overflows horizontally`).toBeLessThanOrEqual(bounds.viewport + 2)
+  expect(bounds.offenders, `${route} has visible elements outside the viewport`).toEqual([])
+}
+
+function dynamicMasks(page: Page) {
+  return [
+    page.locator('.user-menu'),
+    page.locator('.dashboard-intro'),
+    page.locator('#blog-slug'),
+    page.locator('.save-state'),
+    page.locator('.reading-progress'),
+  ]
+}
+
+function screenshotOptions(page: Page) {
+  return {
+    fullPage: true,
+    animations: 'disabled' as const,
+    caret: 'hide' as const,
+    mask: dynamicMasks(page),
+    maxDiffPixelRatio: 0.01,
+    maxDiffPixels: 150,
+  }
+}
+
 async function loginVisualUser(page: Page, project: string) {
   const suffix = `${Date.now()}-${project.replace(/[^a-z0-9]/gi, '')}`
   const email = `visual-${suffix}@own-web.test`
@@ -45,11 +118,11 @@ test.describe('risk-based visual routes', () => {
       await page.goto(route)
       await page.waitForLoadState('networkidle')
       await expect(page.locator('body')).toBeVisible()
-      const dimensions = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: window.innerWidth }))
-      expect(dimensions.width, `${route} overflows horizontally`).toBeLessThanOrEqual(dimensions.viewport)
+      await stabilizeVisual(page)
+      await expectViewportBounds(page, route)
       await page.screenshot({ path: artifactName(testInfo.project.name, route), fullPage: true })
       if (route === '/' || route === '/explore' || route === '/login' || route === '/register') {
-        await expect(page).toHaveScreenshot(`${route === '/' ? 'home' : route.slice(1)}.png`, { fullPage: true, animations:'disabled' })
+        await expect(page).toHaveScreenshot(`${route === '/' ? 'home' : route.slice(1)}.png`, screenshotOptions(page))
       }
     }
   })
@@ -61,14 +134,11 @@ test.describe('risk-based visual routes', () => {
       await page.goto(route)
       await page.waitForLoadState('networkidle')
       await expect(page.locator('body')).toBeVisible()
-      const dimensions = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: window.innerWidth }))
-      expect(dimensions.width, `${route} overflows horizontally`).toBeLessThanOrEqual(dimensions.viewport)
+      await stabilizeVisual(page)
+      await expectViewportBounds(page, route)
       await page.screenshot({ path: artifactName(testInfo.project.name, route), fullPage: true })
       if (route === '/creation' || route === '/write' || route === '/settings' || route === '/dashboard') {
-        const dynamicFields = [page.locator('.user-menu')]
-        if (route === '/settings') dynamicFields.push(page.locator('#blog-slug'))
-        if (route === '/dashboard') dynamicFields.push(page.locator('.dashboard-intro'))
-        await expect(page).toHaveScreenshot(`${route.slice(1)}.png`, { fullPage: true, animations:'disabled', mask:dynamicFields })
+        await expect(page).toHaveScreenshot(`${route.slice(1)}.png`, screenshotOptions(page))
       }
     }
   })

@@ -5,6 +5,9 @@ export default defineConfig({
   testIgnore: '**/visual.spec.ts',
   timeout: 30_000,
   fullyParallel: true,
+  // The E2E suite shares one isolated MySQL database and a single API process.
+  // Serial workers keep auth throttles and fixture lifecycle deterministic.
+  workers: 1,
   forbidOnly: !!process.env.CI,
   reporter: [['list'], ['html', { outputFolder: 'audit-artifacts/playwright-report', open: 'never' }]],
   use: {

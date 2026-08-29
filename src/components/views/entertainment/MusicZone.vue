@@ -4303,7 +4303,8 @@ input:focus-visible {
 .music-zone .progress-handle { background: var(--surface-raised); box-shadow: var(--shadow); }
 .music-zone .fs-playlist-section,
 .music-zone .fs-playlist-content { border-color: var(--border); background: var(--surface); }
-.music-zone .fs-playlist-item { color: var(--text); }
+.music-zone .fs-playlist-item { color: var(--text); opacity: 1; }
+.music-zone .fs-playlist-item .playlist-title { color: var(--text); }
 .music-zone .fs-playlist-item:hover,
 .music-zone .fs-playlist-item.active { background: var(--accent-soft); color: var(--accent); }
 .music-zone .fs-playlist-item.active .playlist-title,

@@ -103,9 +103,9 @@ function validateUploadedFile(file, { allowed, maxBytes, rejectSvg = true } = {}
     if (/<script|javascript:|<iframe|onerror\s*=|onload\s*=/.test(text)) throw Object.assign(new Error('图片内容包含可执行脚本片段'), { status: 400, code: 'FILE_CONTENT_INVALID' });
     const dimensions = imageDimensions(file.path);
     if (!dimensions || dimensions.width < 1 || dimensions.height < 1 || dimensions.width > 100_000 || dimensions.height > 100_000) throw Object.assign(new Error('图片尺寸无效'), { status:400, code:'FILE_DIMENSIONS_INVALID' });
-    if (detected === 'image/png' && !bytes.subarray(Math.max(0, bytes.length - 64)).includes(Buffer.from('IEND'))) throw Object.assign(new Error('PNG 文件不完整'), { status: 400, code: 'FILE_CONTENT_INVALID' });
-    if (detected === 'image/gif' && bytes[bytes.length - 1] !== 0x3b) throw Object.assign(new Error('GIF 文件不完整'), { status: 400, code: 'FILE_CONTENT_INVALID' });
-    if (detected === 'image/jpeg' && !bytes.subarray(Math.max(0, bytes.length - 64)).includes(Buffer.from([0xff, 0xd9]))) throw Object.assign(new Error('JPEG 文件不完整'), { status: 400, code: 'FILE_CONTENT_INVALID' });
+    if (detected === 'image/png' && bytes.lastIndexOf(Buffer.from('IEND')) !== bytes.length - 8) throw Object.assign(new Error('PNG 文件不完整或包含尾随数据'), { status: 400, code: 'FILE_CONTENT_INVALID' });
+    if (detected === 'image/gif' && bytes[bytes.length - 1] !== 0x3b) throw Object.assign(new Error('GIF 文件不完整或包含尾随数据'), { status: 400, code: 'FILE_CONTENT_INVALID' });
+    if (detected === 'image/jpeg' && !(bytes.length >= 2 && bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9)) throw Object.assign(new Error('JPEG 文件不完整或包含尾随数据'), { status: 400, code: 'FILE_CONTENT_INVALID' });
   }
   return { ...file, detectedMime: detected, size };
 }

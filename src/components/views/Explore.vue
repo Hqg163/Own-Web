@@ -10,8 +10,8 @@
           <button v-for="option in feedOptions" :key="option.value" class="feed-tab" :class="{ active: feed === option.value }" role="tab" :aria-selected="feed === option.value" type="button" @click="selectFeed(option.value)">{{ option.label }}</button>
         </div>
         <form class="search-row" @submit.prevent="applySearch">
-          <label class="search-field" for="explore-search"><AppIcon name="search" :size="18" /><span class="visually-hidden">搜索文章</span><input id="explore-search" v-model="searchDraft" type="search" placeholder="搜索标题、摘要、正文、作者、分类或标签" autocomplete="off"></label>
-          <label class="category-select" for="explore-category"><span class="visually-hidden">按分类筛选</span><select id="explore-category" v-model="categoryDraft"><option value="">全部分类</option><option v-for="category in taxonomy.categories" :key="category.slug" :value="category.slug">{{ category.name }}</option></select></label>
+          <label class="search-field" for="explore-search"><AppIcon name="search" :size="18" /><span class="visually-hidden">搜索文章</span><input id="explore-search" v-model="searchDraft" type="search" placeholder="搜索标题、摘要、正文、作者、分类或标签" autocomplete="off" @input="handleSearchInput"></label>
+          <label class="category-select" for="explore-category"><span class="visually-hidden">按分类筛选</span><select id="explore-category" v-model="categoryDraft" @change="selectCategory(categoryDraft)"><option value="">全部分类</option><option v-for="category in taxonomy.categories" :key="category.slug" :value="category.slug">{{ category.name }}</option></select></label>
           <button class="button button-primary" type="submit" :disabled="loading">{{ loading ? '搜索中' : '搜索' }}</button>
         </form>
         <div v-if="activeFilterLabel" class="active-filter"><span>正在查看：{{ activeFilterLabel }}</span><button class="button button-ghost" type="button" @click="clearFilters">清除筛选</button></div>
@@ -21,7 +21,7 @@
         <div v-else class="feed" aria-live="polite">
           <article v-for="post in items" :key="post.id" class="card post-card">
             <div class="post-card__author"><UserAvatar :src="post.avatar_url || post.avatar_path" :name="post.username" :size="36" /><div><RouterLink class="author-link" :to="`/u/${post.blog_slug || `u-${post.author_id || ''}`}`">{{ post.username || '匿名作者' }}</RouterLink><p class="post-meta">{{ date(post.published_at) }} · {{ readingMinutes(post) }} 分钟阅读</p></div></div>
-            <div class="post-card__body"><RouterLink class="post-title" :to="`/posts/${post.slug}`">{{ post.title }}</RouterLink><p v-if="post.excerpt || post.content_markdown" class="post-excerpt">{{ post.excerpt || excerpt(post.content_markdown) }}</p><div v-if="post.categories?.length || post.tags?.length" class="post-taxonomy" aria-label="文章分类与标签"><RouterLink v-for="category in post.categories || []" :key="`category-${category.slug}`" class="taxonomy-link" :to="{ path: '/explore', query: { category: category.slug } }">{{ category.name }}</RouterLink><RouterLink v-for="tag in post.tags || []" :key="`tag-${tag.slug}`" class="taxonomy-link" :to="{ path: '/explore', query: { tag: tag.slug } }">#{{ tag.name }}</RouterLink></div></div>
+            <div class="post-card__body"><RouterLink class="post-title" :to="`/posts/${post.slug}`">{{ post.title }}</RouterLink><p v-if="post.preview_excerpt" class="post-excerpt">{{ post.preview_excerpt }}</p><div v-if="post.categories?.length || post.tags?.length" class="post-taxonomy" aria-label="文章分类与标签"><RouterLink v-for="category in post.categories || []" :key="`category-${category.slug}`" class="taxonomy-link" :to="{ path: '/explore', query: { category: category.slug } }">{{ category.name }}</RouterLink><RouterLink v-for="tag in post.tags || []" :key="`tag-${tag.slug}`" class="taxonomy-link" :to="{ path: '/explore', query: { tag: tag.slug } }">#{{ tag.name }}</RouterLink></div></div>
             <footer class="post-card__footer"><span><AppIcon name="eye" :size="16" />{{ number(post.view_count) }}</span><span><AppIcon name="heart" :size="16" />{{ number(post.like_count) }}</span><span><AppIcon name="mail" :size="16" />{{ number(post.comment_count) }}</span><span><AppIcon name="bookmark" :size="16" />{{ number(post.bookmark_count) }}</span><RouterLink class="read-link" :to="`/posts/${post.slug}`">阅读全文 <AppIcon name="arrow-right" :size="16" /></RouterLink></footer>
           </article>
         </div>
@@ -37,17 +37,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import http from '@/services/http'
 
 type TaxonomyItem = { name: string; slug: string }
-type PostSummary = { id:number; title:string; slug:string; excerpt?:string|null; content_markdown?:string|null; published_at?:string|null; reading_minutes?:number; view_count?:number; like_count?:number; bookmark_count?:number; comment_count?:number; username?:string; blog_slug?:string; author_id?:number; avatar_url?:string|null; avatar_path?:string|null; categories?:TaxonomyItem[]; tags?:TaxonomyItem[] }
+type PostSummary = { id:number; title:string; slug:string; preview_excerpt?:string|null; published_at?:string|null; reading_minutes?:number; view_count?:number; like_count?:number; bookmark_count?:number; comment_count?:number; username?:string; blog_slug?:string; author_id?:number; avatar_url?:string|null; avatar_path?:string|null; categories?:TaxonomyItem[]; tags?:TaxonomyItem[] }
 type Creator = { username:string; blog_slug:string; avatar_url?:string|null; avatar_path?:string|null; post_count?:number }
 
-const route = useRoute(), router = useRouter(), items = ref<PostSummary[]>([]), taxonomy = ref<{categories:TaxonomyItem[];tags:TaxonomyItem[]}>({categories:[],tags:[]}), creators = ref<Creator[]>([]), loading = ref(true), loadError = ref(''), total = ref(0), pageSize = ref(12), page = ref(1), searchDraft = ref(''), categoryDraft = ref('')
+const route = useRoute(), router = useRouter(), items = ref<PostSummary[]>([]), taxonomy = ref<{categories:TaxonomyItem[];tags:TaxonomyItem[]}>({categories:[],tags:[]}), creators = ref<Creator[]>([]), loading = ref(true), loadError = ref(''), total = ref(0), pageSize = ref(12), page = ref(1), searchDraft = ref(String(route.query.q || '')), categoryDraft = ref(String(route.query.category || ''))
 const loggedIn = localStorage.getItem('isLoggedIn') === 'true'
 const validFeeds = ['discover','hot','latest','following'] as const
 type Feed = (typeof validFeeds)[number]
@@ -60,19 +60,27 @@ const activeFilterLabel = computed(() => { const labels:string[]=[]; if(feed.val
 const emptyMessage = computed(() => feed.value==='following'?'关注的创作者还没有公开发布文章。':hasFilters.value?'没有与当前筛选条件匹配的公开文章。':'暂时没有公开文章。')
 function number(value:number|undefined){return new Intl.NumberFormat('zh-CN').format(Number(value||0))}
 function date(value:string|null|undefined){if(!value)return '刚刚发布';const parsed=new Date(value);return Number.isNaN(parsed.getTime())?'刚刚发布':new Intl.DateTimeFormat('zh-CN',{dateStyle:'medium'}).format(parsed)}
-function readingMinutes(post:PostSummary){return Math.max(1,Number(post.reading_minutes||Math.ceil(String(post.content_markdown||'').length/500)||1))}
-function excerpt(value:string|null|undefined){return String(value||'').replace(/\s+/g,' ').trim().slice(0,170)}
+function readingMinutes(post:PostSummary){return Math.max(1,Number(post.reading_minutes||1))}
 function normalizePage(value:unknown){const parsed=Number(value);return Number.isInteger(parsed)&&parsed>0?parsed:1}
-function updateQuery(next:Record<string,string|number|undefined>){const queryObject:Record<string,string>={};Object.entries(next).forEach(([key,value])=>{if(value!==undefined&&value!==''&&value!=='discover'&&!(key==='page'&&Number(value)===1))queryObject[key]=String(value)});router.push({path:'/explore',query:queryObject})}
-function selectFeed(next:Feed){updateQuery({q:query.value,category:selectedCategory.value,tag:selectedTag.value,feed:next,page:1})}
-function applySearch(){updateQuery({q:searchDraft.value.trim(),category:categoryDraft.value,tag:selectedTag.value,feed:feed.value,page:1})}
+type ExploreQuery = { q?:string; category?:string; tag?:string; feed?:Feed; page?:number }
+function updateQuery(next:ExploreQuery, replace = false){const queryObject:Record<string,string>={};Object.entries(next).forEach(([key,value])=>{if(value!==undefined&&value!==''&&value!=='discover'&&!(key==='page'&&Number(value)===1))queryObject[key]=String(value)});const navigate=replace?router.replace:router.push;void navigate({path:'/explore',query:queryObject}).catch(()=>{})}
+function currentUiQuery(pageNumber=1):ExploreQuery{return {q:searchDraft.value.trim(),category:categoryDraft.value,tag:selectedTag.value,feed:feed.value,page:pageNumber}}
+function appliedQuery(pageNumber=page.value):ExploreQuery{return {q:query.value,category:selectedCategory.value,tag:selectedTag.value,feed:feed.value,page:pageNumber}}
+function selectFeed(next:Feed){updateQuery({...currentUiQuery(1),feed:next})}
+function selectCategory(next:string){categoryDraft.value=next;updateQuery({...currentUiQuery(1),category:next})}
+function applySearch(){updateQuery(currentUiQuery(1))}
+function handleSearchInput(){if(searchDraft.value.trim()!=='')return;if(!query.value)return;const next=currentUiQuery(1);next.q=undefined;updateQuery(next,true)}
 function clearFilters(){updateQuery({})}
-function goToPage(next:number){if(next>=1&&next<=totalPages.value)updateQuery({q:query.value,category:selectedCategory.value,tag:selectedTag.value,feed:feed.value,page:next})}
+function goToPage(next:number){if(next>=1&&next<=totalPages.value)updateQuery(appliedQuery(next))}
+function syncDraftsFromRoute(){searchDraft.value=query.value;categoryDraft.value=selectedCategory.value}
 async function loadTaxonomy(){try{const response=await http.get('/api/public/taxonomy');taxonomy.value={categories:Array.isArray(response.data?.categories)?response.data.categories:[],tags:Array.isArray(response.data?.tags)?response.data.tags:[]}}catch{taxonomy.value={categories:[],tags:[]}}}
 async function loadCreators(){try{const response=await http.get('/api/public/creators',{params:{limit:5}});creators.value=Array.isArray(response.data?.items)?response.data.items:[]}catch{creators.value=[]}}
-async function load(){loading.value=true;loadError.value='';page.value=normalizePage(route.query.page);searchDraft.value=query.value;categoryDraft.value=selectedCategory.value;try{const params:Record<string,string|number|undefined>={q:query.value||undefined,category:selectedCategory.value||undefined,tag:selectedTag.value||undefined,feed:feed.value,page:page.value,sort:feed.value==='hot'?'hot':'latest'};const response=await http.get('/api/public/posts',{params});items.value=Array.isArray(response.data?.items)?response.data.items:[];total.value=Number(response.data?.total||items.value.length);pageSize.value=Number(response.data?.pageSize||12);page.value=Number(response.data?.page||page.value)}catch(error:any){items.value=[];loadError.value=error.response?.status===401&&feed.value==='following'?'登录后可查看关注创作者的公开文章。':error.response?.data?.error?.message||'公开文章暂时无法载入，请稍后重试。'}finally{loading.value=false}}
-watch(() => route.fullPath, load)
-onMounted(async()=>{await Promise.all([loadTaxonomy(),loadCreators()]);await load()})
+let requestSequence=0
+let activeController:AbortController|null=null
+async function load(){const requestId=++requestSequence;activeController?.abort();const controller=new AbortController();activeController=controller;syncDraftsFromRoute();loading.value=true;loadError.value='';const requestedPage=normalizePage(route.query.page);const requestedFeed=feed.value;const params:Record<string,string|number|undefined>={q:query.value||undefined,category:selectedCategory.value||undefined,tag:selectedTag.value||undefined,feed:requestedFeed,page:requestedPage,sort:requestedFeed==='hot'?'hot':'latest'};page.value=requestedPage;try{const response=await http.get('/api/public/posts',{params,signal:controller.signal});if(requestId!==requestSequence)return;items.value=Array.isArray(response.data?.items)?response.data.items:[];total.value=Number(response.data?.total||items.value.length);pageSize.value=Number(response.data?.pageSize||12);page.value=Number(response.data?.page||page.value)}catch(error:any){if(requestId!==requestSequence||controller.signal.aborted||error?.code==='ERR_CANCELED')return;items.value=[];loadError.value=error.response?.status===401&&requestedFeed==='following'?'登录后可查看关注创作者的公开文章。':error.response?.data?.error?.message||'公开文章暂时无法载入，请稍后重试。'}finally{if(requestId===requestSequence){loading.value=false;activeController=null}}}
+watch(() => route.fullPath, () => {syncDraftsFromRoute();void load()})
+onMounted(async()=>{syncDraftsFromRoute();await Promise.all([loadTaxonomy(),loadCreators()]);await load()})
+onUnmounted(()=>{requestSequence+=1;activeController?.abort()})
 </script>
 
 <style scoped>

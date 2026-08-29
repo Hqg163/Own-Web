@@ -1,5 +1,5 @@
 <template>
-  <header class="site-header"><div class="container bar">
+  <header class="site-header" data-sticky-header><div class="container bar">
     <RouterLink class="brand" to="/" aria-label="Own-Web 首页">Own-Web<span>／</span></RouterLink>
     <button ref="mobileMenuButton" class="icon-button mobile-menu" type="button" :aria-label="menuOpen ? '关闭导航菜单' : '打开导航菜单'" :aria-expanded="menuOpen" aria-haspopup="true" @click.stop="toggleMobileMenu"><AppIcon name="menu" /></button>
     <nav :class="['nav',{open:menuOpen}]" aria-label="主导航"><RouterLink v-for="link in links" :key="link.to" :to="link.to" @click="menuOpen=false">{{ link.label }}</RouterLink><RouterLink v-if="loggedIn" class="mobile-write" to="/write"><AppIcon name="pen" :size="16" />写文章</RouterLink></nav>
