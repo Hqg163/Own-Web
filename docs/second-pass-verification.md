@@ -1,4 +1,6 @@
-# Own-Web 第二轮复核证据矩阵
+# Own-Web 第二轮复核证据矩阵（历史记录）
+
+> 第三轮对账（2026-08-29）：本文只保留第二轮当时的证据快照，不继承为当前完成声明。当前验收请以 [third-pass-verification.md](./third-pass-verification.md) 为准。本文出现的 `Publicly Verified`、本地作者 URL、测试库和第二轮测试数量都必须按当时上下文解释；它们不证明生产匿名访问、第二账号访问或第三轮新增能力。
 
 > 复核日期：2026-08-29。本文只记录本轮重新取得的代码、测试、运行时和真实站点证据，不继承上一轮结论。结论为“实现与集中门禁完成”，但第二账号独立阅读仍因没有现成会话而保持 Not Verified。
 
@@ -12,7 +14,7 @@
 - 真实 showcase：当前作者会话和真实站点数据库，文章保留，不 teardown
 - 现有用户的 157、156、107 等草稿以及既有私人媒体未删除
 
-证据等级：`Code Verified`、`Unit Tested`、`API Tested`、`E2E Tested`、`Visual Verified`、`Manually Verified`、`Publicly Verified`。
+证据等级（第二轮历史定义）：`Code Verified`、`Unit Tested`、`API Tested`、`E2E Tested`、`Visual Verified`、`Manually Verified`、`Publicly Verified`。第三轮统一改用 `Local Public Verified` 区分 localhost 作者会话与生产公开验证。
 
 ## Claim Verification Matrix
 
@@ -27,7 +29,7 @@
 | Mermaid 是实际安全渲染而非只显示 source | `src/utils/mermaid.ts` 受限 flowchart SVG；`api/lib/content.js` 校验和 fallback | showcase 158 公共页出现安全 SVG；非法内容走 fallback | Mermaid unit、content parity、security regression | Publicly/Unit Tested | 不支持任意 Mermaid 语法是刻意限制 |
 | Markdown/Blocks 保持 canonical source 和语义 parity | `api/lib/content.js`、客户端 preview、统一节点/协议契约 | 158/160 blocks、159/161 markdown 公共页可读 | content parity unit、real-articles UI workflow | E2E Tested | SVG 随机 id 不做逐字比较 |
 | preview 与 published 使用同一安全语义 | server preview + client DOMPurify/enhance pipeline | 真实文章重开、预览、发布后检查 heading/code/table/math/media 等节点 | parity unit、real article E2E | E2E Tested | 未建立跨浏览器像素级 parity |
-| 四篇深度文章已在真实站点保留 | `tests/fixtures/showcase/*`、`showcase-manifest.json` | 作者会话通过 `/write` 和 `/posts/:id/edit` 完成创建、autosave、保存、重载、预览、发布、重开、修改、再发布；真实 URL 均可打开 | real-articles E2E 是隔离测试库；真实站点另有手工记录 | Publicly/Manually Verified | 匿名独立窗口和第二账号窗口没有现成会话，保持 Not Verified |
+| 四篇深度文章已在真实站点保留 | `tests/fixtures/showcase/*`、`showcase-manifest.json` | 作者会话通过 `/write` 和 `/posts/:id/edit` 完成创建、autosave、保存、重载、预览、发布、重开、修改、再发布；真实 URL 均可打开 | real-articles E2E 是隔离测试库；真实站点另有手工记录 | Local Public Verified / Manually Verified（历史记录） | 匿名独立窗口和第二账号窗口没有现成会话，保持 Not Verified |
 | 上传验证覆盖 MIME/magic/尺寸/损坏/polyglot | `api/lib/security.js` | 无损坏图片或脚本片段通过校验 | security regression、media/blog access smoke | API Tested | 云端媒体处理未实现 |
 | CSRF、CORS、headers、rate limit、XSS/SQL injection/IDOR 有防线 | `api/server.js`、`api/blog.js`、security helpers | API 在独立测试库启动并拒绝越权/危险输入 | `test:security`、`test:api`、旧 access smoke | API Tested | 未使用真实生产账号做破坏性安全测试 |
 | 私人工作台旧边界仍保留 | `/personal/*` 路由、workspace API 和 owner scoping 未移除 | Study/Mail/Images/Videos/Music/Profile/Dashboard 页面可进入 | auth-account、study-access、media-access、E2E/visual | API/E2E Tested | 真实私人媒体内容不纳入截图提交 |
@@ -49,11 +51,11 @@
 
 ## 第二账号限制
 
-当前浏览器只有作者会话，没有用户提供的第二账号会话。按照任务约束，本轮没有登出作者、创建账号、伪造 cookie 或把作者会话冒充第二读者。因此“第二账号独立读公开文章”和“匿名独立窗口读公开文章”均明确记录为 Not Verified；真实 URL 存在和作者会话打开公开页面记录为 Publicly/Manually Verified。
+当前浏览器只有作者会话，没有用户提供的第二账号会话。按照任务约束，本轮没有登出作者、创建账号、伪造 cookie 或把作者会话冒充第二读者。因此“第二账号独立读公开文章”和“匿名独立窗口读公开文章”均明确记录为 Not Verified；真实 URL 存在和作者会话打开 localhost 公开页面记录为 `Local Public Verified`/`Manually Verified`。
 
 ## 集中门禁
 
-2026-08-29 从头运行 `npm run test:all`，结果全部通过：
+以下是第二轮历史快照，不是第三轮最终门禁：
 
 ```text
 typecheck                         passed

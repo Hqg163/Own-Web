@@ -1,4 +1,6 @@
-# Own-Web 全站第二轮审计与交付报告
+# Own-Web 全站第二轮审计与交付报告（历史记录）
+
+> 第三轮对账（2026-08-29）：本文保留第二轮的原始背景、实现清单和测试快照，已不再作为当前验收基线。当前基线是 [third-pass-verification.md](./third-pass-verification.md)，其中的 `Local Public Verified`、`Needs Runtime Verification` 和最终测试数量优先于本文。本文中的“真实站点”“Publicly Verified”和第二轮测试数量只表示当时作者会话/本地环境取得的历史证据，不表示生产匿名访问或第二账号验证。
 
 > 复核日期：2026-08-29。Branch：`codex/community-blog-v1`。Start HEAD：`a245cf542e47acfd7241d926c97a03ad36aef8b7`。End HEAD 以包含本报告的最后一个 commit 为准（可由 `git log -1 --format=%H` 复现）。实现、集中质量门禁和真实作者站点发布已经完成；独立匿名/第二账号阅读因当前环境没有第二会话而明确保持 Not Verified。本报告不把测试数据库或代码存在写成第二账号证据。
 
@@ -160,7 +162,7 @@ vitest.config.ts
 
 每篇都完成 Create → Autosave → Save Draft → Reload → Continue → Preview → Publish → Re-open Editor → Modify → Republish；作者会话打开了四个真实公开 URL，并检查了 158 的 Mermaid、159 的 KaTeX、160 的 cover/gallery、161 的 bookmark/embed。自动化 `real-articles.spec.ts` 使用 `own_web_test`，不冒充真实站点证据。159 的 slug 保留首次 autosave 生成的 `未命名草稿-mtd5gy15`，列为 P2 内容质量问题。
 
-匿名独立窗口和用户提供的第二账号会话不存在；没有创建账号、登出作者或伪造会话，所以两项读者验收为 Not Verified。
+匿名独立窗口和用户提供的第二账号会话不存在；没有创建账号、登出作者或伪造会话，所以两项读者验收为 Not Verified。按第三轮统一口径，作者会话下的 localhost 公开页应标记为 `Local Public Verified`，不能升级为匿名、第二账号或生产 `Publicly Verified`。
 
 额外压力 fixture `tests/fixtures/extreme-article.md` 为 57,141 bytes、106 headings、2 个 code fences、20 个图片引用，覆盖长 URL、中英混合和特殊字符。
 
@@ -170,7 +172,7 @@ vitest.config.ts
 
 ## H. Tests
 
-2026-08-29 从头运行 `npm run test:all`，全部通过：typecheck、build（仅 >500 kB chunk warning）、api:check、LRC、unit（7 files/14 tests）、API（own_web_test）、E2E（36）、security、visual（20）、performance（Lighthouse checks），以及 auth-account、study-access、media-access、blog-access 四项旧 smoke。`git diff --check` 通过。空草稿修复后又单独重跑 E2E 为 36/36。
+本段是第二轮历史快照：当时记录了 unit 7 files/14 tests、E2E 36 和 Lighthouse checks。第三轮重新从当前 `START_HEAD` 执行的 11 files/30 tests、E2E 52、Visual 20/20 及实际 Lighthouse 分数，以 [third-pass-verification.md](./third-pass-verification.md) 为准；不要把本段数字当作最终门禁结果。
 
 覆盖空编辑器 A–I、autosave/recovery、草稿删除/IDOR、菜单 outside/Escape/keyboard/mobile、音乐三首混合标题与歌词状态、Preview/Published parity、Markdown/Blocks 节点、math/Mermaid/code/table/gallery/embed、auth/visibility/bookmark/like/comment/follow/report、XSS/SQL injection/CSRF/CORS/rate limit/headers/upload attacks，以及 Study、Mail、Images、Videos、Music、LRC、Profile、Dashboard 和旧 `/personal/*` 路由。测试数据与上传由生命周期清理；真实 showcase 不清理。
 
