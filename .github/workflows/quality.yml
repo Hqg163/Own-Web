@@ -59,7 +59,7 @@ jobs:
       - name: Security regression
         run: npm run test:security
       - name: Core Explore, Math/TOC, user menu and Draft browser tests
-        run: npm run test:e2e -- --project=desktop --grep "guest public routes|article TOC|comment composer|user menu|draft lifecycle"
+        run: npm run test:e2e -- --project=desktop --grep "guest public routes|article TOC|comment composer|user menu|draft lifecycle|fourth-pass|report"
 
   scheduled:
     name: nightly performance and visual gates
