@@ -192,6 +192,7 @@ test('creates and republishes the four manifest articles through the editor UI',
     await page.reload()
     await expect(page.getByLabel('标题')).toHaveValue(article.matchTitle)
     await expect(page.getByRole('heading', { name: '预览' })).toBeVisible()
+    await page.screenshot({ path: screenshotName(`preview-${article.fixture.replace(/\.md$/, '')}`), fullPage: testInfo.project.name.startsWith('desktop') })
 
     await page.getByRole('button', { name: '立即发布', exact: true }).click()
     await expect(page).toHaveURL(/\/creation/)
