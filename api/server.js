@@ -18,6 +18,8 @@ const { mountBlogRoutes } = require('./blog');
 const { mountPersonalSiteRoutes } = require('./lib/personal-site');
 const { mountPublicWebRoutes } = require('./lib/public-web');
 const { sendError, createRateLimiter, originGuard, imageDimensions, validateUploadedFile } = require('./lib/security');
+const { capabilitiesForUser, parseSiteOwnerUserId } = require('./lib/identity');
+const { toUtcIso, withUtcTimestamps } = require('./lib/time');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -252,6 +254,23 @@ const db = mysql.createPool({
   keepAliveInitialDelay: 0
 });
 
+// mysql2's driver timezone controls conversion at the client boundary, but it
+// does not change MySQL's session timezone. Wrap every acquisition so reused
+// pool connections have the same UTC contract as newly created connections.
+const rawGetConnection = db.getConnection.bind(db);
+db.getConnection = (callback) => rawGetConnection((connectionError, connection) => {
+  if (connectionError) return callback(connectionError);
+  if (connection.__ownWebUtc) return callback(null, connection);
+  connection.query("SET SESSION time_zone = '+00:00'", (setTimezoneError) => {
+    if (setTimezoneError) {
+      connection.destroy();
+      return callback(setTimezoneError);
+    }
+    connection.__ownWebUtc = true;
+    return callback(null, connection);
+  });
+});
+
 // 博客路由在旧的全局鉴权前注册：公开读取接口自行做可选会话识别，
 // 写入接口则明确使用 requireAuth。旧接口仍由下方的全局中间件保护。
 mountBlogRoutes(app, db, {
@@ -338,6 +357,11 @@ async function initializeDatabase() {
   await db.promise().query(createVideosTable);
   await db.promise().query(createMusicTable);
   await runMigrations(db);
+  const configuredOwnerId = parseSiteOwnerUserId();
+  if (configuredOwnerId) {
+    const [ownerRows] = await db.promise().query('SELECT id FROM users WHERE id=? AND deleted_at IS NULL', [configuredOwnerId]);
+    if (!ownerRows[0]) console.warn(`[config] SITE_OWNER_USER_ID=${configuredOwnerId} does not match an existing user; owner features remain disabled`);
+  }
   await db.promise().query(createCategoriesTable);
   await db.promise().query(createFilesTable);
   await db.promise().query(createEmailsTable);
@@ -445,7 +469,7 @@ function validateWorkspaceFile(file) {
 }
 
 app.post('/api/logout', requireAuth, async (req, res) => {
-  await db.promise().query('UPDATE users SET session_version=session_version+1,session_revoked_at=NOW() WHERE id=?', [req.user.id]);
+  await db.promise().query('UPDATE users SET session_version=session_version+1,session_revoked_at=UTC_TIMESTAMP() WHERE id=?', [req.user.id]);
   clearAuthCookie(res);
   res.status(200).json({ message: '已退出登录' });
 });
@@ -458,7 +482,7 @@ app.get('/api/me', (req, res) => {
     const user = results[0];
     user.avatar_url = user.avatar_path ? `/api/public/avatars/${user.id}` : null;
     delete user.avatar_path;
-    res.status(200).json({ user });
+    res.status(200).json({ user, capabilities: capabilitiesForUser(user) });
   });
 });
 
@@ -521,7 +545,7 @@ app.put('/api/user/:userId/password', async (req, res) => {
     const updateQuery = 'UPDATE users SET password = ? WHERE id = ?';
     db.query(updateQuery, [hashedPassword, userId], async (err, results) => {
       if (err) return res.status(500).json({ error: '更新密码失败' });
-      await db.promise().query('UPDATE users SET session_version=session_version+1,session_revoked_at=NOW() WHERE id=?', [userId]);
+      await db.promise().query('UPDATE users SET session_version=session_version+1,session_revoked_at=UTC_TIMESTAMP() WHERE id=?', [userId]);
       res.status(200).json({ message: '密码更新成功' });
     });
   });
@@ -594,7 +618,7 @@ app.get('/api/files/:userId', (req, res) => {
   
   db.query(query, params, (err, results) => {
     if (err) return res.status(500).json({ error: '获取文件列表失败' });
-    res.status(200).json({ files: results });
+    res.status(200).json({ files: results.map((row) => withUtcTimestamps(row, ['created_at', 'updated_at'])) });
   });
 });
 
@@ -839,7 +863,7 @@ app.get('/api/file-content/:fileId', (req, res) => {
     // 如果是Markdown且数据库有内容，直接返回
     if (file.is_markdown && file.markdown_content) {
       return res.json({ 
-        file: file, 
+        file: withUtcTimestamps(file, ['created_at', 'updated_at']),
         content: file.markdown_content,
         type: 'markdown'
       });
@@ -857,7 +881,7 @@ app.get('/api/file-content/:fileId', (req, res) => {
       fs.readFile(fullPath, 'utf8', (err, data) => {
         if (err) return res.status(500).json({ error: '读取文件失败' });
         res.json({ 
-          file: file, 
+          file: withUtcTimestamps(file, ['created_at', 'updated_at']),
           content: data, 
           type: file.file_type === '.md' ? 'markdown' : 'text' 
         });
@@ -865,7 +889,7 @@ app.get('/api/file-content/:fileId', (req, res) => {
     } else {
       // 对于二进制文件，返回文件信息和URL
       res.json({ 
-        file: file, 
+        file: withUtcTimestamps(file, ['created_at', 'updated_at']),
         content: null, 
         type: 'binary',
         url: `/api/file-stream/${file.id}`
@@ -1032,7 +1056,7 @@ app.get('/api/emails/:userEmail', (req, res) => {
       return email;
     });
     
-    res.status(200).json({ emails: emails });
+    res.status(200).json({ emails: emails.map((email) => withUtcTimestamps(email, ['created_at'])) });
   });
 });
 
@@ -1295,7 +1319,7 @@ app.get('/api/entertainment/images/recent/:userId', (req, res) => {
   
   db.query(simpleQuery, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: '获取图片失败' });
-    res.status(200).json({ images: results });
+    res.status(200).json({ images: results.map((row) => withUtcTimestamps(row, ['created_at', 'updated_at'])) });
   });
 });
 
@@ -1321,7 +1345,7 @@ app.get('/api/entertainment/images/:userId', (req, res) => {
   
   db.query(query, params, (err, results) => {
     if (err) return res.status(500).json({ error: '获取图片列表失败' });
-    res.status(200).json({ images: results });
+    res.status(200).json({ images: results.map((row) => withUtcTimestamps(row, ['created_at', 'updated_at'])) });
   });
 });
 
@@ -1590,8 +1614,8 @@ function presentOwnedImage(row) {
     file_size: row.file_size,
     width: row.width,
     height: row.height,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    created_at: toUtcIso(row.created_at),
+    updated_at: toUtcIso(row.updated_at),
     url: `/api/entertainment/image-file/${row.id}`
   };
 }
@@ -1684,7 +1708,7 @@ app.get('/api/entertainment/videos/recent/:userId', (req, res) => {
   
   db.query(query, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: '获取视频失败' });
-    res.status(200).json({ videos: results });
+    res.status(200).json({ videos: results.map((row) => withUtcTimestamps(row, ['created_at', 'updated_at'])) });
   });
 });
 
@@ -1701,7 +1725,7 @@ app.get('/api/entertainment/videos/:userId', (req, res) => {
   
   db.query(query, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: '获取视频列表失败' });
-    res.status(200).json({ videos: results });
+    res.status(200).json({ videos: results.map((row) => withUtcTimestamps(row, ['created_at', 'updated_at'])) });
   });
 });
 
@@ -1910,7 +1934,7 @@ app.get('/api/entertainment/music/recent/:userId', (req, res) => {
   
   db.query(query, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: '获取音乐失败' });
-    res.status(200).json({ music: results });
+    res.status(200).json({ music: results.map((row) => withUtcTimestamps(row, ['created_at', 'updated_at'])) });
   });
 });
 
@@ -1927,7 +1951,7 @@ app.get('/api/entertainment/music/:userId', (req, res) => {
   
   db.query(query, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: '获取音乐列表失败' });
-    res.status(200).json({ music: results });
+    res.status(200).json({ music: results.map((row) => withUtcTimestamps(row, ['created_at', 'updated_at'])) });
   });
 });
 

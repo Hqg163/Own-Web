@@ -102,7 +102,7 @@ onMounted(async () => {
   document.addEventListener('keydown', handleEscape)
   try {
     const { data } = await http.get('/api/me')
-    cacheAuthenticatedUser(data.user)
+    cacheAuthenticatedUser(data.user, data.capabilities)
     user.value = data.user
     loggedIn.value = true
   } catch {

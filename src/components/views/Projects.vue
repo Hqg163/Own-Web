@@ -7,7 +7,7 @@
     </header>
     <div v-if="loading" class="empty" role="status">正在载入项目…</div>
     <section v-else-if="error" class="empty error-state" role="alert"><AppIcon name="info" :size="22" /><p>{{ error }}</p><button class="button button-secondary" type="button" @click="load">重试</button></section>
-    <section v-else-if="!projects.length" class="empty" aria-label="项目为空"><AppIcon name="archive" :size="24" /><h2>还没有公开项目</h2><p>站主正在整理可公开展示的作品。</p></section>
+    <section v-else-if="!projects.length" class="empty" aria-label="项目为空"><AppIcon name="archive" :size="24" /><h2>还没有公开项目</h2><p>站主正在整理可公开展示的作品。</p><RouterLink v-if="session.capabilities.isSiteOwner" class="button button-secondary" to="/creation/projects"><AppIcon name="plus" :size="17" />添加第一个项目</RouterLink></section>
     <section v-else class="project-grid" aria-label="公开项目">
       <RouterLink v-for="project in projects" :key="project.id" class="project-card card" :to="`/projects/${project.slug}`">
         <img v-if="project.cover" :src="project.cover" :alt="`${project.title}封面`" width="640" height="360" loading="lazy" decoding="async" />
@@ -22,10 +22,12 @@ import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import http from '@/services/http'
+import { emptySession, loadSession } from '@/services/session'
 
 const projects = ref<any[]>([])
 const loading = ref(true)
 const error = ref('')
+const session = ref(emptySession())
 
 async function load() {
   loading.value = true
@@ -35,7 +37,10 @@ async function load() {
   finally { loading.value = false }
 }
 
-onMounted(load)
+onMounted(async () => {
+  const [nextSession] = await Promise.all([loadSession({ optional: true }), load()])
+  session.value = nextSession
+})
 </script>
 
 <style scoped>

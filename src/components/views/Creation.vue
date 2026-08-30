@@ -6,7 +6,7 @@
         <h1 class="page-title">创作中心</h1>
         <p class="muted">管理文章、草稿和发布状态。</p>
       </div>
-      <div class="heading-actions"><RouterLink class="button" to="/creation/series">系列管理</RouterLink><RouterLink class="button button-secondary" to="/creation/projects">项目管理</RouterLink><RouterLink class="button button-primary" to="/write">写文章</RouterLink></div>
+      <div class="heading-actions"><RouterLink class="button" to="/creation">文章管理</RouterLink><RouterLink class="button" to="/creation/series">系列管理</RouterLink><RouterLink v-if="session.capabilities.isSiteOwner" class="button button-secondary" to="/creation/projects"><AppIcon name="grid" :size="16" />项目管理</RouterLink><RouterLink class="button button-primary" to="/write">写文章</RouterLink></div>
     </div>
 
     <p v-if="deleteMessage" class="success-state" role="status">{{ deleteMessage }}</p>
@@ -46,9 +46,10 @@
           <p class="muted">{{ post.excerpt || String(post.content_markdown || '').slice(0, 120) }}</p>
           <div class="post-stats">{{ post.view_count || 0 }} 阅读 · {{ post.like_count || 0 }} 喜欢 · {{ post.comment_count || 0 }} 评论</div>
         </div>
-        <div class="row">
+          <div class="row">
           <RouterLink class="button" :to="`/posts/${post.id}/edit`">编辑</RouterLink>
           <RouterLink v-if="post.status === 'published'" class="button" :to="`/posts/${post.slug}`">查看</RouterLink>
+          <button v-if="session.capabilities.isSiteOwner && post.status === 'published' && post.visibility === 'public'" class="button button-secondary" type="button" :disabled="featuredPendingId === post.id" @click="toggleFeatured(post)">{{ featuredPendingId === post.id ? '处理中…' : post.featured ? '取消精选' : '加入精选' }}</button>
           <button v-if="post.status === 'draft' || post.status === 'scheduled'" class="button button-danger" type="button" :disabled="deletingId === post.id" @click="openDelete(post)">{{ deletingId === post.id ? '删除中…' : '删除草稿' }}</button>
         </div>
       </article>
@@ -80,7 +81,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import AppIcon from '@/components/AppIcon.vue'
 import http from '@/services/http'
+import { emptySession, loadSession } from '@/services/session'
 
 const route = useRoute()
 const router = useRouter()
@@ -92,6 +95,8 @@ const deleteMessage = ref('')
 const deleteError = ref('')
 const deleteTarget = ref<any | null>(null)
 const deletingId = ref<number | null>(null)
+const featuredPendingId = ref<number | null>(null)
+const session = ref(emptySession())
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(12)
@@ -118,6 +123,18 @@ function apply() { deleteMessage.value = ''; router.push({ path: '/creation', qu
 function go(nextPage: number) { if (nextPage >= 1 && nextPage <= totalPages.value) router.push({ path: '/creation', query: query(nextPage) as any }) }
 function openDelete(post: any) { deleteTarget.value = post; deleteError.value = ''; deleteMessage.value = '' }
 function closeDelete() { if (deletingId.value === null) { deleteTarget.value = null; deleteError.value = '' } }
+
+async function toggleFeatured(post: any) {
+  if (featuredPendingId.value !== null) return
+  featuredPendingId.value = Number(post.id)
+  try {
+    const { data } = await http.put(`/api/posts/${post.id}/featured`, { featured: !post.featured })
+    post.featured = Boolean(data.featured)
+    post.featured_order = Number(data.featured_order || 0)
+  } catch (error: any) {
+    loadError.value = error.response?.data?.error?.message || '精选设置失败，请稍后重试。'
+  } finally { featuredPendingId.value = null }
+}
 
 async function confirmDelete() {
   const post = deleteTarget.value
@@ -165,7 +182,10 @@ async function load() {
 }
 
 watch(() => route.fullPath, load)
-onMounted(load)
+onMounted(async () => {
+  const [nextSession] = await Promise.all([loadSession({ optional: true }), load()])
+  session.value = nextSession
+})
 </script>
 
 <style scoped>

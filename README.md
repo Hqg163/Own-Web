@@ -59,6 +59,8 @@ Vite 会代理 `/api` 和 `/uploads`。生产构建使用 `npm run build`，生�
 
 站主资料必须通过个人资料设置公开并填写后，首页、About、作者页和站主 API 才会展示；未配置或不可公开时使用空状态，不虚构姓名、经历、项目或系列。
 
+站主与管理员的 ID 查询、环境变量配置、重启 Express 和安全注意事项见 [`docs/site-owner-and-admin.md`](docs/site-owner-and-admin.md)。
+
 ## 常用质量门禁
 
 ```bash

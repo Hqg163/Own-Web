@@ -3,15 +3,26 @@ import axios from 'axios'
 export function clearCachedAuth() {
   localStorage.removeItem('isLoggedIn')
   localStorage.removeItem('userInfo')
+  localStorage.removeItem('userCapabilities')
   localStorage.removeItem('userId')
   localStorage.removeItem('userEmail')
 }
 
-export function cacheAuthenticatedUser(user: Record<string, unknown>) {
+export function cacheAuthenticatedUser(user: Record<string, unknown>, capabilities?: Record<string, boolean>) {
   localStorage.setItem('isLoggedIn', 'true')
   if (user.id !== undefined) localStorage.setItem('userId', String(user.id))
   if (user.email !== undefined) localStorage.setItem('userEmail', String(user.email))
   localStorage.setItem('userInfo', JSON.stringify(user))
+  if (capabilities) localStorage.setItem('userCapabilities', JSON.stringify(capabilities))
+}
+
+export function cachedCapabilities(): Record<string, boolean> {
+  try {
+    const value = JSON.parse(localStorage.getItem('userCapabilities') || '{}')
+    return value && typeof value === 'object' ? value : {}
+  } catch {
+    return {}
+  }
 }
 
 const http = axios.create({

@@ -1,9 +1,8 @@
 const jwt = require('jsonwebtoken');
+const { parseSiteOwnerUserId } = require('./identity');
+const { toUtcIso } = require('./time');
 
-const OWNER_ID = () => {
-  const value = Number(process.env.SITE_OWNER_USER_ID || 0);
-  return Number.isSafeInteger(value) && value > 0 ? value : null;
-};
+const OWNER_ID = () => parseSiteOwnerUserId();
 
 const slugify = (value, fallback = 'item') => String(value || '')
   .toLowerCase().trim().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
@@ -124,7 +123,7 @@ function mountPersonalSiteRoutes(app, db, { getAuthToken, authSecret }) {
     total_reading_minutes: articles.reduce((sum, article) => sum + Math.max(1, Math.ceil(String(article.content_markdown || '').length / 500)), 0),
     articles: articles.map((article, index) => ({
       id: Number(article.id), title: article.title, slug: article.slug, excerpt: article.excerpt || '',
-      published_at: article.published_at, series_order: Number(article.series_order || index + 1),
+      published_at: toUtcIso(article.published_at), series_order: Number(article.series_order || index + 1),
       reading_minutes: Math.max(1, Math.ceil(String(article.content_markdown || '').length / 500)),
     })),
   });

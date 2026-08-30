@@ -1,10 +1,11 @@
 const fs = require('fs');
 const path = require('path');
+const { parseSiteOwnerUserId } = require('./identity');
+const { toUtcIso } = require('./time');
 
 const siteUrl = () => String(process.env.PUBLIC_SITE_URL || 'http://localhost:5173').replace(/\/+$/, '');
 const ownerId = () => {
-  const value = Number(process.env.SITE_OWNER_USER_ID || 0);
-  return Number.isSafeInteger(value) && value > 0 ? value : null;
+  return parseSiteOwnerUserId();
 };
 const absolute = (value) => {
   try { return new URL(String(value || ''), `${siteUrl()}/`).toString(); } catch (_) { return siteUrl(); }
@@ -90,7 +91,7 @@ function mountPublicWebRoutes(app, db, { clientDist }) {
         if (!rows[0]) return renderNotFound(req, res, '文章不存在');
         const article = rows[0]; const canonical = absolute(`/posts/${encodeURIComponent(article.slug)}`);
         base.title = `${article.title} · Own-Web`; base.description = plainText(article.excerpt || article.title); base.canonical = canonical; base.type = 'article'; base.image = article.cover_image ? absolute(article.cover_image) : '';
-        base.ld = [{ '@context':'https://schema.org', '@type':'BlogPosting', headline:article.title, description:base.description, url:canonical, datePublished:article.published_at ? new Date(article.published_at).toISOString() : undefined, author:{ '@type':'Person', name:article.username || 'Own-Web 站主', url:article.blog_slug ? absolute(`/u/${encodeURIComponent(article.blog_slug)}`) : siteUrl() }, image:base.image || undefined }];
+        base.ld = [{ '@context':'https://schema.org', '@type':'BlogPosting', headline:article.title, description:base.description, url:canonical, datePublished:toUtcIso(article.published_at) || undefined, author:{ '@type':'Person', name:article.username || 'Own-Web 站主', url:article.blog_slug ? absolute(`/u/${encodeURIComponent(article.blog_slug)}`) : siteUrl() }, image:base.image || undefined }];
       } else if (pathname.startsWith('/u/')) {
         const slug = slugFromPath(pathname, '/u/');
         const [rows] = await query(publicOwnerQuery().replace('id=?', 'blog_slug=?'), [slug]);
@@ -114,7 +115,7 @@ function mountPublicWebRoutes(app, db, { clientDist }) {
   app.get('/feed.xml', async (_req, res, next) => {
     try {
       const [rows] = await query("SELECT p.title,p.slug,p.excerpt,p.content_markdown,p.published_at,u.username FROM posts p JOIN users u ON u.id=p.author_id WHERE p.status='published' AND p.visibility='public' AND u.deleted_at IS NULL ORDER BY p.published_at DESC,p.id DESC LIMIT 100");
-      const items = rows.map((row) => `<item><title>${escapeXml(row.title)}</title><link>${escapeXml(absolute(`/posts/${encodeURIComponent(row.slug)}`))}</link><guid isPermaLink="true">${escapeXml(absolute(`/posts/${encodeURIComponent(row.slug)}`))}</guid><pubDate>${escapeXml(new Date(row.published_at || Date.now()).toUTCString())}</pubDate><dc:creator>${escapeXml(row.username || 'Own-Web')}</dc:creator><description>${escapeXml(plainText(row.excerpt || row.content_markdown, 800))}</description><content:encoded><![CDATA[${String(row.content_markdown || row.excerpt || '').slice(0, 10000).replace(/]]>/g, ']]]]><![CDATA[>')}]]></content:encoded></item>`).join('');
+      const items = rows.map((row) => `<item><title>${escapeXml(row.title)}</title><link>${escapeXml(absolute(`/posts/${encodeURIComponent(row.slug)}`))}</link><guid isPermaLink="true">${escapeXml(absolute(`/posts/${encodeURIComponent(row.slug)}`))}</guid><pubDate>${escapeXml(new Date(toUtcIso(row.published_at) || Date.now()).toUTCString())}</pubDate><dc:creator>${escapeXml(row.username || 'Own-Web')}</dc:creator><description>${escapeXml(plainText(row.excerpt || row.content_markdown, 800))}</description><content:encoded><![CDATA[${String(row.content_markdown || row.excerpt || '').slice(0, 10000).replace(/]]>/g, ']]]]><![CDATA[>')}]]></content:encoded></item>`).join('');
       res.type('application/rss+xml').send(`<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Own-Web</title><link>${escapeXml(siteUrl())}</link><description>${escapeXml('个人写作与博客')}</description><language>zh-CN</language>${items}</channel></rss>`);
     } catch (e) { next(e); }
   });
