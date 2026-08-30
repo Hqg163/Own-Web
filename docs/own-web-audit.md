@@ -53,7 +53,7 @@ api/scripts/ensure-test-db.js
 api/scripts/media-access-smoke.js
 api/scripts/study-access-smoke.js
 api/server.js
-code.txt
+docs/history/code.txt
 docs/blog-editor-benchmark.md
 docs/own-web-audit.md
 docs/second-pass-verification.md
@@ -62,9 +62,8 @@ package-lock.json
 package.json
 playwright.config.ts
 playwright.visual.config.ts
-prompt.txt
+docs/history/prompt.txt
 public/favicon.svg
-public/vite.svg
 scripts/lrc-smoke.ts
 src/App.vue
 src/assets/vue.svg
