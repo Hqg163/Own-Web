@@ -27,7 +27,7 @@ describe('canonical blog content', () => {
 
   it('renders markdown tables, code languages and math markers safely', () => {
     const html = renderMarkdown('# H1\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n```typescript\nconst answer = 42\n```\n\n$$x^2$$')
-    expect(html).toContain('<h2>')
+    expect(html).toContain('<h2 data-source-heading="h1"')
     expect(html).not.toContain('<h1>')
     expect(html).toContain('table-wrap')
     expect(html).toContain('data-language="typescript"')
