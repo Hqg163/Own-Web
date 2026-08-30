@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { createRateLimiter, imageDimensions, validateUploadedFile } = require('./security');
+const { parseUtcInstant, toUtcIso } = require('./time');
 
 const REPORT_REASON_CODES = Object.freeze([
   'spam',
@@ -181,14 +182,38 @@ function mountReportRoutes(app, {
       file_size: Number(row.file_size || 0),
       width: Number(row.width || 0),
       height: Number(row.height || 0),
-      created_at: row.created_at,
+      created_at: toUtcIso(row.created_at),
     }));
     return media;
   }
 
-  function presentReport(row, { admin = false, media = [] } = {}) {
+  function presentReport(row, { admin = false, media = [], summary = false } = {}) {
     const snapshot = parseSnapshot(row.target_snapshot);
-    const targetType = snapshot?.target_type || (row.comment_id == null ? 'post' : 'comment');
+    const publicSnapshot = snapshot ? {
+      ...snapshot,
+      reported_at: toUtcIso(snapshot.reported_at),
+      comment_created_at: toUtcIso(snapshot.comment_created_at),
+    } : null;
+    const targetType = publicSnapshot?.target_type || (row.comment_id == null ? 'post' : 'comment');
+    if (summary) {
+      const shortSummary = targetType === 'comment'
+        ? (publicSnapshot?.comment_excerpt || row.current_comment_content || '评论举报')
+        : (publicSnapshot?.post_title || row.post_title || row.current_post_title || '文章举报');
+      return {
+        id: Number(row.id),
+        post_id: row.post_id == null ? null : Number(row.post_id),
+        comment_id: row.comment_id == null ? null : Number(row.comment_id),
+        target_type: targetType,
+        reason_code: row.reason_code || normalizeReasonCode(null, row.reason),
+        reason: row.reason,
+        status: row.status === 'reviewed' ? 'resolved' : row.status,
+        created_at: toUtcIso(row.created_at),
+        summary: String(shortSummary).slice(0, 180),
+        post_title: row.post_title || publicSnapshot?.post_title || null,
+        post_slug: row.post_slug || publicSnapshot?.post_slug || null,
+        target_author_name: row.target_author_name || undefined,
+      };
+    }
     const report = {
       id: Number(row.id),
       post_id: row.post_id == null ? null : Number(row.post_id),
@@ -199,11 +224,11 @@ function mountReportRoutes(app, {
       details: row.details || '',
       status: row.status === 'reviewed' ? 'resolved' : row.status,
       public_response: row.public_response || null,
-      target_snapshot: snapshot,
+      target_snapshot: publicSnapshot,
       media,
-      created_at: row.created_at,
-      reviewed_at: row.reviewed_at || null,
-      resolved_at: row.resolved_at || null,
+      created_at: toUtcIso(row.created_at),
+      reviewed_at: toUtcIso(row.reviewed_at),
+      resolved_at: toUtcIso(row.resolved_at),
       post_title: row.post_title || snapshot?.post_title || null,
       post_slug: row.post_slug || snapshot?.post_slug || null,
       reporter_name: row.reporter_name || undefined,
@@ -247,9 +272,8 @@ function mountReportRoutes(app, {
       LEFT JOIN users cu ON cu.id=c.author_id
       ${where}
       ORDER BY r.created_at DESC,r.id DESC LIMIT ? OFFSET ?`, [...params, limit, offset]);
-    const media = await mediaForReports(rows.map((row) => row.id));
     return {
-      items: rows.map((row) => presentReport(row, { admin, media: media.get(Number(row.id)) || [] })),
+      items: rows.map((row) => presentReport(row, { admin, summary: true })),
       page,
       limit,
       pageSize: limit,
@@ -444,7 +468,8 @@ function mountReportRoutes(app, {
       const media = rows[0];
       if (!media) return error(res, 404, 'NOT_FOUND', '证据图片不存在');
       const authorized = req.user && (Number(media.owner_id) === Number(req.user.id) || (media.report_id && isAdmin(req)));
-      if (!authorized || (media.report_id == null && media.expires_at && new Date(media.expires_at).getTime() < Date.now())) return error(res, 404, 'NOT_FOUND', '证据图片不存在');
+      const expiry = media.expires_at ? parseUtcInstant(media.expires_at) : null;
+      if (!authorized || (media.report_id == null && expiry && expiry.getTime() < Date.now())) return error(res, 404, 'NOT_FOUND', '证据图片不存在');
       const fullPath = resolveMediaPath(media.file_path);
       if (!fullPath || !fs.existsSync(fullPath)) return error(res, 404, 'NOT_FOUND', '证据图片不存在');
       res.setHeader('X-Content-Type-Options', 'nosniff');
