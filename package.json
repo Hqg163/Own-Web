@@ -13,7 +13,7 @@
     "api:check": "npm --prefix api run check",
     "test:lrc": "tsx scripts/lrc-smoke.ts",
     "test:unit": "vitest run --config vitest.config.ts",
-    "test:api": "tsx tests/api/run-api-tests.ts && tsx tests/api/fourth-pass-report-api.ts",
+    "test:api": "tsx tests/api/run-api-tests.ts && tsx tests/api/fourth-pass-report-api.ts && tsx tests/api/fifth-pass-related-privacy.ts && tsx tests/api/fifth-pass-personal-site.ts && tsx tests/api/fifth-pass-public-web.ts",
     "test:e2e": "playwright test",
     "test:security": "tsx tests/security/security-regression.ts && tsx tests/security/fourth-pass-report-security.ts",
     "test:performance": "node tests/performance/lighthouse.cjs",

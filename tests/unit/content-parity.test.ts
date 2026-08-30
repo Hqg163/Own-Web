@@ -37,7 +37,8 @@ describe('Preview/Published content contract', () => {
 
   it('keeps Markdown extensions aligned with the same semantic markers', () => {
     const html = renderMarkdown('# 标题\n\n:::callout\n提示\n:::\n\n:::details 详情\n折叠\n:::\n\n```mermaid\nflowchart TD\nA --> B\n```\n\n\\(x^2\\)\n\n[^note]: 脚注\n\n@[bookmark](https://www.youtube.com/watch?v=abc)')
-    for (const marker of ['<h1', 'data-callout', '<details', 'data-mermaid', 'data-math', 'data-footnote', 'data-bookmark-card']) expect(html).toContain(marker)
+    for (const marker of ['<h2', 'data-callout', '<details', 'data-mermaid', 'data-math', 'data-footnote', 'data-bookmark-card']) expect(html).toContain(marker)
+    expect(html).not.toContain('<h1')
   })
 
   it('uses the same constrained Mermaid contract for API content', () => {

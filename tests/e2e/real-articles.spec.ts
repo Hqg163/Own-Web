@@ -188,7 +188,7 @@ test('creates and republishes the four manifest articles through the editor UI',
 
     await page.getByRole('button', { name: '保存草稿', exact: true }).click()
     await expect(page).toHaveURL(/\/posts\/\d+\/edit/)
-    await expect(page.getByRole('status')).toContainText(/Saved|已保存/, { timeout: 15_000 })
+    await expect(page.locator('.save-state')).toContainText(/Saved|已保存/, { timeout: 15_000 })
     await page.reload()
     await expect(page.getByLabel('标题')).toHaveValue(article.matchTitle)
     await expect(page.getByRole('heading', { name: '预览' })).toBeVisible()

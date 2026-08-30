@@ -129,7 +129,7 @@ test('desktop TOC remains sticky through the article and keeps its own long-list
     const listMetrics = await tocWrap.evaluate((node: HTMLElement) => ({ clientHeight: node.clientHeight, scrollHeight: node.scrollHeight }))
     expect(listMetrics.scrollHeight).toBeGreaterThan(listMetrics.clientHeight)
 
-    const headings = page.locator('.article h2')
+    const headings = page.locator('.article h2:not([data-source-heading="h1"])')
     const ids = await headings.evaluateAll((nodes) => nodes.map((node) => node.id))
     expect(ids[0]).toBe('重复标题')
     expect(ids[1]).toBe('重复标题-2')

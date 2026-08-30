@@ -3,11 +3,12 @@ import AxeBuilder from '@axe-core/playwright'
 
 test('guest public routes are usable and preserve the workspace entry point', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: /把正在思考的事/ })).toBeVisible()
-  await page.getByRole('link', { name: '开始探索' }).click()
+  await expect(page.getByRole('heading', { name: '一个安静的个人写作空间' })).toBeVisible()
+  await page.getByRole('link', { name: '阅读文章' }).click()
   await expect(page).toHaveURL(/\/explore/)
   await expect(page.getByRole('heading', { name: '探索公开文章' })).toBeVisible()
-  await expect(page.locator('body')).toHaveCSS('overflow-x', 'hidden')
+  const width = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: window.innerWidth }))
+  expect(width.document).toBeLessThanOrEqual(width.viewport + 1)
   const accessibility = await new AxeBuilder({ page }).analyze()
   expect(accessibility.violations).toEqual([])
 })

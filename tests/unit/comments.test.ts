@@ -4,6 +4,7 @@ import {
   normalizeCommentContent,
   normalizeCommentSort,
   normalizeMediaIds,
+  hasMeaningfulComment,
   parseCommentCursor,
 } from '../../api/lib/comments.js'
 
@@ -32,5 +33,13 @@ describe('comment input helpers', () => {
     expect(parseCommentCursor('20')).toBe(20)
     expect(parseCommentCursor('-1')).toBeNull()
     expect(parseCommentCursor('not-a-cursor')).toBeNull()
+  })
+
+  it('accepts text-only, emoji-only, image-only, and mixed comments but rejects empty payloads', () => {
+    expect(hasMeaningfulComment('hello', [])).toBe(true)
+    expect(hasMeaningfulComment('🙂', [])).toBe(true)
+    expect(hasMeaningfulComment('', [1])).toBe(true)
+    expect(hasMeaningfulComment('hello', [1])).toBe(true)
+    expect(hasMeaningfulComment('   ', [])).toBe(false)
   })
 })
