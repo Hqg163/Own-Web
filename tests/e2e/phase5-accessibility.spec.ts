@@ -21,7 +21,7 @@ test.describe('fifth-pass public accessibility', () => {
       const accessibility = await new AxeBuilder({ page }).analyze()
       expect(accessibility.violations).toEqual([])
 
-      const focused = page.locator('main a, main button, main input, main select, main textarea').first()
+      const focused = page.locator('a, button, input, select, textarea').first()
       await focused.focus()
       await expect(focused).toBeVisible()
       await expect(focused).toBeFocused()
