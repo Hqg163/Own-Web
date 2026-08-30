@@ -9,7 +9,7 @@
 START_HEAD=325407f2cbc4f11c318221d985cae8db060806cf
 START_BRANCH=codex/community-blog-v1
 START_WORKTREE_CLEAN=true
-END_HEAD=97c1205
+END_HEAD=6240032
 ```
 
 `END_HEAD` 是功能实现和最终门禁完成时的代码 HEAD；随后仅提交本报告、README、历史归档和清理变更，最终仓库 HEAD 以 `git rev-parse HEAD` 为准。当前基线是 Vue 3 + TypeScript + Vite、Express + MySQL。公开博客和私人工作台仍是两个安全域：公开读接口执行 visibility，写接口执行会话和 ownership 校验。
@@ -38,7 +38,7 @@ END_HEAD=97c1205
 
 | Feature | 主要文件 | Reason | Tests | Screenshots |
 | --- | --- | --- | --- | --- |
-| 共享 ArticleTypography、标题正规化、媒体和窄屏滚动 | `src/styles/article.css`、`api/lib/content.js`、`PostDetail.vue`、`PostEditor.vue` | 发布页和 Preview 共享阅读契约；正文 Markdown `#` 不改源数据，只在渲染层显示为 h2 | 13 unit files/38 tests、phase1 reading、real articles、E2E 124/124 | `audit-artifacts/screenshots/desktop-article-adam-optimizer.png` |
+| 共享 ArticleTypography、标题正规化、媒体和窄屏滚动 | `src/styles/article.css`、`api/lib/content.js`、`PostDetail.vue`、`PostEditor.vue` | 发布页和 Preview 共享阅读契约；正文 Markdown `#` 不改源数据，只在渲染层显示为 h2 | 13 unit files/38 tests、phase1 reading、real articles、E2E 124/124 | Preview：`audit-artifacts/screenshots/desktop-preview-adam-optimizer.png`；Published：`audit-artifacts/screenshots/desktop-article-adam-optimizer.png` |
 | 评论 text/media-only、预览、Escape、focus restore | `CommentComposer.vue`、`CommentItem.vue`、`CommentMedia.vue`、`api/lib/comments.js`、`PostDetail.vue` | 统一 `trimmedText.length > 0 || media.length > 0`，保留 MIME/尺寸/归属校验 | comments unit、phase1 reading、comments-basic、security | 同上文章截图；移动场景在 phase1 E2E |
 | SEO metadata 和生产 shell 注入 | `src/services/metadata.ts`、`api/lib/public-web.js`、`api/server.js` | 统一 title/description/canonical/OG/Twitter/JSON-LD/robots，避免重复标签 | `fifth-pass-public-web.ts`、生产模式 HTTP 检查 | 文章与首页截图 |
 | Site Owner 身份和公开资料 | `.env.example`、`api/lib/personal-site.js`、`Home.vue`、`About.vue`、`AboutSite.vue` | `SITE_OWNER_USER_ID` 与 `ADMIN_EMAILS` 分离；资料缺失时为空状态，不虚构身份 | `fifth-pass-personal-site.ts`、axe 32/32 | `audit-artifacts/fifth-pass-home-1440-light.png`、`audit-artifacts/fifth-pass-home-390-dark.png`、`audit-artifacts/fifth-pass-about-site-1440-light.png` |
@@ -124,6 +124,8 @@ Newsletter、营销、会员/付费订阅、收入、排行榜、徽章、等级
 | `fb3187e` | `test(fifth-pass): add reading accessibility and performance gates` |
 | `dee87a1` | `test(content): cover normalized markdown heading output` |
 | `97c1205` | `test(a11y): make empty-state focus checks deterministic` |
+| `8940430` | `docs(audit): finalize fifth-pass report and archive history` |
+| `6240032` | `test(evidence): capture preview screenshots` |
 | `325407f` | 起始基线：`docs(audit): record fourth-pass evidence` |
 
-文档归档和最终清理提交在本报告之后产生；最终 commit SHA 以仓库 `git log -1` 为准。
+最终仓库 commit SHA 以 `git log -1` 为准；截图证据提交后工作树应保持 clean。
