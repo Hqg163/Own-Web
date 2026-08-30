@@ -1,4 +1,5 @@
 import type { CommentData, CommentId, CommentMediaItem } from './types'
+import { parseUtcInstant, toUtcIso } from '../../services/time'
 
 export function sameCommentId(left: CommentId | null | undefined, right: CommentId | null | undefined) {
   return left != null && right != null && String(left) === String(right)
@@ -32,7 +33,7 @@ export function commentContent(comment: CommentData) {
 }
 
 export function commentCreatedAt(comment: CommentData) {
-  return String(comment.createdAt || comment.created_at || '')
+  return toUtcIso(comment.createdAt ?? comment.created_at) || ''
 }
 
 export function commentIsDeleted(comment: CommentData) {
@@ -56,12 +57,15 @@ export function commentMedia(comment: CommentData): CommentMediaItem[] {
   return source.filter((item): item is CommentMediaItem => Boolean(item && typeof item.url === 'string' && item.url)).map((item) => ({ ...item, alt: item.alt || String((item as any).alt_text || '') || null }))
 }
 
-export function relativeTime(value: string) {
-  const date = new Date(value)
-  if (!value || Number.isNaN(date.getTime())) return '刚刚'
+export function relativeTime(value: string, now: number | Date = Date.now()) {
+  const date = parseUtcInstant(value)
+  if (!date) return '刚刚'
 
-  const seconds = (date.getTime() - Date.now()) / 1000
+  const nowMilliseconds = now instanceof Date ? now.getTime() : now
+  if (!Number.isFinite(nowMilliseconds)) return '刚刚'
+  const seconds = (date.getTime() - nowMilliseconds) / 1000
   const absolute = Math.abs(seconds)
+  if (absolute <= 60) return '刚刚'
   const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
     ['year', 31536000],
     ['month', 2592000],
@@ -78,7 +82,7 @@ export function relativeTime(value: string) {
 }
 
 export function absoluteTime(value: string) {
-  const date = new Date(value)
-  if (!value || Number.isNaN(date.getTime())) return '时间未知'
+  const date = parseUtcInstant(value)
+  if (!date) return '时间未知'
   return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }

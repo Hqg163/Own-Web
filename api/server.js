@@ -20,6 +20,7 @@ const { mountPublicWebRoutes } = require('./lib/public-web');
 const { sendError, createRateLimiter, originGuard, imageDimensions, validateUploadedFile } = require('./lib/security');
 const { capabilitiesForUser, parseSiteOwnerUserId } = require('./lib/identity');
 const { toUtcIso, withUtcTimestamps } = require('./lib/time');
+const { installUtcPool } = require('./lib/utc-pool');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -254,22 +255,9 @@ const db = mysql.createPool({
   keepAliveInitialDelay: 0
 });
 
-// mysql2's driver timezone controls conversion at the client boundary, but it
-// does not change MySQL's session timezone. Wrap every acquisition so reused
-// pool connections have the same UTC contract as newly created connections.
-const rawGetConnection = db.getConnection.bind(db);
-db.getConnection = (callback) => rawGetConnection((connectionError, connection) => {
-  if (connectionError) return callback(connectionError);
-  if (connection.__ownWebUtc) return callback(null, connection);
-  connection.query("SET SESSION time_zone = '+00:00'", (setTimezoneError) => {
-    if (setTimezoneError) {
-      connection.destroy();
-      return callback(setTimezoneError);
-    }
-    connection.__ownWebUtc = true;
-    return callback(null, connection);
-  });
-});
+// mysql2's driver timezone controls client conversion at the boundary, while
+// installUtcPool also enforces UTC on every reused MySQL session.
+installUtcPool(db);
 
 // 博客路由在旧的全局鉴权前注册：公开读取接口自行做可选会话识别，
 // 写入接口则明确使用 requireAuth。旧接口仍由下方的全局中间件保护。
@@ -357,8 +345,11 @@ async function initializeDatabase() {
   await db.promise().query(createVideosTable);
   await db.promise().query(createMusicTable);
   await runMigrations(db);
+  const rawOwnerId = String(process.env.SITE_OWNER_USER_ID || '').trim();
   const configuredOwnerId = parseSiteOwnerUserId();
-  if (configuredOwnerId) {
+  if (rawOwnerId && !configuredOwnerId) {
+    console.warn('[config] SITE_OWNER_USER_ID must be a positive integer; owner features remain disabled');
+  } else if (configuredOwnerId) {
     const [ownerRows] = await db.promise().query('SELECT id FROM users WHERE id=? AND deleted_at IS NULL', [configuredOwnerId]);
     if (!ownerRows[0]) console.warn(`[config] SITE_OWNER_USER_ID=${configuredOwnerId} does not match an existing user; owner features remain disabled`);
   }
