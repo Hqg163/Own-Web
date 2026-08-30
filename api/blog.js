@@ -22,6 +22,8 @@ const {
   mediaUrl
 } = require('./lib/comments');
 const { mountReportRoutes } = require('./lib/reports');
+const { isAdmin: isAdminUser, parseSiteOwnerUserId } = require('./lib/identity');
+const { toUtcIso, withUtcTimestamps } = require('./lib/time');
 
 const PAGE_SIZE = 12;
 const allowedVisibilities = new Set(['public', 'private', 'followers', 'unlisted']);
@@ -30,17 +32,17 @@ const slugify = (value, fallback = 'post') => String(value || '').toLowerCase().
 const parseBoolean = (value) => value === true || value === 1 || value === '1' || value === 'true';
 function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
   const query = db.promise().query.bind(db.promise());
-  const adminEmails = new Set(String(process.env.ADMIN_EMAILS || '').split(',').map((email) => email.trim()).filter(Boolean));
   const jwt = require('jsonwebtoken');
   const optionalAuth = (req, _res, next) => { const token = getAuthToken(req); if (!token) return next(); try { const p = jwt.verify(token, authSecret); db.promise().query('SELECT id,email,session_version FROM users WHERE id=?', [Number(p.sub)]).then(([rows]) => { if (rows[0] && Number(p.sv || 0) === Number(rows[0].session_version || 0)) req.user = { id:Number(p.sub), email:rows[0].email }; next(); }).catch(() => next()); } catch (_) { next(); } };
   const requireAuth = (req, res, next) => req.user ? next() : res.status(401).json({ error: { code: 'AUTH_REQUIRED', message: '请先登录' } });
   const error = (res, status, code, message, fields) => res.status(status).json({ error: { code, message, ...(fields ? { fields } : {}) } });
   const page = (req) => Math.max(1, Number(req.query.page) || 1);
-  const isAdmin = (req) => adminEmails.has(req.user?.email);
-  const siteOwnerId = () => {
-    const id = Number(process.env.SITE_OWNER_USER_ID || 0);
-    return Number.isSafeInteger(id) && id > 0 ? id : null;
-  };
+  const isAdmin = (req) => isAdminUser(req.user);
+  const siteOwnerId = () => parseSiteOwnerUserId();
+  async function nextFeaturedOrder(excludeId) {
+    const [[row]] = await query('SELECT COALESCE(MAX(featured_order),0) max_order FROM posts WHERE featured=TRUE AND id<>?', [excludeId || 0]);
+    return Math.min(2147483647, Math.max(1, Number(row?.max_order || 0) + 1));
+  }
   const commentUserRateLimit = createRateLimiter({ windowMs: 10 * 60 * 1000, limit: 20, key: (req) => `comment-user:${req.user?.id || 'anonymous'}`, message: '评论操作过于频繁，请稍后重试' });
   const commentIpRateLimit = createRateLimiter({ windowMs: 10 * 60 * 1000, limit: 60, key: (req) => `comment-ip:${req.ip || 'unknown'}`, message: '评论操作过于频繁，请稍后重试' });
   const commentMediaUserRateLimit = createRateLimiter({ windowMs: 10 * 60 * 1000, limit: 20, key: (req) => `comment-media-user:${req.user?.id || 'anonymous'}`, message: '评论图片上传过于频繁，请稍后重试' });
@@ -151,7 +153,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       post.content_markdown = String(post.content_markdown || '').replace(/(\/api\/public\/media\/\d+)(?![\w?])/g, `$1?share=${token}`);
       post.content_html = String(post.content_html || '').replace(/(src="\/api\/public\/media\/\d+)(")/g, `$1?share=${token}$2`);
     }
-    return post;
+    return withUtcTimestamps(post, ['published_at', 'scheduled_at', 'created_at', 'updated_at']);
   }
   function presentOwnerPost(row, categories) {
     return { ...presentPublicPost(row, categories), author_id: row.author_id, share_token: row.share_token };
@@ -250,20 +252,21 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       author_deleted: authorDeleted, post_author_deleted: Boolean(row.post_author_deleted_at),
       is_post_author: !deleted && !authorDeleted && Number(row.author_id) === Number(row.post_author_id),
       content: deleted ? '[评论已删除]' : String(row.content || ''),
-      created_at: row.created_at, updated_at: row.updated_at, deleted_at: row.deleted_at || null,
+      created_at: toUtcIso(row.created_at), updated_at: toUtcIso(row.updated_at), deleted_at: toUtcIso(row.deleted_at),
       root_comment_id: row.root_comment_id == null ? null : Number(row.root_comment_id),
       reply_to_comment_id: row.reply_to_comment_id == null ? null : Number(row.reply_to_comment_id),
       parent_id: row.parent_id == null ? null : Number(row.parent_id),
       reply_count: Number(row.reply_count || 0), like_count: Number(row.like_count || 0),
       viewer_liked: Boolean(row.viewer_liked), media: media.map((item) => ({
-        id: Number(item.id), url: mediaUrl(item.id, shareToken), mime_type: item.mime_type, alt_text: item.alt_text
+        id: Number(item.id), url: mediaUrl(item.id, shareToken), mime_type: item.mime_type, alt_text: item.alt_text,
+        created_at: toUtcIso(item.created_at)
       }))
     };
   }
   async function commentMediaFor(ids) {
     if (!ids.length) return new Map();
     const marks = ids.map(() => '?').join(',');
-    const [rows] = await query(`SELECT id,comment_id,mime_type,alt_text FROM comment_media WHERE comment_id IN (${marks}) ORDER BY created_at ASC,id ASC`, ids);
+    const [rows] = await query(`SELECT id,comment_id,mime_type,alt_text,created_at FROM comment_media WHERE comment_id IN (${marks}) ORDER BY created_at ASC,id ASC`, ids);
     const result = new Map(ids.map((id) => [Number(id), []]));
     rows.forEach((row) => result.get(Number(row.comment_id))?.push(row));
     return result;
@@ -346,7 +349,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     const [relatedRows] = await query("SELECT p.id,p.title,p.slug,p.excerpt,p.published_at,p.cover_image,p.cover_alt_text,u.username,u.blog_slug,u.avatar_path FROM posts p JOIN users u ON u.id=p.author_id WHERE p.status='published' AND p.visibility='public' AND p.id<>? ORDER BY (p.author_id=? ) DESC,p.published_at DESC,p.id DESC LIMIT 3", [current.id, current.author_id]);
     const [[previous]] = await query("SELECT p.title,p.slug,p.published_at FROM posts p WHERE p.status='published' AND p.visibility='public' AND p.published_at<? ORDER BY p.published_at DESC,p.id DESC LIMIT 1", [current.published_at]);
     const [[next]] = await query("SELECT p.title,p.slug,p.published_at FROM posts p WHERE p.status='published' AND p.visibility='public' AND p.published_at>? ORDER BY p.published_at ASC,p.id ASC LIMIT 1", [current.published_at]);
-    res.json({ related:relatedRows, previous:previous || null, next:next || null });
+    res.json({ related: relatedRows.map((row) => withUtcTimestamps(row, ['published_at'])), previous: previous ? withUtcTimestamps(previous, ['published_at']) : null, next: next ? withUtcTimestamps(next, ['published_at']) : null });
   } catch (e) { next(e); } });
   app.get('/api/public/users/:slug', optionalAuth, async (req,res,next)=>{ try { const [users]=await query("SELECT id,username,blog_slug,avatar_path,bio,blog_title,social_links FROM users WHERE blog_slug=? AND profile_visibility='public' AND deleted_at IS NULL",[req.params.slug]); if(!users[0])return error(res,404,'NOT_FOUND','用户不存在'); const u=users[0]; const [[count]]=await query("SELECT COUNT(*) count FROM posts WHERE author_id=? AND status='published' AND visibility='public'",[u.id]); const [[followers]]=await query('SELECT COUNT(*) count FROM follows WHERE following_id=?',[u.id]); const [series]=await query('SELECT name,slug FROM series WHERE owner_id=? ORDER BY sort_order ASC,id ASC',[u.id]); let following=false; if(req.user){const [f]=await query('SELECT 1 FROM follows WHERE follower_id=? AND following_id=?',[req.user.id,u.id]);following=!!f.length;} res.json({user:{...u,avatar_url:publicAvatarUrl(u),post_count:count.count,follower_count:followers.count,following,series}});}catch(e){next(e);} });
   app.get('/api/public/users/:slug/posts', optionalAuth, async (req, res, next) => { try {
@@ -390,7 +393,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
   app.get('/api/me/blog-profile', optionalAuth, requireAuth, async(req,res,next)=>{try{const [r]=await query('SELECT id,username,avatar_path,bio,blog_title,blog_slug,social_links,profile_visibility FROM users WHERE id=?',[req.user.id]);const profile=r[0];if(profile)profile.avatar_url=publicAvatarUrl(profile);res.json({profile});}catch(e){next(e);}});
   app.post('/api/me/avatar', optionalAuth, requireAuth, avatarUpload.single('avatar'), async(req,res,next)=>{try{if(!req.file)return error(res,400,'FILE_REQUIRED','请选择 PNG、JPEG、WebP 或 GIF 格式的头像');const [users]=await query('SELECT avatar_path FROM users WHERE id=?',[req.user.id]);const previousPath=resolveAvatarPath(users[0]?.avatar_path);const avatarPath=path.relative(path.dirname(uploadRoot),req.file.path).replace(/\\/g,'/');await query('UPDATE users SET avatar_path=? WHERE id=?',[avatarPath,req.user.id]);if(previousPath&&previousPath!==req.file.path)fs.unlink(previousPath,()=>{});res.status(201).json({avatarUrl:publicAvatarUrl({id:req.user.id,avatar_path:avatarPath})});}catch(e){removeUploadedFile(req.file);next(e);}});
   app.put('/api/me/blog-profile', optionalAuth, requireAuth, async(req,res,next)=>{try{const {bio='',blogTitle='',blogSlug='',socialLinks={},profileVisibility='public'}=req.body;const slug=slugify(blogSlug,`u-${req.user.id}`);if(!/^[a-z0-9-]{3,50}$/.test(slug))return error(res,400,'INVALID_SLUG','主页标识须为 3–50 位小写字母、数字或连字符');if(!['public','private'].includes(profileVisibility))return error(res,400,'INVALID_VISIBILITY','主页可见性无效');const normalizedLinks=normalizeSocialLinks(socialLinks);if(normalizedLinks.message)return error(res,400,'INVALID_SOCIAL_LINK',normalizedLinks.message);const [dup]=await query('SELECT id FROM users WHERE blog_slug=? AND id<>?',[slug,req.user.id]);if(dup.length)return error(res,409,'SLUG_TAKEN','该主页标识已被使用');await query('UPDATE users SET bio=?,blog_title=?,blog_slug=?,social_links=?,profile_visibility=? WHERE id=?',[String(bio).slice(0,1000),String(blogTitle).slice(0,120),slug,JSON.stringify(normalizedLinks.links),profileVisibility,req.user.id]);const [saved]=await query('SELECT id,username,avatar_path,bio,blog_title,blog_slug,social_links,profile_visibility FROM users WHERE id=?',[req.user.id]);if(saved[0])saved[0].avatar_url=publicAvatarUrl(saved[0]);res.json({profile:saved[0]});}catch(e){next(e);}});
-  app.get('/api/dashboard/overview',optionalAuth,requireAuth,async(req,res,next)=>{try{const [[stats]]=await query("SELECT COUNT(*) total, SUM(status='draft') drafts, SUM(status='published') published, SUM(view_count) views FROM posts WHERE author_id=?",[req.user.id]);const [recent]=await query('SELECT id,title,status,updated_at FROM posts WHERE author_id=? ORDER BY updated_at DESC LIMIT 5',[req.user.id]);res.json({stats,recent});}catch(e){next(e);}});
+  app.get('/api/dashboard/overview',optionalAuth,requireAuth,async(req,res,next)=>{try{const [[stats]]=await query("SELECT COUNT(*) total, SUM(status='draft') drafts, SUM(status='published') published, SUM(view_count) views FROM posts WHERE author_id=?",[req.user.id]);const [recent]=await query('SELECT id,title,status,updated_at FROM posts WHERE author_id=? ORDER BY updated_at DESC LIMIT 5',[req.user.id]);res.json({stats,recent:recent.map((row)=>withUtcTimestamps(row,['updated_at']))});}catch(e){next(e);}});
   app.get('/api/posts', optionalAuth, requireAuth, async (req, res, next) => { try {
     const pageNumber = Math.min(100, page(req)), offset = (pageNumber - 1) * PAGE_SIZE, params = [req.user.id], conditions = ['author_id=?'];
     if (req.query.status && allowedStatuses.has(req.query.status)) { conditions.push('status=?'); params.push(req.query.status); }
@@ -425,7 +428,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       next(e);
     }
   });
-  app.get('/api/posts/:id',optionalAuth,requireAuth,async(req,res,next)=>{try{const [r]=await query('SELECT * FROM posts WHERE id=? AND author_id=?',[req.params.id,req.user.id]);if(!r[0])return error(res,404,'NOT_FOUND','文章不存在');const [categories]=await query('SELECT c.slug FROM post_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.post_id=?',[r[0].id]);const [tags]=await query('SELECT t.name FROM post_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.post_id=?',[r[0].id]);res.json({post:{...r[0],categorySlugs:categories.map(x=>x.slug),tags:tags.map(x=>x.name)}});}catch(e){next(e);}});
+  app.get('/api/posts/:id',optionalAuth,requireAuth,async(req,res,next)=>{try{const [r]=await query('SELECT * FROM posts WHERE id=? AND author_id=?',[req.params.id,req.user.id]);if(!r[0])return error(res,404,'NOT_FOUND','文章不存在');const [categories]=await query('SELECT c.slug FROM post_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.post_id=?',[r[0].id]);const [tags]=await query('SELECT t.name FROM post_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.post_id=?',[r[0].id]);const post=withUtcTimestamps({...r[0],categorySlugs:categories.map(x=>x.slug),tags:tags.map(x=>x.name)},['published_at','scheduled_at','created_at','updated_at']);res.json({post});}catch(e){next(e);}});
   app.put('/api/posts/:id', optionalAuth, requireAuth, async (req, res, next) => {
     try {
       const [rows] = await query('SELECT * FROM posts WHERE id=? AND author_id=?', [req.params.id, req.user.id]);
@@ -457,6 +460,15 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       if (coverImage) await ensureOwnedCover(coverImage, req.user.id);
       const featured = req.body.featured === undefined ? Boolean(old.featured) : parseBoolean(req.body.featured);
       if (featured && siteOwnerId() !== Number(req.user.id)) return error(res, 403, 'SITE_OWNER_REQUIRED', '只有站主可以精选文章');
+      if (featured && (status !== 'published' || visibility !== 'public')) return error(res, 400, 'FEATURED_PUBLIC_REQUIRED', '只有已发布的公开文章可以加入精选');
+      if (featured && !old.featured) {
+        const [[featuredCount]] = await query("SELECT COUNT(*) count FROM posts WHERE featured=TRUE AND status='published' AND visibility='public' AND id<>?", [old.id]);
+        if (Number(featuredCount.count || 0) >= 4) return error(res, 409, 'FEATURED_LIMIT_REACHED', '首页最多保留 4 篇精选文章');
+      }
+      const requestedFeaturedOrder = Number(req.body.featuredOrder ?? old.featured_order ?? 0);
+      const featuredOrder = featured
+        ? (Number.isInteger(requestedFeaturedOrder) && requestedFeaturedOrder > 0 && requestedFeaturedOrder <= 2147483647 ? requestedFeaturedOrder : await nextFeaturedOrder(old.id))
+        : 0;
       let seriesId = old.series_id == null ? null : Number(old.series_id);
       if (req.body.seriesId !== undefined || req.body.series_id !== undefined) {
         const rawSeriesId = req.body.seriesId !== undefined ? req.body.seriesId : req.body.series_id;
@@ -471,12 +483,29 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
         if (seriesOrder !== null && (!Number.isInteger(seriesOrder) || seriesOrder < 1 || seriesOrder > 10000)) return error(res, 400, 'INVALID_SERIES_ORDER', '专栏顺序必须是 1–10000 的整数');
       }
       if (!seriesId) seriesOrder = null;
-      await query('UPDATE posts SET title=?,slug=?,excerpt=?,content_markdown=?,content_html=?,content_format=?,content_blocks=?,content_version=content_version+1,content_source=?,cover_image=?,cover_alt_text=?,status=?,visibility=?,allow_comments=?,scheduled_at=?,published_at=?,featured=?,featured_order=?,series_id=?,series_order=? WHERE id=?', [title, slug, excerpt, markdown, html, format, blocks ? JSON.stringify(blocks) : null, req.body.contentSource || 'editor', coverImage, coverAlt, status, visibility, req.body.allowComments ?? old.allow_comments, scheduledAt, publishedAt, featured, Number(req.body.featuredOrder ?? old.featured_order ?? 0) || 0, seriesId, seriesOrder, old.id]);
+      await query('UPDATE posts SET title=?,slug=?,excerpt=?,content_markdown=?,content_html=?,content_format=?,content_blocks=?,content_version=content_version+1,content_source=?,cover_image=?,cover_alt_text=?,status=?,visibility=?,allow_comments=?,scheduled_at=?,published_at=?,featured=?,featured_order=?,series_id=?,series_order=? WHERE id=?', [title, slug, excerpt, markdown, html, format, blocks ? JSON.stringify(blocks) : null, req.body.contentSource || 'editor', coverImage, coverAlt, status, visibility, req.body.allowComments ?? old.allow_comments, scheduledAt, publishedAt, featured, featuredOrder, seriesId, seriesOrder, old.id]);
       await syncTaxonomy(old.id, req.body.categorySlugs, req.body.tags);
       const revisionSource = status === 'published' ? 'publish' : 'manual';
       await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source,content_source) VALUES (?,?,?,?,?,?, ?, ?)", [old.id, req.user.id, title, markdown, format, blocks ? JSON.stringify(blocks) : null, revisionSource, req.body.contentSource || 'editor']);
       res.json({ message: status === 'published' ? '文章已发布' : status === 'scheduled' ? '文章已安排定时发布' : '草稿已保存', status, slug, scheduledAt: scheduledAt ? scheduledAt.toISOString() : null });
     } catch (e) { next(e); }
+  });
+  app.put('/api/posts/:id/featured', optionalAuth, requireAuth, async (req, res, next) => {
+    try {
+      const [rows] = await query('SELECT id,author_id,status,visibility,featured,featured_order FROM posts WHERE id=? AND author_id=?', [req.params.id, req.user.id]);
+      const post = rows[0];
+      if (!post) return error(res, 404, 'NOT_FOUND', '文章不存在');
+      if (siteOwnerId() !== Number(req.user.id)) return error(res, 403, 'SITE_OWNER_REQUIRED', '只有站主可以精选文章');
+      const wantsFeatured = parseBoolean(req.body.featured);
+      if (wantsFeatured && (post.status !== 'published' || post.visibility !== 'public')) return error(res, 400, 'FEATURED_PUBLIC_REQUIRED', '只有已发布的公开文章可以加入精选');
+      if (wantsFeatured && !post.featured) {
+        const [[featuredCount]] = await query("SELECT COUNT(*) count FROM posts WHERE featured=TRUE AND status='published' AND visibility='public' AND id<>?", [post.id]);
+        if (Number(featuredCount.count || 0) >= 4) return error(res, 409, 'FEATURED_LIMIT_REACHED', '首页最多保留 4 篇精选文章');
+      }
+      const nextOrder = wantsFeatured ? await nextFeaturedOrder(post.id) : 0;
+      await query('UPDATE posts SET featured=?,featured_order=? WHERE id=? AND author_id=?', [wantsFeatured, nextOrder, post.id, req.user.id]);
+      return res.json({ featured: wantsFeatured, featured_order: nextOrder });
+    } catch (e) { return next(e); }
   });
   app.post('/api/posts/:id/autosave', optionalAuth, requireAuth, async (req, res, next) => {
     try {
@@ -490,7 +519,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       const markdown = format === 'blocks' ? canonicalContent.blocksToMarkdown(blocks) : String(req.body.contentMarkdown ?? '');
       const html = format === 'blocks' ? canonicalContent.blocksToSafeHtml(blocks) : canonicalContent.renderMarkdown(markdown);
       await query('UPDATE posts SET title=?,content_markdown=?,content_html=?,content_format=?,content_blocks=?,content_version=content_version+1,content_source=? WHERE id=? AND author_id=?', [title, markdown, html, format, blocks ? JSON.stringify(blocks) : null, req.body.contentSource || 'autosave', old.id, req.user.id]);
-      const [recent] = await query("SELECT id FROM post_revisions WHERE post_id=? AND editor_id=? AND source='autosave' AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE) ORDER BY created_at DESC LIMIT 1", [old.id, req.user.id]);
+      const [recent] = await query("SELECT id FROM post_revisions WHERE post_id=? AND editor_id=? AND source='autosave' AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 MINUTE) ORDER BY created_at DESC LIMIT 1", [old.id, req.user.id]);
       const values = [old.id, req.user.id, title, markdown, format, blocks ? JSON.stringify(blocks) : null, req.body.contentSource || 'autosave'];
       if (recent[0]) await query('UPDATE post_revisions SET title=?,content_markdown=?,content_format=?,content_blocks=?,content_version=(SELECT content_version FROM posts WHERE id=?),content_source=? WHERE id=?', [title, markdown, format, blocks ? JSON.stringify(blocks) : null, old.id, req.body.contentSource || 'autosave', recent[0].id]);
       else await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source,content_source) VALUES (?,?,?,?,?,?, 'autosave', ?)", values);
@@ -500,7 +529,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
   app.get('/api/posts/:id/revisions', optionalAuth, requireAuth, async (req, res, next) => {
     try {
       const [rows] = await query('SELECT r.id,r.post_id,r.title,r.content_format,r.content_version,r.source,r.content_source,r.created_at,u.username FROM post_revisions r JOIN users u ON u.id=r.editor_id JOIN posts p ON p.id=r.post_id WHERE r.post_id=? AND p.author_id=? ORDER BY r.created_at DESC LIMIT 100', [req.params.id, req.user.id]);
-      res.json({ items: rows });
+      res.json({ items: rows.map((row) => withUtcTimestamps(row, ['created_at'])) });
     } catch (e) { next(e); }
   });
   app.post('/api/posts/:id/revisions/:revisionId/restore', optionalAuth, requireAuth, async (req, res, next) => {
@@ -567,7 +596,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
   });
   app.get('/api/posts/:id/media', optionalAuth, requireAuth, async (req, res, next) => { try {
     const [rows] = await query('SELECT id,media_kind,mime_type,alt_text,label,caption,created_at FROM post_media WHERE post_id=? AND owner_id=? ORDER BY created_at DESC', [req.params.id, req.user.id]);
-    res.json({ items: rows.map((media) => ({ ...media, url: `/api/public/media/${media.id}` })) });
+    res.json({ items: rows.map((media) => ({ ...withUtcTimestamps(media, ['created_at']), url: `/api/public/media/${media.id}` })) });
   } catch (e) { next(e); } });
   app.delete('/api/posts/media/:mediaId', optionalAuth, requireAuth, async (req, res, next) => { try {
     const [rows] = await query('SELECT id,file_path FROM post_media WHERE id=? AND owner_id=?', [req.params.mediaId, req.user.id]);
@@ -684,7 +713,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
   app.get('/api/posts/:id/comment-media', optionalAuth, async (req, res, next) => { try {
     const post = await loadAccessiblePost(req.params.id, req, res); if (!post) return;
     const [rows] = await query('SELECT cm.id,cm.mime_type,cm.alt_text,cm.file_size,cm.created_at FROM comment_media cm JOIN comments c ON c.id=cm.comment_id WHERE c.post_id=? AND c.deleted_at IS NULL ORDER BY cm.created_at ASC,cm.id ASC', [post.id]);
-    res.json({ items: rows.map((row) => ({ ...row, url: mediaUrl(row.id, post.visibility === 'unlisted' ? req.query.share : null) })) });
+    res.json({ items: rows.map((row) => ({ ...withUtcTimestamps(row, ['created_at']), url: mediaUrl(row.id, post.visibility === 'unlisted' ? req.query.share : null) })) });
   } catch (e) { next(e); } });
   app.post(['/api/comments/media', '/api/posts/comments/media'], optionalAuth, requireAuth, commentMediaUserRateLimit, commentMediaIpRateLimit, commentMediaUploadHandler);
   app.post('/api/posts/:id/comment-media', optionalAuth, requireAuth, commentMediaPostGuard, commentMediaUserRateLimit, commentMediaIpRateLimit, commentMediaUploadHandler);
@@ -704,7 +733,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     const context = await loadCommentPost(req.params.id, req, res); if (!context) return;
     if (context.comment.deleted_at) return error(res, 404, 'NOT_FOUND', '评论不存在');
     const [rows] = await query('SELECT id,mime_type,alt_text,file_size,created_at FROM comment_media WHERE comment_id=? ORDER BY created_at ASC,id ASC', [context.comment.id]);
-    res.json({ items: rows.map((row) => ({ ...row, url: mediaUrl(row.id, context.post.visibility === 'unlisted' ? req.query.share : null) })) });
+    res.json({ items: rows.map((row) => ({ ...withUtcTimestamps(row, ['created_at']), url: mediaUrl(row.id, context.post.visibility === 'unlisted' ? req.query.share : null) })) });
   } catch (e) { next(e); } });
 
   app.delete(['/api/comments/media/:id', '/api/comment-media/:id'], optionalAuth, requireAuth, async (req, res, next) => { try {
@@ -756,7 +785,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     if (Number(context.comment.author_id)!==Number(req.user.id) && Number(context.post.author_id)!==Number(req.user.id)) return error(res,404,'NOT_FOUND','评论不存在');
     const deletedMedia = await withTransaction(async (tx) => {
       const [rows] = await tx.query('SELECT id,file_path FROM comment_media WHERE comment_id=? FOR UPDATE', [context.comment.id]);
-      const [changed] = await tx.query('UPDATE comments SET deleted_at=COALESCE(deleted_at,NOW()),content=\'[评论已删除]\' WHERE id=? AND deleted_at IS NULL', [context.comment.id]);
+      const [changed] = await tx.query('UPDATE comments SET deleted_at=COALESCE(deleted_at,UTC_TIMESTAMP()),content=\'[评论已删除]\' WHERE id=? AND deleted_at IS NULL', [context.comment.id]);
       if (!changed.affectedRows) throw Object.assign(new Error('评论不存在'), { status: 404, code: 'NOT_FOUND' });
       await tx.query('DELETE FROM comment_media WHERE comment_id=?', [context.comment.id]);
       await tx.query('UPDATE posts SET comment_count=GREATEST(0,comment_count-1) WHERE id=?', [context.post.id]);
@@ -775,7 +804,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     await withTransaction(async(tx)=>{const [removed]=await tx.query('DELETE FROM comment_likes WHERE comment_id=? AND user_id=?',[context.comment.id,req.user.id]);if(removed.affectedRows)await tx.query('UPDATE comments SET like_count=GREATEST(0,like_count-1) WHERE id=?',[context.comment.id]);});
     const [[count]]=await query('SELECT like_count FROM comments WHERE id=?',[context.comment.id]);res.json({liked:false,like_count:Number(count?.like_count||0)});
   }catch(e){next(e);}});
-  app.get('/api/notifications',optionalAuth,requireAuth,async(req,res,next)=>{try{const [items]=await query('SELECT n.*,u.username actor_name,u.blog_slug actor_slug,p.slug post_slug,p.title post_title FROM notifications n LEFT JOIN users u ON u.id=n.actor_id LEFT JOIN posts p ON p.id=n.post_id WHERE n.recipient_id=? ORDER BY n.created_at DESC LIMIT 50',[req.user.id]);res.json({items});}catch(e){next(e);}});
+  app.get('/api/notifications',optionalAuth,requireAuth,async(req,res,next)=>{try{const [items]=await query('SELECT n.*,u.username actor_name,u.blog_slug actor_slug,p.slug post_slug,p.title post_title FROM notifications n LEFT JOIN users u ON u.id=n.actor_id LEFT JOIN posts p ON p.id=n.post_id WHERE n.recipient_id=? ORDER BY n.created_at DESC LIMIT 50',[req.user.id]);res.json({items:items.map((item)=>withUtcTimestamps(item,['created_at']))});}catch(e){next(e);}});
   app.put('/api/notifications/:id/read',optionalAuth,requireAuth,async(req,res,next)=>{try{await query('UPDATE notifications SET is_read=TRUE WHERE id=? AND recipient_id=?',[req.params.id,req.user.id]);res.status(204).end();}catch(e){next(e);}});
   mountReportRoutes(app, {
     db,
@@ -801,7 +830,12 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       await connection.promise().query("SELECT RELEASE_LOCK('own_web_scheduled_publisher')");
     } finally { connection.release(); }
   }
-  setTimeout(() => publishDuePosts().catch((error) => console.error('[scheduler] startup compensation failed', error)), 0).unref();
-  setInterval(() => publishDuePosts().catch((error) => console.error('[scheduler] scheduled publish failed', error)), 60 * 1000).unref();
+  const reportSchedulerError = (label) => (schedulerError) => {
+    // On a brand-new database the first timer can fire while migrations are
+    // still creating posts. The next interval will retry after initialization.
+    if (schedulerError?.code !== 'ER_NO_SUCH_TABLE') console.error(`[scheduler] ${label}`, schedulerError);
+  };
+  setTimeout(() => publishDuePosts().catch(reportSchedulerError('startup compensation failed')), 0).unref();
+  setInterval(() => publishDuePosts().catch(reportSchedulerError('scheduled publish failed')), 60 * 1000).unref();
 }
 module.exports = { mountBlogRoutes };

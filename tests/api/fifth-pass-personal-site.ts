@@ -241,6 +241,11 @@ async function main() {
     await login(owner, emails.owner)
     await login(adminButNotOwner, emails.adminButNotOwner)
 
+    const ownerMe = await owner.get('/api/me')
+    assert.deepEqual(ownerMe.body.capabilities, { isSiteOwner: true, isAdmin: false })
+    const adminMe = await adminButNotOwner.get('/api/me')
+    assert.deepEqual(adminMe.body.capabilities, { isSiteOwner: false, isAdmin: true })
+
     const privateProfile = await owner
       .put('/api/me/blog-profile')
       .set('Origin', origin)
@@ -484,6 +489,13 @@ async function main() {
     assert.equal(home.status, 200)
     assert.ok(home.body.featured.some((item: any) => item.slug === `public-series-${suffix}`))
     assert.equal(home.body.featured.some((item: any) => item.slug === `non-owner-featured-${suffix}`), false)
+
+    const unfeatured = await owner.put(`/api/posts/${publicPostId}/featured`).set('Origin', origin).send({ featured: false })
+    assert.equal(unfeatured.status, 200, JSON.stringify(unfeatured.body))
+    assert.equal(unfeatured.body.featured, false)
+    const reFeatured = await owner.put(`/api/posts/${publicPostId}/featured`).set('Origin', origin).send({ featured: true })
+    assert.equal(reFeatured.status, 200, JSON.stringify(reFeatured.body))
+    assert.equal(reFeatured.body.featured, true)
 
     // Comment contract: text-only, image-only, image-only reply, and empty rejection.
     const textComment = await adminButNotOwner
