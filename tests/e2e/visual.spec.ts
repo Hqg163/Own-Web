@@ -78,6 +78,7 @@ function dynamicMasks(page: Page) {
   return [
     page.locator('.user-menu'),
     page.locator('.dashboard-intro'),
+    page.locator('.identity-card'),
     page.locator('#blog-slug'),
     page.locator('.save-state'),
     page.locator('.reading-progress'),
