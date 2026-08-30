@@ -70,11 +70,19 @@ test('my reports keeps the user view private and links report updates', async ({
   await page.goto('/dashboard/reports')
   await expect(page).toHaveURL(/\/dashboard\/reports$/)
   await expect(page.getByRole('heading', { name: '我的举报' })).toBeVisible()
-  await expect(page.getByText('隐私泄露', { exact: true })).toBeVisible()
+  await expect(page.getByText('隐私泄露', { exact: false })).toBeVisible()
   await expect(page.locator('.status-badge').filter({ hasText: '已处理' })).toBeVisible()
-  await expect(page.getByText('感谢反馈，已经完成审核。')).toBeVisible()
+  await expect(page.locator('article.report-card')).not.toContainText('感谢反馈，已经完成审核。')
+  await expect(page.locator('article.report-card')).not.toContainText(report.details)
   await expect(page.getByText('内部备注不应返回给普通用户')).toHaveCount(0)
   await expect(page.getByRole('link', { name: /查看举报详情/ })).toHaveAttribute('href', '/dashboard/reports/701')
+
+  await page.getByRole('link', { name: /查看举报详情/ }).click()
+  await expect(page).toHaveURL(/\/dashboard\/reports\/701$/)
+  await expect(page.getByRole('heading', { name: '举报详情', exact: true })).toBeVisible()
+  await expect(page.getByText('举报时的补充说明')).toBeVisible()
+  await expect(page.getByText('感谢反馈，已经完成审核。')).toBeVisible()
+  await expect(page.getByText('内部备注不应返回给普通用户')).toHaveCount(0)
 
   await page.goto('/dashboard/notifications')
   await page.route('**/api/notifications', async (route) => {
