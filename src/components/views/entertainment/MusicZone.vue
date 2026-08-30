@@ -193,7 +193,17 @@
           <div class="mini-extra">
             <div class="volume-control">
               <button type="button" @click="toggleMute" :aria-label="isMuted ? '取消静音' : '静音'"><AppIcon :name="isMuted || volume === 0 ? 'volume-x' : 'volume'" :size="18" /></button>
-              <input type="range" v-model="volume" min="0" max="100" @input="changeVolume" class="volume-slider" />
+              <input
+                type="range"
+                v-model.number="volume"
+                min="0"
+                max="100"
+                @input="changeVolume"
+                class="volume-slider"
+                :style="{ '--volume-percent': `${volume}%` }"
+                aria-label="音量"
+                :aria-valuetext="isMuted ? '已静音' : `${volume}%`"
+              />
             </div>
             <button class="fullscreen-btn" type="button" @click="openFullscreenPlayer" aria-label="全屏模式"><AppIcon name="maximize" :size="18" /></button>
           </div>
@@ -234,7 +244,17 @@
           </div>
           <div class="fs-volume-control">
             <button type="button" @click="toggleMute" :aria-label="isMuted ? '取消静音' : '静音'"><AppIcon :name="isMuted ? 'volume-x' : 'volume'" :size="18" /></button>
-            <input type="range" v-model="volume" min="0" max="100" @input="changeVolume" />
+            <input
+              type="range"
+              v-model.number="volume"
+              min="0"
+              max="100"
+              @input="changeVolume"
+              class="fs-volume-slider"
+              :style="{ '--volume-percent': `${volume}%` }"
+              aria-label="音量"
+              :aria-valuetext="isMuted ? '已静音' : `${volume}%`"
+            />
           </div>
         </div>
 
@@ -2312,22 +2332,94 @@ export default {
   cursor: pointer;
 }
 
-.volume-slider {
+.volume-slider,
+.fs-volume-slider {
+  --volume-percent: 0%;
+  --volume-track: var(--border);
+  --volume-fill: var(--accent);
+  --volume-thumb: var(--accent);
   width: 80px;
-  height: 4px;
+  height: 20px;
+  padding: 0;
   -webkit-appearance: none;
-  background: var(--surface-raised);
-  border-radius: 2px;
-  outline: none;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
 }
 
-.volume-slider::-webkit-slider-thumb {
+.volume-slider:focus-visible,
+.fs-volume-slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.volume-slider::-webkit-slider-runnable-track,
+.fs-volume-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--volume-fill) 0%,
+    var(--volume-fill) var(--volume-percent),
+    var(--volume-track) var(--volume-percent),
+    var(--volume-track) 100%
+  );
+  border-radius: 999px;
+}
+
+.volume-slider::-webkit-slider-thumb,
+.fs-volume-slider::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
-  background: var(--accent);
+  appearance: none;
+  background: var(--volume-thumb);
+  border: 2px solid var(--surface);
   border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--border);
   cursor: pointer;
+}
+
+.volume-slider:hover::-webkit-slider-thumb,
+.fs-volume-slider:hover::-webkit-slider-thumb,
+.volume-slider:focus-visible::-webkit-slider-thumb,
+.fs-volume-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 3px var(--accent);
+}
+
+.volume-slider::-moz-range-track,
+.fs-volume-slider::-moz-range-track {
+  height: 4px;
+  background: var(--volume-track);
+  border: 0;
+  border-radius: 999px;
+}
+
+.volume-slider::-moz-range-progress,
+.fs-volume-slider::-moz-range-progress {
+  height: 4px;
+  background: var(--volume-fill);
+  border-radius: 999px;
+}
+
+.volume-slider::-moz-range-thumb,
+.fs-volume-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  background: var(--volume-thumb);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+}
+
+.volume-slider:hover::-moz-range-thumb,
+.fs-volume-slider:hover::-moz-range-thumb,
+.volume-slider:focus-visible::-moz-range-thumb,
+.fs-volume-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 3px var(--accent);
 }
 
 .fullscreen-btn {
@@ -2496,21 +2588,8 @@ export default {
   cursor: pointer;
 }
 
-.fs-volume-control input {
+.fs-volume-control .fs-volume-slider {
   width: 100px;
-  height: 4px;
-  -webkit-appearance: none;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 2px;
-}
-
-.fs-volume-control input::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  background: white;
-  border-radius: 50%;
-  cursor: pointer;
 }
 
 .fs-body {
@@ -4285,8 +4364,11 @@ input:focus-visible {
 .music-zone .fs-lyric-line.past { color: var(--subtle); }
 .music-zone .fs-lyric-line.active { color: var(--accent); }
 .music-zone .fs-volume-control button { color: var(--text); }
-.music-zone .fs-volume-control input { background: var(--border); }
-.music-zone .fs-volume-control input::-webkit-slider-thumb { background: var(--accent); }
+.music-zone .fs-volume-control .fs-volume-slider {
+  --volume-track: var(--border);
+  --volume-fill: var(--accent);
+  --volume-thumb: var(--accent);
+}
 .music-zone .fs-song-info p,
 .music-zone .time-current,
 .music-zone .time-total,
