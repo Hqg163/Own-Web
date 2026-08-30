@@ -167,6 +167,61 @@ async function runMigrations(db) {
     await query('UPDATE posts p SET comment_count=(SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id AND c.deleted_at IS NULL)');
     await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260829_comments_v2']);
   }
+
+  const [reportsDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260830_reports_v2']);
+  if (!reportsDone.length) {
+    await addColumn(db, 'reports', 'reason_code', "VARCHAR(40) NOT NULL DEFAULT 'other'");
+    await addColumn(db, 'reports', 'public_response', 'TEXT NULL');
+    await addColumn(db, 'reports', 'internal_note', 'TEXT NULL');
+    await addColumn(db, 'reports', 'resolved_at', 'DATETIME NULL');
+    await addColumn(db, 'reports', 'target_snapshot', 'JSON NULL');
+
+    // Existing deployments used `reviewed`; retain it during the transition,
+    // normalize the historical rows, and then enforce the new vocabulary.
+    await query("ALTER TABLE reports MODIFY status ENUM('pending','reviewing','resolved','dismissed','reviewed') NOT NULL DEFAULT 'pending'");
+    await query("UPDATE reports SET status='resolved', resolved_at=COALESCE(resolved_at, reviewed_at) WHERE status='reviewed'");
+    await query("UPDATE reports SET reason_code='other' WHERE reason_code IS NULL OR reason_code='' ");
+    await query("ALTER TABLE reports MODIFY status ENUM('pending','reviewing','resolved','dismissed') NOT NULL DEFAULT 'pending'");
+
+    // The target snapshot is the durable audit record. Target deletion must
+    // not cascade-delete the report that explains why it was filed.
+    await dropForeignKeysForColumn(db, 'reports', 'post_id');
+    await dropForeignKeysForColumn(db, 'reports', 'comment_id');
+    if (!await constraintExists(db, 'reports', 'fk_reports_post_set_null')) {
+      await query('ALTER TABLE reports ADD CONSTRAINT fk_reports_post_set_null FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE SET NULL');
+    }
+    if (!await constraintExists(db, 'reports', 'fk_reports_comment_set_null')) {
+      await query('ALTER TABLE reports ADD CONSTRAINT fk_reports_comment_set_null FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE SET NULL');
+    }
+    if (!await indexExists(db, 'reports', 'idx_reports_reporter_status')) await query('CREATE INDEX idx_reports_reporter_status ON reports (reporter_id, status, created_at)');
+    if (!await indexExists(db, 'reports', 'idx_reports_target_status')) await query('CREATE INDEX idx_reports_target_status ON reports (post_id, comment_id, status, created_at)');
+    if (!await indexExists(db, 'reports', 'idx_reports_status_created')) await query('CREATE INDEX idx_reports_status_created ON reports (status, created_at, id)');
+
+    await addColumn(db, 'notifications', 'report_id', 'BIGINT NULL');
+    await query("ALTER TABLE notifications MODIFY type ENUM('follow','like','comment','reply','report_update') NOT NULL");
+    if (!await constraintExists(db, 'notifications', 'fk_notifications_report')) {
+      await query('ALTER TABLE notifications ADD CONSTRAINT fk_notifications_report FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE');
+    }
+    if (!await indexExists(db, 'notifications', 'idx_notification_report')) await query('CREATE INDEX idx_notification_report ON notifications (report_id, recipient_id, created_at)');
+
+    await query(`CREATE TABLE IF NOT EXISTS report_media (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      owner_id INT NOT NULL,
+      report_id BIGINT NULL,
+      file_path VARCHAR(500) NOT NULL,
+      mime_type VARCHAR(100) NOT NULL,
+      file_size BIGINT UNSIGNED NOT NULL,
+      width INT UNSIGNED NOT NULL DEFAULT 0,
+      height INT UNSIGNED NOT NULL DEFAULT 0,
+      expires_at DATETIME NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(owner_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(report_id) REFERENCES reports(id) ON DELETE CASCADE,
+      KEY idx_report_media_pending (owner_id, report_id, expires_at),
+      KEY idx_report_media_report (report_id, created_at)
+    )`);
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260830_reports_v2']);
+  }
 }
 
 async function indexExists(db, table, indexName) {
@@ -175,6 +230,24 @@ async function indexExists(db, table, indexName) {
     [table, indexName]
   );
   return rows.length > 0;
+}
+
+async function constraintExists(db, table, constraintName) {
+  const [rows] = await db.promise().query(
+    `SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? LIMIT 1`,
+    [table, constraintName]
+  );
+  return rows.length > 0;
+}
+
+async function dropForeignKeysForColumn(db, table, column) {
+  const [rows] = await db.promise().query(
+    `SELECT DISTINCT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+     WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+       AND REFERENCED_TABLE_NAME IS NOT NULL`,
+    [table, column]
+  );
+  for (const row of rows) await db.promise().query(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`${row.CONSTRAINT_NAME}\``);
 }
 
 function createShareToken() { return crypto.randomBytes(32).toString('hex'); }

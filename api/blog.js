@@ -20,6 +20,7 @@ const {
   normalizeMediaIds,
   mediaUrl
 } = require('./lib/comments');
+const { mountReportRoutes } = require('./lib/reports');
 
 const PAGE_SIZE = 12;
 const allowedVisibilities = new Set(['public', 'private', 'followers', 'unlisted']);
@@ -722,9 +723,17 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
   }catch(e){next(e);}});
   app.get('/api/notifications',optionalAuth,requireAuth,async(req,res,next)=>{try{const [items]=await query('SELECT n.*,u.username actor_name,u.blog_slug actor_slug,p.slug post_slug,p.title post_title FROM notifications n LEFT JOIN users u ON u.id=n.actor_id LEFT JOIN posts p ON p.id=n.post_id WHERE n.recipient_id=? ORDER BY n.created_at DESC LIMIT 50',[req.user.id]);res.json({items});}catch(e){next(e);}});
   app.put('/api/notifications/:id/read',optionalAuth,requireAuth,async(req,res,next)=>{try{await query('UPDATE notifications SET is_read=TRUE WHERE id=? AND recipient_id=?',[req.params.id,req.user.id]);res.status(204).end();}catch(e){next(e);}});
-  app.post('/api/reports',optionalAuth,requireAuth,async(req,res,next)=>{try{if(!req.body.postId&&!req.body.commentId)return error(res,400,'TARGET_REQUIRED','请选择举报内容');let postId=req.body.postId?Number(req.body.postId):null,commentId=req.body.commentId?Number(req.body.commentId):null;if((req.body.postId&&!Number.isInteger(postId))||(req.body.commentId&&!Number.isInteger(commentId)))return error(res,400,'INVALID_TARGET','举报目标无效');if(commentId){const [comments]=await query('SELECT id,post_id FROM comments WHERE id=?',[commentId]);if(!comments[0])return error(res,404,'NOT_FOUND','评论不存在');if(postId&&postId!==comments[0].post_id)return error(res,400,'TARGET_MISMATCH','评论不属于指定文章');postId=comments[0].post_id;}const post=await loadAccessiblePost(postId,req,res);if(!post)return;const [r]=await query('INSERT INTO reports (reporter_id,post_id,comment_id,reason,details) VALUES (?,?,?,?,?)',[req.user.id,post.id,commentId,String(req.body.reason||'其他').slice(0,80),String(req.body.details||'').slice(0,2000)]);res.status(201).json({report:{id:r.insertId,status:'pending'}});}catch(e){next(e);}});
-  app.get('/api/admin/reports',optionalAuth,requireAuth,async(req,res,next)=>{try{if(!isAdmin(req))return error(res,403,'ADMIN_REQUIRED','需要管理员权限');const [items]=await query('SELECT * FROM reports ORDER BY created_at DESC LIMIT 100');res.json({items});}catch(e){next(e);}});
-  app.put('/api/admin/reports/:id',optionalAuth,requireAuth,async(req,res,next)=>{try{if(!isAdmin(req))return error(res,403,'ADMIN_REQUIRED','需要管理员权限');const status=['reviewed','dismissed'].includes(req.body.status)?req.body.status:'reviewed';await query('UPDATE reports SET status=?,reviewed_by=?,reviewed_at=NOW() WHERE id=?',[status,req.user.id,req.params.id]);res.status(204).end();}catch(e){next(e);}});
+  mountReportRoutes(app, {
+    db,
+    uploadRoot,
+    optionalAuth,
+    requireAuth,
+    error,
+    loadAccessiblePost,
+    withTransaction,
+    resolveMediaPath,
+    isAdmin,
+  });
   async function publishDuePosts() {
     if (typeof db.getConnection !== 'function') {
       await query("UPDATE posts SET status='published',published_at=COALESCE(published_at,UTC_TIMESTAMP()),scheduled_at=NULL WHERE status='scheduled' AND scheduled_at IS NOT NULL AND scheduled_at<=UTC_TIMESTAMP()");

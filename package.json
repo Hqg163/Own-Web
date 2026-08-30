@@ -13,9 +13,9 @@
     "api:check": "npm --prefix api run check",
     "test:lrc": "tsx scripts/lrc-smoke.ts",
     "test:unit": "vitest run --config vitest.config.ts",
-    "test:api": "tsx tests/api/run-api-tests.ts",
+    "test:api": "tsx tests/api/run-api-tests.ts && tsx tests/api/fourth-pass-report-api.ts",
     "test:e2e": "playwright test",
-    "test:security": "tsx tests/security/security-regression.ts",
+    "test:security": "tsx tests/security/security-regression.ts && tsx tests/security/fourth-pass-report-security.ts",
     "test:performance": "node tests/performance/lighthouse.cjs",
     "test:visual": "playwright test --config=playwright.visual.config.ts tests/e2e/visual.spec.ts",
     "test:all": "npm run typecheck && npm run build && npm run api:check && npm run test:lrc && npm run test:unit && npm run test:api && npm run test:e2e && npm run test:security && npm run test:visual && npm run test:performance && npm --prefix api run test:auth-account && npm --prefix api run test:study-access && npm --prefix api run test:media-access && npm --prefix api run test:blog-access"
