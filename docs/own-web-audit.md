@@ -1,5 +1,7 @@
 # Own-Web 全站第二轮审计与交付报告（历史记录）
 
+> 第四轮对账（2026-08-30）：本文仅是历史快照；当前验收、提交和未验证边界请以 [fourth-pass-verification.md](./fourth-pass-verification.md) 为准。
+
 > 第三轮对账（2026-08-29）：本文保留第二轮的原始背景、实现清单和测试快照，已不再作为当前验收基线。当前基线是 [third-pass-verification.md](./third-pass-verification.md)，其中的 `Local Public Verified`、`Needs Runtime Verification` 和最终测试数量优先于本文。本文中的“真实站点”“Publicly Verified”和第二轮测试数量只表示当时作者会话/本地环境取得的历史证据，不表示生产匿名访问或第二账号验证。
 
 > 复核日期：2026-08-29。Branch：`codex/community-blog-v1`。Start HEAD：`a245cf542e47acfd7241d926c97a03ad36aef8b7`。End HEAD 以包含本报告的最后一个 commit 为准（可由 `git log -1 --format=%H` 复现）。实现、集中质量门禁和真实作者站点发布已经完成；独立匿名/第二账号阅读因当前环境没有第二会话而明确保持 Not Verified。本报告不把测试数据库或代码存在写成第二账号证据。
