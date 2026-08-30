@@ -15,6 +15,8 @@ const { imageSize } = require('image-size');
 const mm = require('music-metadata');
 const { runMigrations } = require('./migrations');
 const { mountBlogRoutes } = require('./blog');
+const { mountPersonalSiteRoutes } = require('./lib/personal-site');
+const { mountPublicWebRoutes } = require('./lib/public-web');
 const { sendError, createRateLimiter, originGuard, imageDimensions, validateUploadedFile } = require('./lib/security');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -256,6 +258,10 @@ mountBlogRoutes(app, db, {
   getAuthToken,
   authSecret: process.env.AUTH_SECRET,
   uploadRoot: UPLOAD_ROOT
+});
+mountPersonalSiteRoutes(app, db, {
+  getAuthToken,
+  authSecret: process.env.AUTH_SECRET
 });
 app.use('/api', authenticatedApiRequest);
 
@@ -2101,8 +2107,8 @@ app.post('/api/entertainment/music/:musicId/play', (req, res) => {
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.resolve(__dirname, '..', 'dist');
-  app.use(express.static(clientDist));
-  app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  app.use(express.static(clientDist, { index: false }));
+  mountPublicWebRoutes(app, db, { clientDist });
 }
 
 app.use((error, req, res, next) => {

@@ -32,6 +32,10 @@ function mathNodeHtml(kind, value) {
   return `<${block ? 'div' : 'span'} class="${className}" ${marker}="true" data-math="${escapeHtml(value)}">${escapeHtml(value)}</${block ? 'div' : 'span'}>`;
 }
 
+function renderedHeadingLevel(level) {
+  return Math.min(4, Math.max(2, Number(level) || 2));
+}
+
 function invalid(message, fields) {
   return Object.assign(new Error(message), { status: 400, code: 'INVALID_CONTENT', fields });
 }
@@ -164,7 +168,7 @@ function inlineMarkdown(value) {
   const hold = (content) => { const key = `\u0000${placeholders.length}\u0000`; placeholders.push(content); return key; };
   let source = String(value ?? '');
   source = source.replace(/`([^`\n]+)`/g, (_m, code) => hold(`<code>${escapeHtml(code)}</code>`));
-  source = source.replace(/!\[([^\]]*)\]\((\/api\/public\/media\/\d+(?:\?share=[a-f0-9]{64})?)\)/g, (_m, alt, src) => hold(`<img src="${src}" alt="${escapeHtml(alt)}">`));
+  source = source.replace(/!\[([^\]]*)\]\((\/api\/public\/media\/\d+(?:\?share=[a-f0-9]{64})?)\)/g, (_m, alt, src) => hold(`<img src="${src}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async">`));
   source = source.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi, (_m, label, href) => hold(`<a href="${escapeHtml(href)}" rel="nofollow noopener" target="_blank">${escapeHtml(label)}</a>`));
   source = source.replace(/\\\(([^\n]+?)\\\)/g, (_m, formula) => {
     const safeValue = safeMathValue(formula);
@@ -250,7 +254,7 @@ function renderMarkdown(markdown) {
     const footnote = line.match(/^\[\^([a-z0-9_-]{1,30})\]:\s*(.+)$/i);
     if (footnote) { html.push(`<aside data-footnote><sup>${escapeHtml(footnote[1])}</sup> ${inlineMarkdown(footnote[2])}</aside>`); index += 1; continue; }
     const heading = line.match(/^(#{1,4})\s+(.+)$/);
-    if (heading) { const level = heading[1].length; html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`); index += 1; continue; }
+    if (heading) { const sourceLevel = heading[1].length; const level = renderedHeadingLevel(sourceLevel); const sourceMarker = sourceLevel === 1 ? ' data-source-heading="h1" class="article-source-h1"' : ''; html.push(`<h${level}${sourceMarker}>${inlineMarkdown(heading[2])}</h${level}>`); index += 1; continue; }
     if (/^\s*(---+|\*\*\*+)\s*$/.test(line)) { html.push('<hr>'); index += 1; continue; }
     if (/^>\s?/.test(line)) {
       const quote = [];
@@ -338,7 +342,7 @@ function blocksToSafeHtml(doc) {
       return value;
     }
     if (node.type === 'paragraph') return `<p>${children}</p>`;
-    if (node.type === 'heading') return `<h${node.attrs.level} id="${escapeHtml(String(node.attrs.id || '').replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, '-'))}">${children}</h${node.attrs.level}>`;
+    if (node.type === 'heading') { const sourceLevel = Number(node.attrs.level); const level = renderedHeadingLevel(sourceLevel); const sourceMarker = sourceLevel === 1 ? ' data-source-heading="h1" class="article-source-h1"' : ''; return `<h${level}${sourceMarker} id="${escapeHtml(String(node.attrs.id || '').replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, '-'))}">${children}</h${level}>`; }
     if (node.type === 'blockquote') return `<blockquote>${children}</blockquote>`;
     if (node.type === 'bulletList' || node.type === 'taskList') return `<ul>${children}</ul>`;
     if (node.type === 'orderedList') return `<ol>${children}</ol>`;
@@ -346,8 +350,8 @@ function blocksToSafeHtml(doc) {
     if (node.type === 'horizontalRule') return '<hr>';
     if (node.type === 'codeBlock') return `<pre data-language="${escapeHtml(node.attrs.language || 'text')}"><code>${children}</code></pre>`;
     if (node.type === 'hardBreak') return '<br>';
-    if (node.type === 'image') return `<figure data-align="${node.attrs.align}" style="--media-width:${node.attrs.width}%"><img src="${escapeHtml(node.attrs.src)}" alt="${escapeHtml(node.attrs.alt)}">${node.attrs.caption ? `<figcaption>${escapeHtml(node.attrs.caption)}</figcaption>` : ''}</figure>`;
-    if (node.type === 'gallery') return `<div data-gallery>${node.attrs.items.map((item) => `<figure><img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.alt)}">${item.caption ? `<figcaption>${escapeHtml(item.caption)}</figcaption>` : ''}</figure>`).join('')}</div>`;
+    if (node.type === 'image') return `<figure data-align="${node.attrs.align}" style="--media-width:${node.attrs.width}%"><img src="${escapeHtml(node.attrs.src)}" alt="${escapeHtml(node.attrs.alt)}" loading="lazy" decoding="async">${node.attrs.caption ? `<figcaption>${escapeHtml(node.attrs.caption)}</figcaption>` : ''}</figure>`;
+    if (node.type === 'gallery') return `<div data-gallery>${node.attrs.items.map((item) => `<figure><img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.alt)}" loading="lazy" decoding="async">${item.caption ? `<figcaption>${escapeHtml(item.caption)}</figcaption>` : ''}</figure>`).join('')}</div>`;
     if (node.type === 'attachment') return `<p><a href="${escapeHtml(node.attrs.src)}" download>${escapeHtml(node.attrs.label)}</a></p>`;
     if (node.type === 'audio') return `<figure><audio controls src="${escapeHtml(node.attrs.src)}"></audio><figcaption>${escapeHtml(node.attrs.label)}</figcaption></figure>`;
     if (node.type === 'video') return `<figure><video controls src="${escapeHtml(node.attrs.src)}"></video><figcaption>${escapeHtml(node.attrs.label)}</figcaption></figure>`;

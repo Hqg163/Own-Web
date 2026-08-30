@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "check": "node --check server.js && node --check blog.js && node --check migrations.js",
+    "check": "node --check server.js && node --check blog.js && node --check migrations.js && node --check lib/comments.js && node --check lib/content.js && node --check lib/reports.js && node --check lib/security.js && node --check lib/personal-site.js && node --check lib/public-web.js",
     "test:blog-access": "node scripts/ensure-test-db.js && node scripts/blog-access-smoke.js",
     "test:study-access": "node scripts/ensure-test-db.js && node scripts/study-access-smoke.js",
     "test:media-access": "node scripts/ensure-test-db.js && node scripts/media-access-smoke.js",

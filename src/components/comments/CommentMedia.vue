@@ -1,11 +1,11 @@
 <template>
   <ol v-if="items.length" class="comment-media" aria-label="评论图片">
-    <li v-for="(item, index) in items" :key="item.id ?? item.url" class="comment-media__item" draggable="true" @dragstart="dragStart(index, $event)" @dragover.prevent @drop="drop(index)">
-      <button class="comment-media__preview" type="button" :aria-label="`预览图片 ${index + 1}`" @click="$emit('preview', item, index)">
-        <img :src="item.url" :alt="item.alt || item.name || `评论图片 ${index + 1}`">
+    <li v-for="(item, index) in items" :key="item.id ?? item.url" class="comment-media__item" :draggable="editable" @dragstart="dragStart(index, $event)" @dragover.prevent @drop="drop(index)">
+      <button class="comment-media__preview" type="button" :data-media-id="item.id || undefined" :aria-label="`预览图片 ${index + 1}`" @click="$emit('preview', item, index)">
+        <img :src="item.url" :alt="item.alt || item.name || `评论图片 ${index + 1}`" width="160" height="160" loading="lazy" decoding="async">
       </button>
       <span class="comment-media__position">{{ index + 1 }}</span>
-      <div class="comment-media__actions">
+      <div v-if="editable" class="comment-media__actions">
         <button class="comment-media__action" type="button" :disabled="index === 0" :aria-label="`图片 ${index + 1} 上移`" @click="$emit('move', { from: index, to: index - 1 })"><AppIcon class="comment-media__up" name="arrow-down" :size="14" /></button>
         <button class="comment-media__action" type="button" :disabled="index === items.length - 1" :aria-label="`图片 ${index + 1} 下移`" @click="$emit('move', { from: index, to: index + 1 })"><AppIcon name="arrow-down" :size="14" /></button>
         <button class="comment-media__action comment-media__remove" type="button" :aria-label="`删除图片 ${index + 1}`" @click="$emit('remove', item, index)"><AppIcon name="close" :size="14" /></button>
@@ -19,7 +19,7 @@ import { ref } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import type { CommentMediaItem } from './types'
 
-defineProps<{ items: CommentMediaItem[] }>()
+withDefaults(defineProps<{ items: CommentMediaItem[]; editable?: boolean }>(), { editable: false })
 const emit = defineEmits<{
   preview: [item: CommentMediaItem, index: number]
   remove: [item: CommentMediaItem, index: number]

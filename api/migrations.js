@@ -222,6 +222,62 @@ async function runMigrations(db) {
     )`);
     await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260830_reports_v2']);
   }
+
+  const [personalSiteDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260830_personal_site_v1']);
+  if (!personalSiteDone.length) {
+    await addColumn(db, 'posts', 'featured', 'BOOLEAN NOT NULL DEFAULT FALSE');
+    await addColumn(db, 'posts', 'featured_order', 'INT NOT NULL DEFAULT 0');
+    await addColumn(db, 'posts', 'series_id', 'BIGINT NULL');
+    await addColumn(db, 'posts', 'series_order', 'INT NULL');
+
+    await query(`CREATE TABLE IF NOT EXISTS projects (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      owner_id INT NOT NULL,
+      title VARCHAR(160) NOT NULL,
+      slug VARCHAR(180) NOT NULL,
+      summary VARCHAR(500) NULL,
+      description MEDIUMTEXT NULL,
+      cover VARCHAR(500) NULL,
+      year SMALLINT NULL,
+      role VARCHAR(120) NULL,
+      tech_stack JSON NULL,
+      github_url VARCHAR(500) NULL,
+      demo_url VARCHAR(500) NULL,
+      featured BOOLEAN NOT NULL DEFAULT FALSE,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE KEY unique_project_slug (slug),
+      KEY idx_projects_owner_featured (owner_id, featured, sort_order, id)
+    )`);
+
+    await query(`CREATE TABLE IF NOT EXISTS series (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      owner_id INT NOT NULL,
+      name VARCHAR(160) NOT NULL,
+      slug VARCHAR(180) NOT NULL,
+      description VARCHAR(1000) NULL,
+      cover VARCHAR(500) NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE KEY unique_series_slug (slug),
+      KEY idx_series_owner_order (owner_id, sort_order, id)
+    )`);
+
+    if (!await constraintExists(db, 'posts', 'fk_posts_series')) {
+      await query('ALTER TABLE posts ADD CONSTRAINT fk_posts_series FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE SET NULL');
+    }
+    if (!await indexExists(db, 'posts', 'idx_posts_series_order')) {
+      await query('CREATE INDEX idx_posts_series_order ON posts (series_id, series_order, published_at, id)');
+    }
+    if (!await indexExists(db, 'posts', 'idx_posts_featured')) {
+      await query('CREATE INDEX idx_posts_featured ON posts (featured, featured_order, published_at, id)');
+    }
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260830_personal_site_v1']);
+  }
 }
 
 async function indexExists(db, table, indexName) {

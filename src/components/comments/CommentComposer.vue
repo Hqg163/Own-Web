@@ -8,7 +8,7 @@
       </label>
     </div>
     <div v-if="active || media.length" class="comment-composer__details">
-      <CommentMedia :items="media" @preview="(item, index) => $emit('preview', item, index)" @remove="removeMedia" @move="moveMedia" />
+      <CommentMedia :items="media" :editable="true" @preview="(item, index) => $emit('preview', item, index)" @remove="removeMedia" @move="moveMedia" />
       <div class="comment-composer__footer">
         <div class="comment-composer__tools">
           <button class="comment-composer__tool" type="button" :disabled="disabled || media.length >= maxMedia" @click="fileInput?.click()"><AppIcon name="image" :size="16" />添加图片</button>
@@ -20,7 +20,7 @@
             <EmojiPicker v-model:open="emojiOpen" :categories="categories" @select="insertEmoji" />
           </div>
           <button v-if="replyingTo" class="button button-ghost comment-composer__cancel" type="button" :disabled="disabled" @click="$emit('cancel')">取消</button>
-          <button class="button button-primary comment-composer__submit" type="submit" :disabled="disabled || !modelValue.trim()">{{ submitting ? '发送中…' : replyingTo ? '发送回复' : '发表评论' }}</button>
+          <button class="button button-primary comment-composer__submit" type="submit" :disabled="disabled || (!modelValue.trim() && !media.length)">{{ submitting ? '发送中…' : replyingTo ? '发送回复' : '发表评论' }}</button>
         </div>
       </div>
     </div>
@@ -84,7 +84,7 @@ function handleTextKeydown(event: KeyboardEvent) {
 }
 
 function submit() {
-  if (props.disabled || !props.modelValue.trim()) return
+  if (props.disabled || (!props.modelValue.trim() && !props.media.length)) return
   emit('submit', { content: props.modelValue.trim(), media: [...props.media], parentId: props.replyingToId ?? null })
 }
 

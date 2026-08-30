@@ -49,6 +49,10 @@ function normalizeMediaIds(value) {
   return ids.length === value.length && ids.every(Boolean) ? ids : null;
 }
 
+function hasMeaningfulComment(content, mediaIds) {
+  return Boolean(normalizeCommentContent(content) || (Array.isArray(mediaIds) && mediaIds.length > 0));
+}
+
 function mediaUrl(id, shareToken) {
   const base = `/api/public/comment-media/${encodeURIComponent(String(id))}`;
   return shareToken ? `${base}?share=${encodeURIComponent(String(shareToken))}` : base;
@@ -69,5 +73,6 @@ module.exports = {
   normalizeCommentSort,
   normalizeCommentContent,
   normalizeMediaIds,
+  hasMeaningfulComment,
   mediaUrl
 };

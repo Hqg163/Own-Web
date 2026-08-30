@@ -8,7 +8,7 @@
         <time :datetime="view.createdAt || undefined" :title="view.absoluteTime">{{ view.relativeTime }}</time>
       </header>
       <p v-if="view.deleted" class="comment-item__deleted">这条评论已删除。</p>
-      <p v-else class="comment-item__text">{{ view.content }}</p>
+      <p v-else-if="view.content" class="comment-item__text">{{ view.content }}</p>
       <CommentMedia v-if="!view.deleted && view.media.length" :items="view.media" @preview="(item, index) => $emit('preview', item, index)" />
       <div v-if="!view.deleted" class="comment-item__actions" aria-label="评论操作">
         <button v-if="canLike" class="comment-item__action" :class="{ 'is-active': view.liked }" type="button" :aria-pressed="view.liked" @click="$emit('like', comment)">

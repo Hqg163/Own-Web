@@ -8,16 +8,16 @@
         <div v-if="post.categories?.length || post.tags?.length" class="article-taxonomy"><RouterLink v-for="category in post.categories || []" :key="category.slug" class="taxonomy-link" :to="{ path: '/explore', query: { category: category.slug } }">{{ category.name }}</RouterLink><RouterLink v-for="tag in post.tags || []" :key="tag.slug" class="taxonomy-link" :to="{ path: '/explore', query: { tag: tag.slug } }">#{{ tag.name }}</RouterLink></div>
         <h1 class="page-title">{{ post.title }}</h1>
         <div class="byline"><UserAvatar :src="post.avatar_url || post.avatar_path" :name="post.username" :size="36" /><div><RouterLink :to="`/u/${post.blog_slug}`">{{ post.username }}</RouterLink><span>{{ date(post.published_at) }} · {{ post.reading_minutes || 1 }} 分钟阅读 · {{ post.view_count || 0 }} 次阅读</span></div></div>
-        <img v-if="post.cover_image" class="cover" :src="post.cover_image" :alt="post.cover_alt_text || '文章封面'" /><p v-if="post.excerpt" class="lead">{{ post.excerpt }}</p>
-        <div ref="articleRef" class="article" v-html="html"></div>
+        <img v-if="post.cover_image" class="cover" :src="post.cover_image" :alt="post.cover_alt_text || '文章封面'" width="1280" height="720" fetchpriority="high" /><p v-if="post.excerpt" class="lead">{{ post.excerpt }}</p>
+        <div ref="articleRef" class="article article-typography" v-html="html"></div>
         <div class="article-actions" aria-label="文章操作"><button class="button" :class="{ selected: liked }" type="button" :disabled="actionPending.like" :aria-pressed="liked" @click="toggleLike"><AppIcon name="heart" :size="17" />{{ actionPending.like ? '处理中' : liked ? '已喜欢' : '喜欢' }} <span>{{ post.like_count }}</span></button><button class="button" :class="{ selected: bookmarked }" type="button" :disabled="actionPending.bookmark" :aria-pressed="bookmarked" @click="toggleBookmark"><AppIcon name="bookmark" :size="17" />{{ actionPending.bookmark ? '处理中' : bookmarked ? '取消收藏' : '收藏' }}</button><button class="button button-secondary" type="button" @click="shareArticle"><AppIcon name="external-link" :size="17" />分享</button><button class="button button-ghost" type="button" :disabled="actionPending.report || reported" @click="report"><AppIcon name="shield" :size="17" />{{ reported ? '已举报' : actionPending.report ? '提交中' : '举报' }}</button></div>
         <p v-if="actionMessage" class="action-status" :class="{ error: actionError }" role="status">{{ actionMessage }}</p>
-        <nav v-if="related.previous || related.next" class="post-nav" aria-label="前后文章"><RouterLink v-if="related.previous" :to="`/posts/${related.previous.slug}`">← {{ related.previous.title }}</RouterLink><RouterLink v-if="related.next" :to="`/posts/${related.next.slug}`">{{ related.next.title }} →</RouterLink></nav>
+        <nav v-if="related.previous || related.next" class="post-nav" aria-label="全站前后文章"><RouterLink v-if="related.previous" :to="`/posts/${related.previous.slug}`">← {{ related.previous.title }}</RouterLink><RouterLink v-if="related.next" :to="`/posts/${related.next.slug}`">{{ related.next.title }} →</RouterLink></nav>
+        <section v-if="seriesNavigation" class="series-nav card" aria-labelledby="series-nav-title"><div><p class="eyebrow">Series</p><h2 id="series-nav-title"><RouterLink :to="`/series/${seriesNavigation.slug}`">{{ seriesNavigation.name }}</RouterLink></h2><p>本系列第 {{ seriesNavigation.order || '—' }} / {{ seriesNavigation.total || '—' }} 篇</p></div><div class="series-nav-links"><RouterLink v-if="seriesNavigation.previous" :to="`/posts/${seriesNavigation.previous.slug}`">← {{ seriesNavigation.previous.title }}</RouterLink><RouterLink v-if="seriesNavigation.next" :to="`/posts/${seriesNavigation.next.slug}`">{{ seriesNavigation.next.title }} →</RouterLink></div></section>
         <section class="author-card card"><UserAvatar :src="post.avatar_url || post.avatar_path" :name="post.username" :size="48" /><div><b>{{ post.blog_title || post.username }}</b><p>{{ post.bio || '这个作者暂时还没有留下简介。' }}</p></div><RouterLink class="button button-secondary" :to="`/u/${post.blog_slug}`">查看作者主页</RouterLink></section>
-        <section v-if="related.related?.length" class="related" aria-labelledby="related-title"><h2 id="related-title">继续阅读</h2><div class="related-grid"><RouterLink v-for="item in related.related" :key="item.id" class="card related-card" :to="`/posts/${item.slug}`"><img v-if="item.cover_image" :src="item.cover_image" :alt="item.cover_alt_text || ''" /><small>{{ item.username }} · {{ date(item.published_at) }}</small><b>{{ item.title }}</b><p>{{ item.excerpt }}</p></RouterLink></div></section>
-        <section class="comments" aria-labelledby="comments-title">
-          <div class="comments-heading"><h2 id="comments-title">评论 <span>{{ commentCount }}</span></h2><p v-if="!canComment" class="muted">作者已关闭评论。</p></div>
-          <CommentSection v-if="canComment || comments.length" v-model="commentDraft" v-model:media="commentMedia" :comments="comments" :total="commentCount" :sort="commentSort" :loading="commentsLoading" :loading-more="commentsLoadingMore" :has-more-comments="hasMoreComments" :reply-limit="2" :can-comment="canComment" :logged-in="loggedIn" :current-user="currentUser" :current-user-id="currentUserId" :max-media="9" :error="commentError" @update:sort="changeCommentSort" @submit="submitCommentPayload" @reply="startReply" @cancel-reply="cancelReply" @delete="removeComment" @like="toggleCommentLike" @report="reportComment" @load-more="loadMoreComments" @load-more-replies="loadReplies" />
+        <section v-if="related.related?.length" class="related" aria-labelledby="related-title"><h2 id="related-title">继续阅读</h2><div class="related-grid"><RouterLink v-for="item in related.related" :key="item.id" class="card related-card" :to="`/posts/${item.slug}`"><img v-if="item.cover_image" :src="item.cover_image" :alt="item.cover_alt_text || ''" width="320" height="180" loading="lazy" decoding="async" /><small>{{ item.username }} · {{ date(item.published_at) }}</small><b>{{ item.title }}</b><p>{{ item.excerpt }}</p></RouterLink></div></section>
+        <section class="comments">
+          <CommentSection v-if="canComment || comments.length" v-model="commentDraft" v-model:media="commentMedia" :comments="comments" :total="commentCount" :sort="commentSort" :loading="commentsLoading" :loading-more="commentsLoadingMore" :has-more-comments="hasMoreComments" :reply-limit="2" :can-comment="canComment" :logged-in="loggedIn" :current-user="currentUser" :current-user-id="currentUserId" :max-media="9" :error="commentError" @update:sort="changeCommentSort" @submit="submitCommentPayload" @reply="startReply" @cancel-reply="cancelReply" @delete="removeComment" @like="toggleCommentLike" @report="reportComment" @load-more="loadMoreComments" @load-more-replies="loadReplies" @preview="openCommentPreview" />
           <p v-else class="comment-empty muted">暂时还没有评论。</p>
         </section>
       </article>
@@ -27,6 +27,12 @@
       </aside>
     </div>
     <ReportDialog :open="reportDialogOpen" :target-type="reportTargetType" :target-id="reportTargetId" :post-id="post?.id || 0" :target-label="reportTargetLabel" @close="closeReportDialog" @submitted="handleReportSubmitted" />
+    <div v-if="commentPreview" class="dialog-backdrop image-preview-backdrop" @click.self="closeCommentPreview">
+      <section class="dialog card image-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="comment-preview-title" tabindex="-1" @keydown.esc.stop.prevent="closeCommentPreview">
+        <div class="dialog-head"><h2 id="comment-preview-title">评论图片预览</h2><button ref="commentPreviewCloseButton" class="icon-button" type="button" aria-label="关闭图片预览" @click="closeCommentPreview">×</button></div>
+        <img class="image-preview" :src="commentPreview.url" :alt="commentPreview.alt || commentPreview.name || '评论图片'" />
+      </section>
+    </div>
     <div v-if="deleteCommentId" class="dialog-backdrop" @click.self="cancelDeleteComment"><form class="dialog card" role="dialog" aria-modal="true" aria-labelledby="delete-comment-title" @keydown.esc.stop.prevent="cancelDeleteComment" @submit.prevent="confirmDeleteComment"><div class="dialog-head"><h2 id="delete-comment-title">删除评论</h2><button class="icon-button" type="button" aria-label="关闭确认对话框" @click="cancelDeleteComment">×</button></div><p>确定删除这条评论吗？删除后会保留“评论已删除”占位。</p><div class="dialog-actions"><button class="button" type="button" @click="cancelDeleteComment">取消</button><button ref="deleteConfirmButton" class="button button-danger" type="submit">删除评论</button></div></form></div>
   </main>
 </template>
@@ -38,6 +44,7 @@ import DOMPurify from 'dompurify'
 import hljs from 'highlight.js/lib/common'
 import 'katex/dist/katex.min.css'
 import http from '@/services/http'
+import { setPageMetadata } from '@/services/metadata'
 import AppIcon from '@/components/AppIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import CommentSection from '@/components/comments/CommentSection.vue'
@@ -46,9 +53,10 @@ import { sameCommentId } from '@/components/comments/format'
 import { enhanceMermaid } from '@/utils/mermaid'
 import { enhanceMath } from '@/utils/math'
 import { collectHeadings, scrollToHeading, type TocHeading } from '@/utils/toc'
+import type { CommentMediaItem } from '@/components/comments/types'
 
 type TaxonomyItem = { name: string; slug: string }
-type Post = { id: number; title: string; username: string; blog_slug: string; avatar_url?: string | null; avatar_path?: string | null; published_at?: string | null; reading_minutes?: number; cover_image?: string | null; cover_alt_text?: string | null; excerpt?: string | null; content_html?: string | null; like_count: number; view_count?: number; bookmark_count?: number; comment_count?: number; categories?: TaxonomyItem[]; tags?: TaxonomyItem[]; viewer_liked?: boolean; viewer_bookmarked?: boolean; bio?: string | null; blog_title?: string | null }
+type Post = { id: number; title: string; username: string; blog_slug: string; avatar_url?: string | null; avatar_path?: string | null; published_at?: string | null; reading_minutes?: number; cover_image?: string | null; cover_alt_text?: string | null; excerpt?: string | null; content_html?: string | null; like_count: number; view_count?: number; bookmark_count?: number; comment_count?: number; categories?: TaxonomyItem[]; tags?: TaxonomyItem[]; viewer_liked?: boolean; viewer_bookmarked?: boolean; bio?: string | null; blog_title?: string | null; series?: { id: number; name: string; slug: string; description?: string; order?: number | null; total?: number; previous?: { title: string; slug: string } | null; next?: { title: string; slug: string } | null } | null }
 type Comment = { id: number; post_id?: number; parent_id?: number | null; root_comment_id?: number | null; reply_to_comment_id?: number | null; author_id?: number | null; username: string; blog_slug?: string | null; avatar_url?: string | null; content: string; created_at: string; deleted_at?: string | null; like_count?: number; viewer_liked?: boolean; replies?: Comment[]; has_more_replies?: boolean }
 
 const route = useRoute()
@@ -57,6 +65,7 @@ const comments = ref<Comment[]>([])
 const commentCount = ref(0)
 const commentSort = ref<'newest' | 'oldest' | 'popular'>('newest')
 const related = ref<any>({ related: [], previous: null, next: null })
+const seriesDetail = ref<any>(null)
 const articleRef = ref<HTMLElement>()
 const loading = ref(true)
 const commentsLoading = ref(false)
@@ -85,10 +94,35 @@ const tocWrap = ref<HTMLElement>()
 const deleteCommentId = ref<number | null>(null)
 const deleteConfirmButton = ref<HTMLButtonElement>()
 const actionPending = ref({ like: false, bookmark: false, report: false })
+const commentPreview = ref<CommentMediaItem | null>(null)
+const commentPreviewReturn = ref<HTMLElement | null>(null)
+const commentPreviewReturnSelector = ref('')
+const commentPreviewCloseButton = ref<HTMLButtonElement | null>(null)
 const loggedIn = computed(() => localStorage.getItem('isLoggedIn') === 'true')
 const currentUserId = Number(JSON.parse(localStorage.getItem('userInfo') || '{}').id) || 0
 const currentUser = JSON.parse(localStorage.getItem('userInfo') || '{}')
-const html = computed(() => DOMPurify.sanitize(post.value?.content_html || '', { ADD_TAGS: ['audio', 'video', 'figure', 'figcaption', 'details', 'summary', 'pre', 'code', 'aside', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a', 'img', 'div', 'span'], ADD_ATTR: ['controls', 'src', 'href', 'download', 'target', 'rel', 'alt', 'title', 'data-callout', 'data-gallery', 'data-bookmark-card', 'data-embed', 'data-language', 'data-math', 'data-mermaid', 'style', 'loading'] }))
+const seriesNavigation = computed(() => {
+  const base = post.value?.series
+  if (!base) return null
+  const articles = Array.isArray(seriesDetail.value?.articles) ? seriesDetail.value.articles : []
+  const index = articles.findIndex((article: any) => Number(article.id) === Number(post.value?.id))
+  return { ...base, order: base.order || (index >= 0 ? index + 1 : null), total: base.total || articles.length || null, previous: index > 0 ? articles[index - 1] : null, next: index >= 0 && index < articles.length - 1 ? articles[index + 1] : null }
+})
+function normalizeArticleHeadings(value: string) {
+  if (typeof document === 'undefined') return value.replace(/<h1(\s[^>]*)?>/gi, '<h2$1>').replace(/<\/h1>/gi, '</h2>')
+  const template = document.createElement('template')
+  template.innerHTML = value
+  template.content.querySelectorAll('h1').forEach((heading) => {
+    const replacement = document.createElement('h2')
+    replacement.dataset.sourceHeading = 'h1'
+    replacement.className = 'article-source-h1'
+    for (const attribute of [...heading.attributes]) replacement.setAttribute(attribute.name, attribute.value)
+    replacement.innerHTML = heading.innerHTML
+    heading.replaceWith(replacement)
+  })
+  return template.innerHTML
+}
+const html = computed(() => DOMPurify.sanitize(normalizeArticleHeadings(post.value?.content_html || ''), { ADD_TAGS: ['audio', 'video', 'figure', 'figcaption', 'details', 'summary', 'pre', 'code', 'aside', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a', 'img', 'div', 'span'], ADD_ATTR: ['controls', 'src', 'href', 'download', 'target', 'rel', 'alt', 'title', 'data-callout', 'data-gallery', 'data-bookmark-card', 'data-embed', 'data-language', 'data-math', 'data-mermaid', 'data-source-heading', 'style', 'loading', 'decoding', 'width', 'height'] }))
 const requiresLogin = computed(() => error.value.includes('登录'))
 const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.fullPath } }))
 const date = (value: string | null | undefined) => { if (!value) return '刚刚'; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? '刚刚' : new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(parsed) }
@@ -101,7 +135,7 @@ async function loadComments(append = false) { if (!post.value) return; if (appen
 async function loadMoreComments() { if (!commentsLoadingMore.value && hasMoreComments.value) await loadComments(true) }
 async function changeCommentSort(sort: string) { if (sort === 'oldest' || sort === 'popular' || sort === 'newest') { commentSort.value = sort; await loadComments() } }
 async function loadReplies(comment: any) { try { const key = String(comment.id); const cursor = replyCursors.value[key]; const response = await http.get(`/api/comments/${comment.id}/replies`, { params: { pageSize: 20, ...(cursor ? { cursor } : {}), ...(shareConfig().params || {}) } }); const incoming = normalizeCommentItems(response.data?.items); const existing = Array.isArray(comment.replies) ? comment.replies : comments.value.filter((item) => sameCommentId(item.parent_id, comment.id)); const merged = new Map([...existing, ...incoming].map((item) => [String(item.id), item])); comment.replies = [...merged.values()]; replyCursors.value[key] = response.data?.nextCursor || null; comment.has_more_replies = Boolean(response.data?.nextCursor) } catch (e: any) { commentError.value = e.response?.data?.error?.message || '回复暂时无法载入。' } }
-async function submitCommentPayload(payload: { content: string; media?: Array<{ id?: number; file?: File }>; parentId?: number | string | null }) { if (!post.value || !payload.content?.trim() || !canComment.value) return; try { const mediaIds = (payload.media || []).filter((item) => item.id).map((item) => Number(item.id)); const localFiles = (payload.media || []).filter((item) => item.file).map((item) => item.file as File); if (localFiles.length) { const form = new FormData(); localFiles.slice(0, 9).forEach((file) => form.append('images', file)); const uploaded = await http.post(`/api/posts/${post.value.id}/comment-media`, form, { ...shareConfig(), headers: { 'Content-Type': 'multipart/form-data' } }); mediaIds.push(...(uploaded.data?.items || []).map((item: any) => Number(item.id)).filter((id: number) => Number.isInteger(id) && id > 0)) } await http.post(`/api/posts/${post.value.id}/comments`, { content: payload.content.trim(), parentId: payload.parentId || null, mediaIds }, shareConfig()); commentDraft.value = ''; commentMedia.value = []; await loadComments(); setActionMessage('评论已发布。') } catch (e: any) { commentError.value = e.response?.data?.error?.message || '评论未发布，请稍后重试。' } }
+async function submitCommentPayload(payload: { content: string; media?: Array<{ id?: number; file?: File }>; parentId?: number | string | null }) { const content = String(payload.content || '').trim(); const media = payload.media || []; if (!post.value || (!content && !media.length) || !canComment.value) return; try { const mediaIds = media.filter((item) => item.id).map((item) => Number(item.id)); const localFiles = media.filter((item) => item.file).map((item) => item.file as File); if (localFiles.length) { const form = new FormData(); localFiles.slice(0, 9).forEach((file) => form.append('images', file)); const uploaded = await http.post(`/api/posts/${post.value.id}/comment-media`, form, { ...shareConfig(), headers: { 'Content-Type': 'multipart/form-data' } }); mediaIds.push(...(uploaded.data?.items || []).map((item: any) => Number(item.id)).filter((id: number) => Number.isInteger(id) && id > 0)) } await http.post(`/api/posts/${post.value.id}/comments`, { content, parentId: payload.parentId || null, mediaIds }, shareConfig()); commentDraft.value = ''; commentMedia.value = []; await loadComments(); setActionMessage('评论已发布。') } catch (e: any) { commentError.value = e.response?.data?.error?.message || '评论未发布，请稍后重试。' } }
 function startReply() { if (!loggedIn.value) login() }
 function cancelReply() { commentDraft.value = ''; commentMedia.value = [] }
 async function toggleCommentLike(comment: any) { if (!loggedIn.value) return login(); try { if (comment.viewer_liked) { await http.delete(`/api/comments/${comment.id}/like`); comment.viewer_liked = false; comment.like_count = Math.max(0, Number(comment.like_count || 0) - 1) } else { await http.post(`/api/comments/${comment.id}/like`); comment.viewer_liked = true; comment.like_count = Number(comment.like_count || 0) + 1 } } catch (e: any) { commentError.value = e.response?.data?.error?.message || '评论互动未完成。' } }
@@ -112,16 +146,39 @@ async function removeComment(comment: any) { deleteCommentId.value = Number(comm
 function cancelDeleteComment() { deleteCommentId.value = null }
 async function confirmDeleteComment() { const id = deleteCommentId.value; if (!id) return; deleteCommentId.value = null; try { await http.delete(`/api/comments/${id}`); await loadComments(); setActionMessage('评论已删除。') } catch (e: any) { commentError.value = e.response?.data?.error?.message || '删除未完成，请稍后重试。' } }
 
-function enhance() { const root = articleRef.value; if (!root) return; toc.value = collectHeadings(root); enhanceMermaid(root); root.querySelectorAll('pre code').forEach((element) => { if (element.closest('.mermaid-container') || element.classList.contains('language-mermaid')) return; try { hljs.highlightElement(element as HTMLElement) } catch (_) {} }); root.querySelectorAll('pre').forEach((pre) => { if (pre.querySelector('.copy-code')) return; const button = document.createElement('button'); button.className = 'copy-code button button-secondary'; button.type = 'button'; button.textContent = '复制代码'; button.addEventListener('click', async () => { await navigator.clipboard?.writeText(pre.querySelector('code')?.textContent || ''); button.textContent = '已复制'; window.setTimeout(() => { button.textContent = '复制代码' }, 1400) }); pre.appendChild(button) }); enhanceMath(root); setupHeadingObserver(root); window.setTimeout(restoreHash, 0) }
+function enhance() { const root = articleRef.value; if (!root) return; const elements = [...root.querySelectorAll<HTMLElement>('h1,h2,h3,h4')]; toc.value = collectHeadings(root).filter((item, index) => item.level >= 2 && !elements[index]?.classList.contains('article-source-h1')); enhanceMermaid(root); root.querySelectorAll('pre code').forEach((element) => { if (element.closest('.mermaid-container') || element.classList.contains('language-mermaid')) return; try { hljs.highlightElement(element as HTMLElement) } catch (_) {} }); root.querySelectorAll('pre').forEach((pre) => { if (pre.querySelector('.copy-code')) return; const button = document.createElement('button'); button.className = 'copy-code button button-secondary'; button.type = 'button'; button.textContent = '复制代码'; button.addEventListener('click', async () => { await navigator.clipboard?.writeText(pre.querySelector('code')?.textContent || ''); button.textContent = '已复制'; window.setTimeout(() => { button.textContent = '复制代码' }, 1400) }); pre.appendChild(button) }); enhanceMath(root); setupHeadingObserver(root); window.setTimeout(restoreHash, 0) }
 let headingObserver: IntersectionObserver | null = null
-function setupHeadingObserver(root: HTMLElement) { headingObserver?.disconnect(); if (typeof IntersectionObserver === 'undefined') return; headingObserver = new IntersectionObserver((entries) => { const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]; if (visible) activeHeading.value = (visible.target as HTMLElement).id }, { rootMargin: '-96px 0px -65% 0px', threshold: [0, 1] }); root.querySelectorAll('h1,h2,h3,h4').forEach((heading) => headingObserver?.observe(heading)) }
-function jumpTo(id: string, pushHistory = true) { const heading = document.getElementById(id); if (!heading) return; const previousHash = window.location.hash; if (pushHistory && previousHash !== `#${id}`) history.pushState(null, '', `#${id}`); if (!scrollToHeading(id, { behavior: 'smooth' })) return; activeHeading.value = id }
+function setupHeadingObserver(root: HTMLElement) { headingObserver?.disconnect(); if (typeof IntersectionObserver === 'undefined') return; headingObserver = new IntersectionObserver((entries) => { const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]; if (visible) activeHeading.value = (visible.target as HTMLElement).id }, { rootMargin: '-96px 0px -65% 0px', threshold: [0, 1] }); root.querySelectorAll('h2,h3,h4').forEach((heading) => headingObserver?.observe(heading)) }
+function jumpTo(id: string, pushHistory = true) { const heading = document.getElementById(id); if (!heading) return; const previousHash = window.location.hash; if (pushHistory && previousHash !== `#${id}`) history.pushState(null, '', `#${id}`); const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches; if (!scrollToHeading(id, { behavior: reducedMotion ? 'auto' : 'smooth' })) return; activeHeading.value = id }
 function restoreHash() { const id = decodeURIComponent(route.hash.replace(/^#/, '') || window.location.hash.replace(/^#/, '')); if (id && document.getElementById(id)) jumpTo(id, false) }
 function handleHashChange() { restoreHash() }
 function handlePopState() { restoreHash() }
 function scrollActiveTocItem(id: string) { const container = tocWrap.value; if (!container || !id) return; const item = [...container.querySelectorAll<HTMLAnchorElement>('.toc a')].find((link) => link.getAttribute('href') === `#${id}`); item?.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }
-function setMetadata() { if (!post.value) return; document.title = `${post.value.title} · Own-Web`; const description = post.value.excerpt || ''; const metadata: Array<[string, string]> = [['description', description], ['og:title', post.value.title], ['og:description', description], ['og:type', 'article'], ['og:url', window.location.href], ['og:image', post.value.cover_image || '']]; for (const [property, content] of metadata) { let meta = document.head.querySelector(`meta[property="${property}"],meta[name="${property}"]`) as HTMLMetaElement | null; if (!meta) { meta = document.createElement('meta'); meta.setAttribute(property.startsWith('og:') ? 'property' : 'name', property); document.head.appendChild(meta) } meta.content = content } }
-async function load() { loading.value = true; error.value = ''; commentError.value = ''; actionMessage.value = ''; try { const response = await http.get(`/api/public/posts/${route.params.slug}`, shareConfig()); post.value = response.data.post; canComment.value = Boolean(response.data.canComment); liked.value = Boolean(post.value?.viewer_liked); bookmarked.value = Boolean(post.value?.viewer_bookmarked); commentCount.value = Number(post.value?.comment_count || 0); await Promise.all([loadComments(), http.get(`/api/public/posts/${route.params.slug}/related`).then((response) => { related.value = response.data }).catch(() => {})]); setMetadata(); loading.value = false; await nextTick(); enhance() } catch (e: any) { error.value = e.response?.data?.error?.message || '文章不可用' } finally { loading.value = false } }
+async function openCommentPreview(item: CommentMediaItem) {
+  commentPreviewReturn.value = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  commentPreviewReturnSelector.value = item.id ? `.comment-media__preview[data-media-id="${CSS.escape(String(item.id))}"]` : '.comment-media__preview'
+  commentPreview.value = item
+  await nextTick()
+  commentPreviewCloseButton.value?.focus()
+}
+function closeCommentPreview() {
+  const target = commentPreviewReturn.value
+  commentPreview.value = null
+  nextTick(() => {
+    const restore = () => {
+      const selectedTarget = commentPreviewReturnSelector.value ? document.querySelector<HTMLButtonElement>(commentPreviewReturnSelector.value) : null
+      if (selectedTarget) selectedTarget.focus({ preventScroll: true })
+      else if (target?.isConnected) target.focus({ preventScroll: true })
+      else document.querySelector<HTMLButtonElement>('.comment-media__preview')?.focus({ preventScroll: true })
+      commentPreviewReturn.value = null
+      commentPreviewReturnSelector.value = ''
+    }
+    restore()
+    window.setTimeout(restore, 0)
+  })
+}
+function setMetadata() { if (!post.value) return; const description = post.value.excerpt || `${post.value.username} 的公开文章`; setPageMetadata({ title: `${post.value.title} · Own-Web`, description, canonical: window.location.href, type: 'article', image: post.value.cover_image, jsonLd: { '@context': 'https://schema.org', '@type': 'BlogPosting', headline: post.value.title, description, url: window.location.href, datePublished: post.value.published_at, author: { '@type': 'Person', name: post.value.username, url: `${window.location.origin}/u/${encodeURIComponent(post.value.blog_slug)}` }, image: post.value.cover_image ? new URL(post.value.cover_image, window.location.origin).toString() : undefined } }) }
+async function load() { loading.value = true; error.value = ''; commentError.value = ''; actionMessage.value = ''; seriesDetail.value = null; try { const response = await http.get(`/api/public/posts/${route.params.slug}`, shareConfig()); post.value = response.data.post; canComment.value = Boolean(response.data.canComment); liked.value = Boolean(post.value?.viewer_liked); bookmarked.value = Boolean(post.value?.viewer_bookmarked); commentCount.value = Number(post.value?.comment_count || 0); await Promise.all([loadComments(), http.get(`/api/public/posts/${route.params.slug}/related`).then((response) => { related.value = response.data }).catch(() => {}), post.value?.series?.slug ? http.get(`/api/public/series/${post.value.series.slug}`).then((response) => { seriesDetail.value = response.data.series }).catch(() => {}) : Promise.resolve()]); setMetadata(); loading.value = false; await nextTick(); enhance() } catch (e: any) { error.value = e.response?.data?.error?.message || '文章不可用' } finally { loading.value = false } }
 async function toggleLike() { if (!loggedIn.value) return login(); if (!post.value || actionPending.value.like) return; actionPending.value.like = true; const wasLiked = liked.value; const oldCount = post.value.like_count; try { if (wasLiked) { await http.delete(`/api/posts/${post.value.id}/like`, shareConfig()); liked.value = false; post.value.like_count = Math.max(0, oldCount - 1); setActionMessage('已取消喜欢。') } else { await http.post(`/api/posts/${post.value.id}/like`, {}, shareConfig()); liked.value = true; post.value.like_count = oldCount + 1; setActionMessage('已喜欢这篇文章。') } } catch (e: any) { liked.value = wasLiked; post.value.like_count = oldCount; setActionMessage(e.response?.data?.error?.message || '操作未完成，请稍后重试。', true) } finally { actionPending.value.like = false } }
 async function toggleBookmark() { if (!loggedIn.value) return login(); if (!post.value || actionPending.value.bookmark) return; actionPending.value.bookmark = true; const old = bookmarked.value; try { if (old) { await http.delete(`/api/posts/${post.value.id}/bookmark`, shareConfig()); bookmarked.value = false; setActionMessage('已取消收藏。') } else { await http.post(`/api/posts/${post.value.id}/bookmark`, {}, shareConfig()); bookmarked.value = true; setActionMessage('已收藏到你的工作台。') } } catch (e: any) { bookmarked.value = old; setActionMessage(e.response?.data?.error?.message || '收藏未完成，请稍后重试。', true) } finally { actionPending.value.bookmark = false } }
 async function shareArticle() { try { await navigator.clipboard.writeText(window.location.href); setActionMessage('文章链接已复制。') } catch (_) { setActionMessage('请从浏览器地址栏复制文章链接。') } }
@@ -136,5 +193,80 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); window.removeEventListene
 </script>
 
 <style scoped>
-.reading{max-width:1180px;position:relative}.reading-progress{position:fixed;z-index:10;top:0;left:0;height:3px;background:var(--accent);transition:width .1s linear}.article-layout{display:grid;grid-template-columns:minmax(0,820px) 220px;justify-content:center;gap:var(--space-7)}.page-title{font-size:clamp(2.1rem,6vw,3.5rem);line-height:1.16}.article-taxonomy{display:flex;flex-wrap:wrap;gap:var(--space-1);margin-bottom:var(--space-3)}.taxonomy-link{padding:2px var(--space-2);border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:.8rem;text-decoration:none}.byline{display:flex;align-items:center;gap:var(--space-2);color:var(--muted);font-size:.9rem}.byline>div{display:grid;gap:2px}.byline span{color:var(--subtle)}.byline a{color:var(--accent);font-weight:700}.cover{width:100%;max-height:440px;object-fit:cover;border-radius:var(--radius);margin:var(--space-6) 0}.lead{font-size:1.18rem;color:var(--muted);border-left:3px solid var(--accent);padding-left:var(--space-4)}.article{font-size:1.05rem;line-height:1.85;overflow-wrap:anywhere}.article :deep(h2),.article :deep(h3),.article :deep(h4){scroll-margin-top:88px}.article :deep(img){max-width:100%;height:auto}.article :deep(figure){max-width:var(--media-width,100%);margin:var(--space-5) auto}.article :deep(figure[data-align="left"]){margin-left:0}.article :deep(figure[data-align="right"]){margin-right:0}.article :deep(pre){position:relative;overflow:auto;padding:var(--space-4);background:var(--code-surface);border:1px solid var(--border);border-radius:var(--radius-sm)}.article :deep(.copy-code){position:absolute;top:var(--space-2);right:var(--space-2);min-height:30px;padding:0 var(--space-2);font-size:.75rem}.article :deep(blockquote){margin-left:0;padding-left:var(--space-4);border-left:3px solid var(--border);color:var(--muted)}.article :deep(table){display:block;max-width:100%;overflow:auto;border-collapse:collapse}.article :deep(th),.article :deep(td){padding:var(--space-2);border:1px solid var(--border);text-align:left}.article :deep(aside[data-callout]){margin:var(--space-4) 0;padding:var(--space-3);border-left:3px solid var(--accent);border-radius:var(--radius-sm);background:var(--accent-soft)}.article :deep(details){margin:var(--space-4) 0;padding:var(--space-3);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-raised)}.article :deep(details summary){cursor:pointer;color:var(--accent);font-weight:700}.article :deep([data-gallery]){display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--space-3);margin:var(--space-5) 0}.article :deep([data-gallery] figure){margin:0}.article :deep(audio),.article :deep(video){display:block;width:100%;max-width:100%}.article :deep(figcaption){margin-top:var(--space-2);color:var(--muted);font-size:.9rem}.article :deep([data-bookmark-card]){display:grid;gap:4px;margin:var(--space-4) 0;padding:var(--space-3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--accent);text-decoration:none}.article :deep(.math-inline),.article :deep(.math-block){overflow:auto}.article :deep(.math-block){margin:var(--space-4) 0;padding:var(--space-3);text-align:center;background:var(--surface-raised);border-radius:var(--radius-sm)}.toc-wrap{align-self:start;position:sticky;top:88px;max-height:calc(100vh - 112px);overflow-y:auto;min-height:0}.toc{display:grid;gap:var(--space-2);padding:var(--space-3);font-size:.82rem}.toc a,.toc-mobile a{color:var(--muted);text-decoration:none}.toc a:hover,.toc a.active,.toc-mobile a:hover,.toc-mobile a.active{color:var(--accent);font-weight:700}.toc-level-3,.toc-level-4{padding-left:var(--space-2);font-size:.78rem}.toc-mobile{display:none}.toc-mobile summary{cursor:pointer;font-weight:700}.toc-mobile summary span{color:var(--subtle);font-weight:500}.toc-mobile nav{display:grid;gap:var(--space-2);padding-top:var(--space-2)}.article-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);border-top:1px solid var(--border);padding-top:var(--space-5);margin-top:var(--space-6)}.article-actions .selected{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong)}.action-status{margin:var(--space-2) 0;color:var(--muted);font-size:.9rem}.action-status.error,.error{color:var(--danger)}.post-nav{display:flex;justify-content:space-between;gap:var(--space-3);margin-top:var(--space-6);padding-top:var(--space-4);border-top:1px solid var(--border)}.post-nav a{max-width:48%;color:var(--accent);text-decoration:none}.author-card{display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-6);padding:var(--space-4)}.author-card div{min-width:0;flex:1}.author-card p{margin:var(--space-1) 0 0;color:var(--muted)}.author-card .button{flex:none}.related{margin-top:var(--space-7)}.related h2{font-size:1.25rem}.related-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-3)}.related-card{display:grid;gap:var(--space-1);padding:var(--space-3);color:inherit;text-decoration:none}.related-card img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:var(--radius-sm)}.related-card small,.related-card p{color:var(--muted)}.related-card p{margin:0;display:-webkit-box;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}.comments{margin-top:var(--space-8)}.comments-heading{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3)}.comments h2{margin:0}.comments h2 span{color:var(--subtle);font-size:1rem;font-weight:500}.comment-empty{margin-top:var(--space-4)}.dialog-backdrop{position:fixed;z-index:30;inset:0;display:grid;place-items:center;padding:var(--space-4);background:var(--scrim)}.dialog{width:min(560px,100%);padding:var(--space-5);background:var(--surface)}.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3)}.dialog-head h2{margin:0;font-size:1.2rem}.dialog-actions{display:flex;justify-content:flex-end;gap:var(--space-2);margin-top:var(--space-4)}@media(max-width:900px){.article-layout{grid-template-columns:1fr}.toc-wrap{position:static;top:auto;max-height:none;overflow:visible}.toc{display:none}.toc-mobile{display:block;margin-top:var(--space-5)}.related-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:640px){.article-actions .button{flex:1}.comments-heading{align-items:start;flex-direction:column}.author-card{align-items:start;flex-wrap:wrap}.author-card .button{width:100%}.related-grid{grid-template-columns:1fr}.post-nav{align-items:stretch;flex-direction:column}.post-nav a{max-width:100%}}
+.reading { max-width: 1180px; position: relative; }
+.reading-progress { position: fixed; z-index: 10; top: 0; left: 0; height: 3px; background: var(--accent); transition: width .1s linear; }
+.article-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 220px); width: 100%; max-width: 1080px; margin: 0 auto; justify-content: center; gap: var(--space-7); min-width: 0; }
+.article-layout > article { min-width: 0; }
+.page-title { font-size: clamp(2.1rem, 6vw, 3.5rem); line-height: 1.16; }
+.article-taxonomy { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-3); }
+.taxonomy-link { padding: 2px var(--space-2); border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .8rem; text-decoration: none; }
+.byline { display: flex; align-items: center; gap: var(--space-2); color: var(--muted); font-size: .9rem; }
+.byline > div { display: grid; gap: 2px; min-width: 0; }
+.byline span { color: var(--subtle); }
+.byline a { color: var(--accent); font-weight: 700; }
+.cover { display: block; width: 100%; max-height: 440px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); margin: var(--space-6) 0; }
+.lead { font-size: 1.18rem; color: var(--muted); border-left: 3px solid var(--accent); padding-left: var(--space-4); }
+.article :deep(.copy-code) { position: absolute; top: var(--space-2); right: var(--space-2); min-height: 30px; padding: 0 var(--space-2); font-size: .75rem; }
+.toc-wrap { align-self: start; position: sticky; top: 88px; max-height: calc(100vh - 220px); overflow-y: auto; min-height: 0; }
+.toc { display: grid; gap: var(--space-2); padding: var(--space-3); font-size: .82rem; }
+.toc a, .toc-mobile a { color: var(--muted); text-decoration: none; }
+.toc a:hover, .toc a.active, .toc-mobile a:hover, .toc-mobile a.active { color: var(--accent); font-weight: 700; }
+.toc-level-3, .toc-level-4 { padding-left: var(--space-2); font-size: .78rem; }
+.toc-mobile { display: none; }
+.toc-mobile summary { cursor: pointer; font-weight: 700; }
+.toc-mobile summary span { color: var(--subtle); font-weight: 500; }
+.toc-mobile nav { display: grid; gap: var(--space-2); padding-top: var(--space-2); }
+.article-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); border-top: 1px solid var(--border); padding-top: var(--space-5); margin-top: var(--space-6); }
+.article-actions .selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
+.action-status { margin: var(--space-2) 0; color: var(--muted); font-size: .9rem; }
+.action-status.error, .error { color: var(--danger); }
+.post-nav { display: flex; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+.post-nav a { max-width: 48%; color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+.series-nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-4); padding: var(--space-4); }
+.series-nav h2 { margin: var(--space-1) 0; font-size: 1.05rem; }
+.series-nav h2 a, .series-nav-links a { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+.series-nav p { margin: 0; color: var(--muted); font-size: .88rem; }
+.series-nav-links { display: flex; flex-wrap: wrap; justify-content: end; gap: var(--space-3); max-width: 52%; text-align: right; }
+.author-card { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-6); padding: var(--space-4); }
+.author-card div { min-width: 0; flex: 1; }
+.author-card p { margin: var(--space-1) 0 0; color: var(--muted); }
+.author-card .button { flex: none; }
+.related { margin-top: var(--space-7); }
+.related h2 { font-size: 1.25rem; }
+.related-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.related-card { display: grid; min-width: 0; gap: var(--space-1); padding: var(--space-3); color: inherit; text-decoration: none; }
+.related-card img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-sm); }
+.related-card small, .related-card p { color: var(--muted); }
+.related-card p { margin: 0; display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.comments { margin-top: var(--space-8); min-width: 0; }
+.comments-heading { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.comments h2 { margin: 0; }
+.comments h2 span { color: var(--subtle); font-size: 1rem; font-weight: 500; }
+.comment-empty { margin-top: var(--space-4); }
+.dialog-backdrop { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; padding: var(--space-4); background: var(--scrim); }
+.dialog { width: min(560px, 100%); padding: var(--space-5); background: var(--surface); }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.dialog-head h2 { margin: 0; font-size: 1.2rem; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
+.image-preview-dialog { width: min(960px, 100%); max-height: calc(100vh - 32px); overflow: auto; }
+.image-preview { display: block; width: 100%; max-height: calc(100vh - 132px); margin-top: var(--space-4); object-fit: contain; }
+@media (max-width: 900px) {
+  .article-layout { grid-template-columns: 1fr; }
+  .toc-wrap { position: static; top: auto; max-height: none; overflow: visible; }
+  .toc { display: none; }
+  .toc-mobile { display: block; margin-top: var(--space-5); }
+  .related-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .article-actions .button { flex: 1; }
+  .comments-heading { align-items: start; flex-direction: column; }
+  .author-card { align-items: start; flex-wrap: wrap; }
+  .author-card .button { width: 100%; }
+  .related-grid { grid-template-columns: 1fr; }
+  .post-nav { align-items: stretch; flex-direction: column; }
+  .post-nav a { max-width: 100%; }
+  .series-nav { align-items: start; flex-direction: column; }
+  .series-nav-links { justify-content: start; max-width: 100%; text-align: left; }
+  .image-preview-dialog { padding: var(--space-3); }
+}
 </style>
