@@ -30,6 +30,7 @@
             <RouterLink role="menuitem" to="/dashboard/notifications">通知</RouterLink>
             <RouterLink role="menuitem" to="/dashboard/reports">我的举报</RouterLink>
             <RouterLink role="menuitem" to="/settings">设置</RouterLink>
+            <RouterLink role="menuitem" to="/ai">AI 助手</RouterLink>
             <RouterLink role="menuitem" to="/dashboard">工作台</RouterLink>
             <button role="menuitem" type="button" @click="logout">退出登录</button>
           </div>
@@ -60,6 +61,7 @@ const links = computed(() => [
   { label: '探索', to: '/explore' },
   { label: '项目', to: '/projects' },
   { label: '关于', to: '/about' },
+  { label: 'AI', to: '/ai' },
   ...(loggedIn.value ? [{ label: '创作中心', to: '/creation' }] : []),
 ])
 

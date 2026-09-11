@@ -3,6 +3,7 @@
   <div class="app-shell">
     <NavigationBar />
     <router-view class="page" />
+    <AiPanel />
     <footer class="site-footer">
       <div class="container footer-inner">
         <p class="footer-copy">© {{ year }} Own-Web</p>
@@ -22,6 +23,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import NavigationBar from '../NavigationBar.vue'
+import AiPanel from '../ai/AiPanel.vue'
 const year = new Date().getFullYear()
 </script>
 

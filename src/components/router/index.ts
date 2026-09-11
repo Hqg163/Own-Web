@@ -14,6 +14,7 @@ const routes: RouteRecordRaw[] = [{ path: '/', component: Layout, children: [
   { path:'u/:username/posts', name:'ProfilePosts', component:()=>import('../views/Profile.vue') },
   { path:'about/site', name:'AboutSite', component:()=>import('../views/AboutSite.vue') },
   { path:'about', name:'About', component:()=>import('../views/About.vue') },
+  { path:'ai', name:'Ai', component:()=>import('../views/AiPage.vue') },
   { path:'creation', name:'Creation', component:()=>import('../views/Creation.vue'), meta:protectedMeta },
   { path:'creation/projects', name:'ProjectManager', component:()=>import('../views/ProjectManager.vue'), meta:protectedMeta },
   { path:'creation/series', name:'SeriesManager', component:()=>import('../views/SeriesManager.vue'), meta:protectedMeta },

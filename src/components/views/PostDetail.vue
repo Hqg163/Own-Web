@@ -9,7 +9,8 @@
         <h1 class="page-title">{{ post.title }}</h1>
         <div class="byline"><UserAvatar :src="post.avatar_url || post.avatar_path" :name="post.username" :size="36" /><div><RouterLink :to="`/u/${post.blog_slug}`">{{ post.username }}</RouterLink><span>{{ date(post.published_at) }} · {{ post.reading_minutes || 1 }} 分钟阅读 · {{ post.view_count || 0 }} 次阅读</span></div></div>
         <img v-if="post.cover_image" class="cover" :src="post.cover_image" :alt="post.cover_alt_text || '文章封面'" width="1280" height="720" fetchpriority="high" /><p v-if="post.excerpt" class="lead">{{ post.excerpt }}</p>
-        <div ref="articleRef" class="article article-typography" v-html="html"></div>
+        <div ref="articleRef" class="article article-typography" v-html="html" @mouseup="captureSelection" @keyup="captureSelection"></div>
+        <button v-if="selectionAsk" ref="selectionAskButton" class="selection-ask-ai" type="button" :style="{ top: `${selectionAsk.top}px`, left: `${selectionAsk.left}px` }" @click="askSelection"><AppIcon name="sparkles" :size="16" />询问 AI</button>
         <div class="article-actions" aria-label="文章操作"><button class="button" :class="{ selected: liked }" type="button" :disabled="actionPending.like" :aria-pressed="liked" @click="toggleLike"><AppIcon name="heart" :size="17" />{{ actionPending.like ? '处理中' : liked ? '已喜欢' : '喜欢' }} <span>{{ post.like_count }}</span></button><button class="button" :class="{ selected: bookmarked }" type="button" :disabled="actionPending.bookmark" :aria-pressed="bookmarked" @click="toggleBookmark"><AppIcon name="bookmark" :size="17" />{{ actionPending.bookmark ? '处理中' : bookmarked ? '取消收藏' : '收藏' }}</button><button class="button button-secondary" type="button" @click="shareArticle"><AppIcon name="external-link" :size="17" />分享</button><button class="button button-ghost" type="button" :disabled="actionPending.report || reported" @click="report"><AppIcon name="shield" :size="17" />{{ reported ? '已举报' : actionPending.report ? '提交中' : '举报' }}</button></div>
         <p v-if="actionMessage" class="action-status" :class="{ error: actionError }" role="status">{{ actionMessage }}</p>
         <nav v-if="related.previous || related.next" class="post-nav" aria-label="全站前后文章"><RouterLink v-if="related.previous" :to="`/posts/${related.previous.slug}`">← {{ related.previous.title }}</RouterLink><RouterLink v-if="related.next" :to="`/posts/${related.next.slug}`">{{ related.next.title }} →</RouterLink></nav>
@@ -54,6 +55,7 @@ import { enhanceMermaid } from '@/utils/mermaid'
 import { enhanceMath } from '@/utils/math'
 import { collectHeadings, scrollToHeading, type TocHeading } from '@/utils/toc'
 import type { CommentMediaItem } from '@/components/comments/types'
+import { useAi } from '@/services/ai'
 
 type TaxonomyItem = { name: string; slug: string }
 type Post = { id: number; title: string; username: string; blog_slug: string; avatar_url?: string | null; avatar_path?: string | null; published_at?: string | null; reading_minutes?: number; cover_image?: string | null; cover_alt_text?: string | null; excerpt?: string | null; content_html?: string | null; like_count: number; view_count?: number; bookmark_count?: number; comment_count?: number; categories?: TaxonomyItem[]; tags?: TaxonomyItem[]; viewer_liked?: boolean; viewer_bookmarked?: boolean; bio?: string | null; blog_title?: string | null; series?: { id: number; name: string; slug: string; description?: string; order?: number | null; total?: number; previous?: { title: string; slug: string } | null; next?: { title: string; slug: string } | null } | null }
@@ -67,6 +69,9 @@ const commentSort = ref<'newest' | 'oldest' | 'popular'>('newest')
 const related = ref<any>({ related: [], previous: null, next: null })
 const seriesDetail = ref<any>(null)
 const articleRef = ref<HTMLElement>()
+const ai = useAi()
+const selectionAsk = ref<{ text: string; top: number; left: number; heading: string; anchor: string } | null>(null)
+const selectionAskButton = ref<HTMLButtonElement | null>(null)
 const loading = ref(true)
 const commentsLoading = ref(false)
 const commentsLoadingMore = ref(false)
@@ -127,6 +132,29 @@ const requiresLogin = computed(() => error.value.includes('登录'))
 const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.fullPath } }))
 const date = (value: string | null | undefined) => { if (!value) return '刚刚'; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? '刚刚' : new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(parsed) }
 const shareConfig = () => route.query.share ? { params: { share: String(route.query.share) } } : {}
+
+function captureSelection() {
+  window.setTimeout(() => {
+    const root = articleRef.value; const selection = window.getSelection()
+    if (!root || !selection || selection.isCollapsed || !selection.anchorNode || !root.contains(selection.anchorNode)) { selectionAsk.value = null; return }
+    const text = selection.toString().trim().slice(0, 4000)
+    const range = selection.rangeCount ? selection.getRangeAt(0) : null
+    if (!text || !range) { selectionAsk.value = null; return }
+    const rect = range.getBoundingClientRect()
+    const headings = [...root.querySelectorAll<HTMLElement>('h2,h3,h4')]
+    const matched = headings.filter((heading) => heading.getBoundingClientRect().top <= rect.top + 2)
+    const current = matched.length ? matched[matched.length - 1] : undefined
+    selectionAsk.value = { text, top: Math.max(8, rect.top - 42), left: Math.min(window.innerWidth - 126, Math.max(8, rect.left)), heading: current?.textContent?.trim() || '', anchor: current?.id || '' }
+    nextTick(() => selectionAskButton.value?.focus({ preventScroll: true }))
+  }, 0)
+}
+function askSelection() {
+  if (!post.value || !selectionAsk.value) return
+  const selected = selectionAsk.value
+  ai.open(document.activeElement instanceof HTMLElement ? document.activeElement : null, { route: route.fullPath, articleId: post.value.id, selectedText: selected.text, title: post.value.title, heading: selected.heading, anchor: selected.anchor, ...(route.query.share ? { shareToken: String(route.query.share) } : {}) })
+  selectionAsk.value = null
+  window.getSelection()?.removeAllRanges()
+}
 
 function setActionMessage(message: string, isError = false) { actionMessage.value = message; actionError.value = isError }
 function login() { window.location.assign(`/login?redirect=${encodeURIComponent(route.fullPath)}`) }
@@ -207,6 +235,7 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); window.removeEventListene
 .cover { display: block; width: 100%; max-height: 440px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); margin: var(--space-6) 0; }
 .lead { font-size: 1.18rem; color: var(--muted); border-left: 3px solid var(--accent); padding-left: var(--space-4); }
 .article :deep(.copy-code) { position: absolute; top: var(--space-2); right: var(--space-2); min-height: 30px; padding: 0 var(--space-2); font-size: .75rem; }
+.selection-ask-ai { position: fixed; z-index: 25; display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 10px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow); font-size: .82rem; font-weight: 700; }
 .toc-wrap { align-self: start; position: sticky; top: 88px; max-height: calc(100vh - 220px); overflow-y: auto; min-height: 0; }
 .toc { display: grid; gap: var(--space-2); padding: var(--space-3); font-size: .82rem; }
 .toc a, .toc-mobile a { color: var(--muted); text-decoration: none; }

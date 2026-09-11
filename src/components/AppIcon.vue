@@ -62,6 +62,14 @@
     <path v-else-if="name === 'external-link'" d="M14 4h6v6m0-6-9 9M18 13v6H4V5h6" />
     <path v-else-if="name === 'shield'" d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6zM9 12l2 2 4-4" />
     <path v-else-if="name === 'info'" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-10v5m0-8h.01" />
+    <path v-else-if="name === 'sparkles'" d="m12 3 1.4 5.6L19 10l-5.6 1.4L12 17l-1.4-5.6L5 10l5.6-1.4zM19 16l.7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7zM5 16l.6 1.8L7.5 18l-1.9.6L5 20.5l-.6-1.9L2.5 18l1.9-.6z" />
+    <path v-else-if="name === 'send'" d="m21 3-7.5 18-3.1-7.4L3 10.5zM10.4 13.6 15 9" />
+    <path v-else-if="name === 'stop'" d="M6 6h12v12H6z" />
+    <path v-else-if="name === 'copy'" d="M9 9h11v11H9zM4 15H3V4h11v1" />
+    <path v-else-if="name === 'thumb-up'" d="M8 21H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3m0 11V10l4-7 1 1a3 3 0 0 1 .7 3.1L13 10h6a2 2 0 0 1 2 2l-1 7a2 2 0 0 1-2 2z" />
+    <path v-else-if="name === 'thumb-down'" d="M8 3H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3M8 3v11l4 7 1-1a3 3 0 0 0 .7-3.1L13 14h6a2 2 0 0 0 2-2l-1-7a2 2 0 0 0-2-2z" />
+    <path v-else-if="name === 'message-square'" d="M20 15a3 3 0 0 1-3 3H9l-5 3v-3a3 3 0 0 1-1-2.3V6a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3z" />
+    <path v-else-if="name === 'history'" d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2" />
     <path v-else-if="name === 'github'" d="M9 19c-4 1.2-4-2-5.5-2.5M14.5 22v-3.1a2.7 2.7 0 0 0-.8-2.1c2.7-.3 5.5-1.3 5.5-6A4.7 4.7 0 0 0 18 7.5 4.4 4.4 0 0 0 17.9 4S16.8 3.7 14.5 5.2a12.4 12.4 0 0 0-5 0C7.2 3.7 6.1 4 6.1 4A4.4 4.4 0 0 0 6 7.5a4.7 4.7 0 0 0-1.2 3.3c0 4.7 2.8 5.7 5.5 6a2.7 2.7 0 0 0-.8 2.1V22" />
     <path v-else-if="name === 'chevron-right'" d="m9 18 6-6-6-6" />
     <path v-else d="M4 6h16M4 12h16M4 18h10" />

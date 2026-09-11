@@ -43,3 +43,9 @@ Each AI phase records targeted checks, `npm run typecheck`, `npm run api:check`,
 - Chat emits `start`, `delta`, `citation`, `tool_start`, `tool_end`, `usage`, `done`, and `error`. Abort propagation marks the assistant record aborted and records actual or estimated use. Request logs deliberately omit message text, selected text, secrets and cookies.
 - Per-IP window, daily guest/user, per-subject concurrency and global daily request/token limits are enforced before model work. Direct chat stays available during a Qdrant outage; site questions report that retrieval is unavailable.
 - `test:ai-api`, `test:ai-agent`, `test:ai-rag`, `test:unit`, `api:check`, `typecheck`, `build`, and `git diff --check` passed.
+
+### Phase 5 — shared AI experience complete
+
+- Added a shared, safe Markdown-rendering chat state and surface to the global layout, `/ai`, the article selection action and logged-in Settings. The launcher hides when the AI server reports disabled, so an unconfigured installation preserves existing routes and visual baselines; `/ai` instead explains that the feature is unavailable.
+- The panel is a focus-managed desktop side panel and mobile bottom sheet. It supports streaming status, stop, regenerate, safe copied output, source cards and model selection. `/ai` keeps the in-memory guest conversation or exposes the server-backed login history, with guarded rename/delete actions. Selection sends only the bounded selected text and identifying page metadata; the server repeats access authorization.
+- A focused `test:ai-ui` starts the isolated test API with the explicit deterministic Mock provider. It covers actual POST/SSE streaming, desktop/mobile and light/dark projects, axe, Esc, dialog close and focus restoration. `typecheck`, `test:unit`, `api:check`, `build`, and `git diff --check` passed for this phase.
