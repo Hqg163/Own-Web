@@ -22,4 +22,14 @@ test.describe('AI guest experience', () => {
     await expect(page.getByRole('dialog', { name: '站内助手' })).toBeHidden()
     await expect(launcher).toBeFocused()
   })
+
+  test('sanitizes hostile model-shaped Markdown output before it reaches the document', async ({ page }) => {
+    await page.goto('/ai')
+    const composer = page.getByRole('textbox', { name: '输入给 AI 的消息' })
+    await composer.fill('<img src=x onerror="window.__ownWebAiXss = 1">')
+    await composer.press('Enter')
+    await expect(page.getByText('这是一个 Mock 模式的直接回复：')).toBeVisible()
+    await expect(page.locator('.ai-message--assistant img')).toHaveCount(0)
+    await expect(page.evaluate(() => (window as any).__ownWebAiXss)).resolves.toBeUndefined()
+  })
 })

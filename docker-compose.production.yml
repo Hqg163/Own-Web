@@ -1,0 +1,25 @@
+# Production Qdrant profile. Start this instead of the development Compose file
+# when the API runs on the same private Docker network.
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?Set QDRANT_API_KEY before production startup}
+    networks:
+      - ai-internal
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:6333/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+networks:
+  ai-internal:
+    internal: true
+
+volumes:
+  qdrant_data:
