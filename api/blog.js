@@ -5,6 +5,7 @@ const multer = require('multer');
 const { createShareToken } = require('./migrations');
 const canonicalContent = require('./lib/content');
 const { validateUploadedFile, createRateLimiter } = require('./lib/security');
+const { canAccessPost } = require('./lib/post-access');
 const {
   COMMENT_PAGE_SIZE,
   MAX_COMMENT_MEDIA_COUNT,
@@ -65,15 +66,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     }
     return { links };
   }
-  async function access(post, viewer, token) {
-    if (!post) return false;
-    if (viewer?.id === post.author_id) return true;
-    if (post.status !== 'published') return false;
-    if (post.visibility === 'public') return true;
-    if (post.visibility === 'unlisted') return token && token === post.share_token;
-    if (post.visibility !== 'followers' || !viewer) return false;
-    const [rows] = await query('SELECT 1 FROM follows WHERE follower_id = ? AND following_id = ?', [viewer.id, post.author_id]); return rows.length > 0;
-  }
+  async function access(post, viewer, token) { return canAccessPost(query, post, viewer, token); }
   async function loadAccessiblePost(id, req, res) {
     const [rows] = await query('SELECT * FROM posts WHERE id=?', [id]);
     const post = rows[0];
