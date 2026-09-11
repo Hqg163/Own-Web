@@ -35,3 +35,11 @@ Each AI phase records targeted checks, `npm run typecheck`, `npm run api:check`,
 - The system prompt explicitly treats user and retrieved content as untrusted; low-confidence site questions stop before model generation. Long authorized article summaries use a section map instead of similarity search.
 - Login-scoped conversation, summary, preference-memory and model-gateway services are ready for the API layer. Memory is only explicitly saved, always scoped by `user_id`, and never exists permanently for guests. The gateway allows registry models only and permits one DeepSeek-to-Qwen fallback.
 - `test:ai-agent`, `test:unit`, `api:check`, `typecheck`, `build`, and `git diff --check` passed.
+
+### Phase 4 — AI API and SSE complete
+
+- `/api/ai/*` is mounted before the old mandatory API authentication middleware but after the established Origin and no-store middleware. It independently resolves the existing HttpOnly session cookie, allowing a limited guest flow without changing any legacy `/api` protection.
+- Added model metadata, guest/login conversation CRUD, SSE chat, settings, explicit Memory and feedback endpoints. Login-bound rows always query through `user_id`; guest conversations remain in a process-only map, while only a HMAC of the browser-session guest ID may be stored in usage records.
+- Chat emits `start`, `delta`, `citation`, `tool_start`, `tool_end`, `usage`, `done`, and `error`. Abort propagation marks the assistant record aborted and records actual or estimated use. Request logs deliberately omit message text, selected text, secrets and cookies.
+- Per-IP window, daily guest/user, per-subject concurrency and global daily request/token limits are enforced before model work. Direct chat stays available during a Qdrant outage; site questions report that retrieval is unavailable.
+- `test:ai-api`, `test:ai-agent`, `test:ai-rag`, `test:unit`, `api:check`, `typecheck`, `build`, and `git diff --check` passed.

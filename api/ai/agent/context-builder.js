@@ -18,7 +18,7 @@ function createContextBuilder({ db, config }) {
     const parsed = pageContextSchema.parse(pageContext || {});
     const context = {
       user: user ? { id: Number(user.id), email: user.email || null } : null,
-      route: parsed.route || null, selectedText: parsed.selectedText ? parsed.selectedText.slice(0, config.limits.selectedTextChars) : '',
+      route: parsed.route || null, selectedText: '',
       requestedArticleId: parsed.articleId || null, article: null,
       heading: parsed.heading || null, anchor: parsed.anchor || null,
       shareToken: parsed.shareToken || null,
@@ -32,6 +32,7 @@ function createContextBuilder({ db, config }) {
       status: article.status, visibility: article.visibility, contentMarkdown: article.content_markdown,
       contentVersion: Number(article.content_version || 0),
     };
+    context.selectedText = parsed.selectedText ? parsed.selectedText.slice(0, config.limits.selectedTextChars) : '';
     return context;
   }
 

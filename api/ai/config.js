@@ -38,7 +38,7 @@ const configSchema = z.object({
 function loadAiConfig(env = process.env) {
   return configSchema.parse({
     enabled: boolean(env.AI_ENABLED, false),
-    providerMode: String(env.AI_PROVIDER_MODE || (env.NODE_ENV === 'test' ? 'mock' : 'live')).toLowerCase() === 'mock' ? 'mock' : 'live',
+    providerMode: String(env.AI_PROVIDER_MODE || 'mock').toLowerCase() === 'mock' ? 'mock' : 'live',
     defaultModel: String(env.AI_DEFAULT_MODEL || 'qwen-fast'),
     qwen: { apiKey: String(env.DASHSCOPE_API_KEY || ''), baseUrl: String(env.QWEN_BASE_URL || ''), model: String(env.QWEN_CHAT_MODEL || 'qwen3.8-flash') },
     deepseek: { apiKey: String(env.DEEPSEEK_API_KEY || ''), baseUrl: String(env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'), model: String(env.DEEPSEEK_CHAT_MODEL || 'deepseek-v4-flash') },

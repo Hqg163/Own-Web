@@ -24,7 +24,17 @@ const { installUtcPool } = require('./lib/utc-pool');
 const { loadAiConfig } = require('./ai/config');
 const { createQdrantStore } = require('./ai/qdrant');
 const { createEmbeddingProvider } = require('./ai/providers/embedding-provider');
+const { createRerankerProvider } = require('./ai/providers/reranker-provider');
 const { createIndexer, createIndexQueue } = require('./ai/retrieval/indexer');
+const { createRetriever } = require('./ai/retrieval/retriever');
+const { TtlLruCache } = require('./ai/cache');
+const { createContextBuilder } = require('./ai/agent/context-builder');
+const { createSkillRegistry } = require('./ai/agent/skills');
+const { createConversationStore } = require('./ai/agent/conversation-store');
+const { createMemoryStore } = require('./ai/agent/memory-store');
+const { createModelGateway } = require('./ai/agent/model-gateway');
+const { createAgentWorkflow } = require('./ai/agent/workflow');
+const { mountAiRoutes } = require('./ai/routes');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -268,8 +278,17 @@ installUtcPool(db);
 // startup and request behaviour when AI is not configured.
 const aiConfig = loadAiConfig();
 const aiQdrant = createQdrantStore(aiConfig);
-const aiIndexer = createIndexer({ db, config: aiConfig, qdrant: aiQdrant, embeddingProvider: createEmbeddingProvider(aiConfig) });
+const aiEmbeddingProvider = createEmbeddingProvider(aiConfig);
+const aiIndexer = createIndexer({ db, config: aiConfig, qdrant: aiQdrant, embeddingProvider: aiEmbeddingProvider });
 const aiIndexQueue = createIndexQueue({ db, config: aiConfig, indexer: aiIndexer });
+const aiGateway = createModelGateway({ config: aiConfig });
+const aiMemoryStore = createMemoryStore({ db });
+const aiConversationStore = createConversationStore({ db, config: aiConfig });
+const aiWorkflow = createAgentWorkflow({
+  contextBuilder: createContextBuilder({ db, config: aiConfig }),
+  retriever: createRetriever({ db, config: aiConfig, qdrant: aiQdrant, embeddingProvider: aiEmbeddingProvider, rerankerProvider: createRerankerProvider(aiConfig), retrievalCache: new TtlLruCache(aiConfig.cache) }),
+  skills: createSkillRegistry({ db, config: aiConfig }), gateway: aiGateway, memoryStore: aiMemoryStore, config: aiConfig,
+});
 
 // 博客路由在旧的全局鉴权前注册：公开读取接口自行做可选会话识别，
 // 写入接口则明确使用 requireAuth。旧接口仍由下方的全局中间件保护。
@@ -282,6 +301,10 @@ mountBlogRoutes(app, db, {
 mountPersonalSiteRoutes(app, db, {
   getAuthToken,
   authSecret: process.env.AUTH_SECRET
+});
+mountAiRoutes(app, db, {
+  getAuthToken, authSecret: process.env.AUTH_SECRET, config: aiConfig, gateway: aiGateway, workflow: aiWorkflow,
+  conversationStore: aiConversationStore, memoryStore: aiMemoryStore,
 });
 app.use('/api', authenticatedApiRequest);
 

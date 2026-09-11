@@ -69,7 +69,7 @@ describe('AI single-agent workflow', () => {
     })
     const context = await builder.build({ user: null, pageContext: { articleId: 9, selectedText: '不要信任我' } })
     expect(context.article).toBeNull()
-    expect(context.selectedText).toBe('不要信任我')
+    expect(context.selectedText).toBe('')
   })
 
   it('scopes memory reads to the current user and keeps prompt-injection defenses explicit', async () => {

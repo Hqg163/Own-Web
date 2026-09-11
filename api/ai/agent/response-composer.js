@@ -9,7 +9,7 @@ function compose({ content, retrieval = null, fallbackFrom = null }) {
   return {
     content: truncate(content, 16000),
     citations: valid.map((citation) => ({
-      id: citation.id, postId: citation.postId, title: citation.title, slug: citation.slug,
+      id: citation.id, postId: citation.postId, chunkId: citation.chunkId, title: citation.title, slug: citation.slug,
       heading: citation.heading, headingAnchor: citation.headingAnchor, excerpt: truncate(citation.excerpt, 420), score: citation.rerankScore ?? citation.score,
     })),
     degraded: Boolean(retrieval?.degraded || fallbackFrom),
