@@ -278,6 +278,88 @@ async function runMigrations(db) {
     }
     await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260830_personal_site_v1']);
   }
+
+  const [aiDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260911_ai_v1']);
+  if (!aiDone.length) {
+    await query(`CREATE TABLE IF NOT EXISTS ai_conversations (
+      id CHAR(36) PRIMARY KEY, user_id INT NOT NULL, title VARCHAR(180) NOT NULL DEFAULT '新对话',
+      selected_model VARCHAR(80) NOT NULL DEFAULT 'qwen-fast', summary MEDIUMTEXT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      KEY idx_ai_conversations_user_last (user_id, last_message_at, id)
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS ai_messages (
+      id CHAR(36) PRIMARY KEY, conversation_id CHAR(36) NOT NULL, role ENUM('user','assistant','system') NOT NULL,
+      content MEDIUMTEXT NOT NULL, model_provider VARCHAR(80) NULL, model_name VARCHAR(180) NULL,
+      status ENUM('complete','streaming','aborted','error') NOT NULL DEFAULT 'complete',
+      input_tokens INT UNSIGNED NULL, output_tokens INT UNSIGNED NULL, latency_ms INT UNSIGNED NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE,
+      KEY idx_ai_messages_conversation_time (conversation_id, created_at, id)
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS ai_message_sources (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY, message_id CHAR(36) NOT NULL, source_type VARCHAR(32) NOT NULL,
+      source_id VARCHAR(120) NULL, post_id BIGINT NULL, chunk_id CHAR(36) NULL, title VARCHAR(180) NOT NULL,
+      slug VARCHAR(180) NULL, heading VARCHAR(500) NULL, heading_anchor VARCHAR(255) NULL,
+      excerpt TEXT NULL, source_rank INT UNSIGNED NULL, score DECIMAL(12,6) NULL,
+      FOREIGN KEY (message_id) REFERENCES ai_messages(id) ON DELETE CASCADE,
+      KEY idx_ai_message_sources_message (message_id, source_rank)
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS ai_memories (
+      id CHAR(36) PRIMARY KEY, user_id INT NOT NULL, type ENUM('preference') NOT NULL,
+      memory_key VARCHAR(120) NOT NULL, memory_value TEXT NOT NULL, confidence DECIMAL(4,3) NOT NULL DEFAULT 1.000,
+      source_conversation_id CHAR(36) NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (source_conversation_id) REFERENCES ai_conversations(id) ON DELETE SET NULL,
+      UNIQUE KEY unique_ai_memory (user_id, type, memory_key), KEY idx_ai_memories_user (user_id, type, updated_at)
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS ai_user_settings (
+      user_id INT PRIMARY KEY, memory_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      default_model VARCHAR(80) NOT NULL DEFAULT 'qwen-fast', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS ai_feedback (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, message_id CHAR(36) NOT NULL,
+      rating TINYINT NOT NULL, reason VARCHAR(1000) NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (message_id) REFERENCES ai_messages(id) ON DELETE CASCADE,
+      UNIQUE KEY unique_ai_feedback (user_id, message_id), KEY idx_ai_feedback_message (message_id)
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS ai_usage (
+      request_id CHAR(36) PRIMARY KEY, user_id INT NULL, session_hash CHAR(64) NULL,
+      provider VARCHAR(80) NULL, model VARCHAR(180) NULL, input_tokens INT UNSIGNED NULL,
+      output_tokens INT UNSIGNED NULL, total_tokens INT UNSIGNED NULL, latency_ms INT UNSIGNED NULL,
+      status VARCHAR(32) NOT NULL, route_type VARCHAR(64) NULL, tool_calls INT UNSIGNED NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+      KEY idx_ai_usage_user_day (user_id, created_at), KEY idx_ai_usage_session_day (session_hash, created_at),
+      KEY idx_ai_usage_created (created_at)
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS ai_index_jobs (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY, source_type VARCHAR(32) NOT NULL, source_id BIGINT NOT NULL,
+      content_hash CHAR(64) NULL, status ENUM('pending','running','completed','failed') NOT NULL DEFAULT 'pending',
+      error TEXT NULL, embedding_model VARCHAR(180) NULL, indexed_at DATETIME NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      KEY idx_ai_index_jobs_status (status, updated_at), KEY idx_ai_index_jobs_source (source_type, source_id, status)
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS ai_index_chunks (
+      chunk_id CHAR(36) PRIMARY KEY, post_id BIGINT NOT NULL, content_hash CHAR(64) NOT NULL,
+      heading VARCHAR(500) NULL, heading_path VARCHAR(1000) NULL, heading_anchor VARCHAR(255) NULL,
+      chunk_index INT UNSIGNED NOT NULL, content MEDIUMTEXT NOT NULL, metadata JSON NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+      UNIQUE KEY unique_ai_chunk (post_id, content_hash, chunk_index), KEY idx_ai_chunks_post (post_id, content_hash)
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS ai_index_state (
+      id TINYINT PRIMARY KEY, version BIGINT UNSIGNED NOT NULL DEFAULT 0,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`);
+    await query('INSERT IGNORE INTO ai_index_state (id, version) VALUES (1, 0)');
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260911_ai_v1']);
+  }
 }
 
 async function indexExists(db, table, indexName) {

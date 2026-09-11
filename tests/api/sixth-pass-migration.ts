@@ -109,12 +109,12 @@ async function assertMigrationSchema() {
     const [tables] = await connection.query(
       `SELECT TABLE_NAME
        FROM information_schema.TABLES
-       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('projects', 'series')
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('projects', 'series', 'ai_conversations', 'ai_messages', 'ai_index_chunks', 'ai_usage')
        ORDER BY TABLE_NAME`,
     )
     assert.deepEqual(
       tables.map((row: { TABLE_NAME: string }) => row.TABLE_NAME),
-      ['projects', 'series'],
+      ['ai_conversations', 'ai_index_chunks', 'ai_messages', 'ai_usage', 'projects', 'series'],
     )
 
     const [columns] = await connection.query(
@@ -198,11 +198,22 @@ async function assertMigrationSchema() {
     expectForeignKey('series', 'owner_id', 'users', 'CASCADE')
     expectForeignKey('posts', 'series_id', 'series', 'SET NULL', 'fk_posts_series')
 
+    const [aiColumns] = await connection.query(
+      `SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('ai_conversations', 'ai_messages', 'ai_index_chunks', 'ai_usage')`,
+    )
+    const aiColumnNames = new Set(aiColumns.map((row: { TABLE_NAME: string; COLUMN_NAME: string }) => `${row.TABLE_NAME}.${row.COLUMN_NAME}`))
+    for (const name of ['ai_conversations.user_id', 'ai_messages.conversation_id', 'ai_index_chunks.post_id', 'ai_usage.request_id']) {
+      assert.ok(aiColumnNames.has(name), `missing AI migration column ${name}`)
+    }
+
     const [sentinel] = await connection.query(
       'SELECT id FROM schema_migrations WHERE id = ?',
       ['20260830_personal_site_v1'],
     )
     assert.equal(sentinel.length, 1, 'personal-site migration sentinel was not recorded')
+    const [aiSentinel] = await connection.query('SELECT id FROM schema_migrations WHERE id = ?', ['20260911_ai_v1'])
+    assert.equal(aiSentinel.length, 1, 'AI migration sentinel was not recorded')
   } finally {
     await connection.end()
   }
