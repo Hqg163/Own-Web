@@ -28,3 +28,10 @@ Each AI phase records targeted checks, `npm run typecheck`, `npm run api:check`,
 - New and changed post content queues best-effort reindexing only after the existing article operation succeeds. Indexing writes dense (1024 dimensions) and Qdrant native multilingual BM25 vectors, then removes stale point IDs; it never rolls back a blog write.
 - Retrieval builds the scope before Qdrant hybrid RRF, then rehydrates every candidate from MySQL and repeats the shared post-access decision before reranking or prompt use. Reranker failure falls back to RRF and marks the result degraded.
 - `tests/unit/ai-rag.test.ts` covers heading IDs, chunk boundaries, deterministic IDs, mock embeddings, stale-point removal ordering, hybrid RRF shape, hydration and rerank fallback. `test:ai-rag`, `test:unit`, `api:check`, `typecheck`, `build`, and `git diff --check` passed. The existing `api` blog-access smoke was also run, but its shared `own_web_test` database contains leftover public fixtures and its strict single-item assertion failed before this feature can affect that route; it needs an isolated/reset test database. A live Qdrant fixture still requires Docker or an explicitly configured isolated Qdrant service.
+
+### Phase 3 — single-agent workflow complete
+
+- Added one deterministic workflow: context is reloaded and authorized first, then routed to direct chat, RAG, or one of five fixed read-only skills. It has no arbitrary SQL, shell, URL, MCP, multi-agent, or model-selected tool surface.
+- The system prompt explicitly treats user and retrieved content as untrusted; low-confidence site questions stop before model generation. Long authorized article summaries use a section map instead of similarity search.
+- Login-scoped conversation, summary, preference-memory and model-gateway services are ready for the API layer. Memory is only explicitly saved, always scoped by `user_id`, and never exists permanently for guests. The gateway allows registry models only and permits one DeepSeek-to-Qwen fallback.
+- `test:ai-agent`, `test:unit`, `api:check`, `typecheck`, `build`, and `git diff --check` passed.

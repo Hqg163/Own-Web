@@ -9,6 +9,10 @@ const integer = (value, fallback, minimum = 0) => {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= minimum ? parsed : fallback;
 };
+const decimal = (value, fallback, minimum = 0, maximum = 1) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
+};
 
 const configSchema = z.object({
   enabled: z.boolean(),
@@ -28,6 +32,7 @@ const configSchema = z.object({
     globalDailyRequests: z.number().int().positive(), globalDailyTokens: z.number().int().positive(),
   }),
   cache: z.object({ maxEntries: z.number().int().positive(), ttlMs: z.number().int().positive() }),
+  confidence: z.object({ highThreshold: z.number().min(0).max(1), mediumThreshold: z.number().min(0).max(1) }),
 });
 
 function loadAiConfig(env = process.env) {
@@ -50,6 +55,7 @@ function loadAiConfig(env = process.env) {
       globalDailyRequests: integer(env.AI_GLOBAL_DAILY_REQUEST_LIMIT, 1000, 1), globalDailyTokens: integer(env.AI_GLOBAL_DAILY_TOKEN_LIMIT, 500000, 1),
     },
     cache: { maxEntries: integer(env.AI_CACHE_MAX_ENTRIES, 500, 1), ttlMs: integer(env.AI_CACHE_TTL_MS, 5 * 60 * 1000, 1000) },
+    confidence: { highThreshold: decimal(env.AI_CONFIDENCE_HIGH, 0.55), mediumThreshold: decimal(env.AI_CONFIDENCE_MEDIUM, 0.25) },
   });
 }
 
