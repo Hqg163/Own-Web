@@ -15,3 +15,16 @@
 ## Phase checkpoints
 
 Each AI phase records targeted checks, `npm run typecheck`, `npm run api:check`, `npm run build`, and `git diff --check` before its single-purpose commit. Real provider checks remain opt-in through `AI_LIVE_TESTS=1`; routine tests use a deterministic provider.
+
+### Phase 1 — configuration and persistence complete
+
+- Added the additive AI v1 MySQL schema, server-side validated AI configuration, model registry, TTL/LRU cache and Qdrant collection client.
+- Qdrant is declared in `docker-compose.yml` as `qdrant/qdrant:v1.19.0`, bound only to `127.0.0.1:6333`; the server remains functional when AI is disabled or Qdrant is absent.
+- Fresh-migration smoke, configuration smoke, `typecheck`, `api:check`, `build`, and `git diff --check` passed. Docker was unavailable in this workspace, so a live Compose health check remains a deployment verification item.
+
+### Phase 2 — RAG preparation and retrieval complete
+
+- The only index text source is `posts.content_markdown`. Heading IDs use the same normalization contract as the client renderer. The chunker retains code, Mermaid and display math as atomic blocks; ordinary long prose is split before the configured limit.
+- New and changed post content queues best-effort reindexing only after the existing article operation succeeds. Indexing writes dense (1024 dimensions) and Qdrant native multilingual BM25 vectors, then removes stale point IDs; it never rolls back a blog write.
+- Retrieval builds the scope before Qdrant hybrid RRF, then rehydrates every candidate from MySQL and repeats the shared post-access decision before reranking or prompt use. Reranker failure falls back to RRF and marks the result degraded.
+- `tests/unit/ai-rag.test.ts` covers heading IDs, chunk boundaries, deterministic IDs, mock embeddings, stale-point removal ordering, hybrid RRF shape, hydration and rerank fallback. `test:ai-rag`, `test:unit`, `api:check`, `typecheck`, `build`, and `git diff --check` passed. The existing `api` blog-access smoke was also run, but its shared `own_web_test` database contains leftover public fixtures and its strict single-item assertion failed before this feature can affect that route; it needs an isolated/reset test database. A live Qdrant fixture still requires Docker or an explicitly configured isolated Qdrant service.

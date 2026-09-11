@@ -21,6 +21,10 @@ const { sendError, createRateLimiter, originGuard, imageDimensions, validateUplo
 const { capabilitiesForUser, parseSiteOwnerUserId } = require('./lib/identity');
 const { toUtcIso, withUtcTimestamps } = require('./lib/time');
 const { installUtcPool } = require('./lib/utc-pool');
+const { loadAiConfig } = require('./ai/config');
+const { createQdrantStore } = require('./ai/qdrant');
+const { createEmbeddingProvider } = require('./ai/providers/embedding-provider');
+const { createIndexer, createIndexQueue } = require('./ai/retrieval/indexer');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -259,12 +263,21 @@ const db = mysql.createPool({
 // installUtcPool also enforces UTC on every reused MySQL session.
 installUtcPool(db);
 
+// Construction is local and does not contact Qdrant. The worker only runs for
+// an explicitly enabled AI deployment, so the legacy site keeps its existing
+// startup and request behaviour when AI is not configured.
+const aiConfig = loadAiConfig();
+const aiQdrant = createQdrantStore(aiConfig);
+const aiIndexer = createIndexer({ db, config: aiConfig, qdrant: aiQdrant, embeddingProvider: createEmbeddingProvider(aiConfig) });
+const aiIndexQueue = createIndexQueue({ db, config: aiConfig, indexer: aiIndexer });
+
 // 博客路由在旧的全局鉴权前注册：公开读取接口自行做可选会话识别，
 // 写入接口则明确使用 requireAuth。旧接口仍由下方的全局中间件保护。
 mountBlogRoutes(app, db, {
   getAuthToken,
   authSecret: process.env.AUTH_SECRET,
-  uploadRoot: UPLOAD_ROOT
+  uploadRoot: UPLOAD_ROOT,
+  aiIndexQueue
 });
 mountPersonalSiteRoutes(app, db, {
   getAuthToken,

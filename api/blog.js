@@ -31,7 +31,7 @@ const allowedVisibilities = new Set(['public', 'private', 'followers', 'unlisted
 const allowedStatuses = new Set(['draft', 'published', 'scheduled', 'archived']);
 const slugify = (value, fallback = 'post') => String(value || '').toLowerCase().trim().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 160) || fallback;
 const parseBoolean = (value) => value === true || value === 1 || value === '1' || value === 'true';
-function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
+function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot, aiIndexQueue = null }) {
   const query = db.promise().query.bind(db.promise());
   const jwt = require('jsonwebtoken');
   const optionalAuth = (req, _res, next) => { const token = getAuthToken(req); if (!token) return next(); try { const p = jwt.verify(token, authSecret); db.promise().query('SELECT id,email,session_version FROM users WHERE id=?', [Number(p.sub)]).then(([rows]) => { if (rows[0] && Number(p.sv || 0) === Number(rows[0].session_version || 0)) req.user = { id:Number(p.sub), email:rows[0].email }; next(); }).catch(() => next()); } catch (_) { next(); } };
@@ -40,6 +40,14 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
   const page = (req) => Math.max(1, Number(req.query.page) || 1);
   const isAdmin = (req) => isAdminUser(req.user);
   const siteOwnerId = () => parseSiteOwnerUserId();
+  // Indexing is intentionally asynchronous and best-effort: a Qdrant outage
+  // must never turn a successful article write into a failed blog request.
+  const queueAiIndex = (postId) => {
+    if (!aiIndexQueue || !Number.isSafeInteger(Number(postId))) return;
+    Promise.resolve(aiIndexQueue.enqueue(Number(postId))).catch((indexError) => {
+      console.warn('[ai-index] Failed to enqueue post', Number(postId), indexError?.code || indexError?.message || 'unknown');
+    });
+  };
   async function nextFeaturedOrder(excludeId) {
     const [[row]] = await query('SELECT COALESCE(MAX(featured_order),0) max_order FROM posts WHERE featured=TRUE AND id<>?', [excludeId || 0]);
     return Math.min(2147483647, Math.max(1, Number(row?.max_order || 0) + 1));
@@ -415,6 +423,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       insertedPostId = result.insertId;
       if (blocks) await ensureOwnedBlockMedia(blocks, req.user.id, insertedPostId);
       await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source) VALUES (?,?,?,?,?,?,'manual')", [insertedPostId, req.user.id, title, markdown, format, blocks ? JSON.stringify(blocks) : null]);
+      queueAiIndex(insertedPostId);
       res.status(201).json({ post: { id: insertedPostId, title, slug, status: 'draft' } });
     } catch (e) {
       if (insertedPostId) await query('DELETE FROM posts WHERE id=? AND author_id=?', [insertedPostId, req.user.id]).catch(() => {});
@@ -480,6 +489,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       await syncTaxonomy(old.id, req.body.categorySlugs, req.body.tags);
       const revisionSource = status === 'published' ? 'publish' : 'manual';
       await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source,content_source) VALUES (?,?,?,?,?,?, ?, ?)", [old.id, req.user.id, title, markdown, format, blocks ? JSON.stringify(blocks) : null, revisionSource, req.body.contentSource || 'editor']);
+      queueAiIndex(old.id);
       res.json({ message: status === 'published' ? '文章已发布' : status === 'scheduled' ? '文章已安排定时发布' : '草稿已保存', status, slug, scheduledAt: scheduledAt ? scheduledAt.toISOString() : null });
     } catch (e) { next(e); }
   });
@@ -516,6 +526,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       const values = [old.id, req.user.id, title, markdown, format, blocks ? JSON.stringify(blocks) : null, req.body.contentSource || 'autosave'];
       if (recent[0]) await query('UPDATE post_revisions SET title=?,content_markdown=?,content_format=?,content_blocks=?,content_version=(SELECT content_version FROM posts WHERE id=?),content_source=? WHERE id=?', [title, markdown, format, blocks ? JSON.stringify(blocks) : null, old.id, req.body.contentSource || 'autosave', recent[0].id]);
       else await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source,content_source) VALUES (?,?,?,?,?,?, 'autosave', ?)", values);
+      queueAiIndex(old.id);
       res.json({ savedAt: new Date().toISOString(), status: 'saved' });
     } catch (e) { next(e); }
   });
@@ -535,6 +546,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
       const html = revision.content_format === 'blocks' ? canonicalContent.blocksToSafeHtml(blocks) : canonicalContent.renderMarkdown(markdown);
       await query('UPDATE posts SET title=?,content_markdown=?,content_html=?,content_format=?,content_blocks=?,content_version=content_version+1,content_source=? WHERE id=? AND author_id=?', [revision.title, markdown, html, revision.content_format, blocks ? JSON.stringify(blocks) : null, 'restore', req.params.id, req.user.id]);
       await query("INSERT INTO post_revisions (post_id,editor_id,title,content_markdown,content_format,content_blocks,source,content_source) VALUES (?,?,?,?,?,?, 'manual', 'restore')", [req.params.id, req.user.id, revision.title, markdown, revision.content_format, blocks ? JSON.stringify(blocks) : null]);
+      queueAiIndex(req.params.id);
       res.json({ message: '修订已恢复' });
     } catch (e) { next(e); }
   });
@@ -547,6 +559,7 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot }) {
     await query('DELETE FROM post_media WHERE post_id=? AND owner_id=?', [post.id, req.user.id]);
     await query('DELETE FROM posts WHERE id=? AND author_id=? AND status IN (\'draft\',\'scheduled\')', [post.id, req.user.id]);
     for (const item of media) removeUploadedFile({ path:path.resolve(path.dirname(uploadRoot), String(item.file_path || '').replace(/^[/\\]+/, '')) });
+    queueAiIndex(post.id);
     res.status(204).end();
   } catch (e) { next(e); } });
   app.post('/api/posts/media', optionalAuth, requireAuth, mediaUpload.single('image'), async (req, res, next) => { try {
