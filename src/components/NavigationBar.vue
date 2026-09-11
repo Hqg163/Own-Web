@@ -61,7 +61,6 @@ const links = computed(() => [
   { label: '探索', to: '/explore' },
   { label: '项目', to: '/projects' },
   { label: '关于', to: '/about' },
-  { label: 'AI', to: '/ai' },
   ...(loggedIn.value ? [{ label: '创作中心', to: '/creation' }] : []),
 ])
 

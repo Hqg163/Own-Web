@@ -1,6 +1,25 @@
 import { expect, test } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
+async function createPublicArticle(page: import('@playwright/test').Page, project: string) {
+  const origin = 'http://127.0.0.1:5173'
+  const suffix = `${Date.now()}-${project.replace(/[^a-z0-9]/gi, '')}`
+  const email = `ai-selection-${suffix}@own-web.test`
+  const password = 'OwnWebAiSelectionA1!'
+  await expect((await page.request.post('/api/register', { headers: { Origin: origin }, data: { email, password } })).status()).toBe(201)
+  await expect((await page.request.post('/api/login', { headers: { Origin: origin }, data: { email, password } })).status()).toBe(200)
+  const contentMarkdown = '# 选区测试\n\n## 概念\n\n这是一段已经发布并授权给当前读者的选区证据。'
+  const created = await page.request.post('/api/posts', { headers: { Origin: origin }, data: { title: `AI 选区 ${suffix}`, contentFormat: 'markdown', contentMarkdown } })
+  expect(created.status()).toBe(201)
+  const post = (await created.json()).post
+  const published = await page.request.put(`/api/posts/${post.id}`, {
+    headers: { Origin: origin },
+    data: { title: post.title, slug: post.slug, contentFormat: 'markdown', contentMarkdown, status: 'published', visibility: 'public' },
+  })
+  expect(published.status()).toBe(200)
+  return post.slug as string
+}
+
 test.describe('AI guest experience', () => {
   test.skip(process.env.AI_E2E_ENABLED !== '1', 'AI UI is enabled only by the focused Mock-provider runner')
 
@@ -31,5 +50,24 @@ test.describe('AI guest experience', () => {
     await expect(page.getByText('这是一个 Mock 模式的直接回复：')).toBeVisible()
     await expect(page.locator('.ai-message--assistant img')).toHaveCount(0)
     await expect(page.evaluate(() => (window as any).__ownWebAiXss)).resolves.toBeUndefined()
+  })
+
+  test('passes an article selection into the shared Ask AI panel', async ({ page }, testInfo) => {
+    const slug = await createPublicArticle(page, testInfo.project.name)
+    await page.goto(`/posts/${slug}`)
+    await expect(page.locator('.article')).toContainText('已经发布并授权给当前读者')
+    await page.locator('.article').evaluate((article) => {
+      const text = [...article.querySelectorAll('p')].find((node) => node.textContent?.includes('已经发布并授权给当前读者'))
+      if (!text?.firstChild) throw new Error('selection fixture paragraph was not rendered')
+      const range = document.createRange()
+      range.selectNodeContents(text)
+      const selection = window.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+      text.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    })
+    await page.getByRole('button', { name: '询问 AI' }).click()
+    await expect(page.getByRole('dialog', { name: '站内助手' })).toBeVisible()
+    await expect(page.getByText('当前已附加一段文章选文。')).toBeVisible()
   })
 })
