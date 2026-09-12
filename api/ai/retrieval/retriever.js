@@ -1,7 +1,8 @@
 const { buildRetrievalScope } = require('./scope');
-const { evaluateConfidence } = require('./confidence');
+const { evaluateConfidence, evaluateRrfConfidence } = require('./confidence');
 const { canAccessPost } = require('../../lib/post-access');
 const { createChunks } = require('./chunker');
+const { createRetrievalQueries } = require('./query-rewriter');
 
 function rerankScore(candidate) {
   return Number(candidate?.rerankScore ?? candidate?.score ?? 0);
@@ -130,18 +131,19 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
     if (!qdrant.client) throw Object.assign(new Error('本站知识检索暂时不可用'), { code: 'QDRANT_UNAVAILABLE' });
     const scope = await buildRetrievalScope(query, user, context);
     const version = await indexVersion();
-    const cacheKey = `${question.trim().toLowerCase()}|${scope.hash}|${version}`;
+    const retrievalQueries = createRetrievalQueries(question, context);
+    const cacheKey = `${retrievalQueries.join('\u0000').toLowerCase()}|${scope.hash}|${version}`;
     const cached = retrievalCache?.get(cacheKey);
     if (cached) return cached;
-    const [vector] = await embeddingProvider.embed([question]);
+    const vectors = await embeddingProvider.embed(retrievalQueries);
     let responses;
     try {
-      responses = await Promise.all((scope.filters || [scope.filter]).map((filter) => qdrant.client.query(qdrant.collection, {
+      responses = await Promise.all(retrievalQueries.flatMap((retrievalQuery, queryIndex) => (scope.filters || [scope.filter]).map((filter) => qdrant.client.query(qdrant.collection, {
         prefetch: [
-          { query: vector, using: 'dense', limit: 20, filter },
-          { query: { text: question, model: 'Qdrant/bm25', options: qdrant.bm25 || { tokenizer: 'multilingual', stemmer: { type: 'none' }, stopwords: {} } }, using: 'bm25', limit: 20, filter },
+          { query: vectors[queryIndex], using: 'dense', limit: 20, filter },
+          { query: { text: retrievalQuery, model: 'Qdrant/bm25', options: qdrant.bm25 || { tokenizer: 'multilingual', stemmer: { type: 'none' }, stopwords: {} } }, using: 'bm25', limit: 20, filter },
         ], query: { rrf: { k: 60 } }, limit: 20, with_payload: true,
-      })));
+      }))));
     } catch (error) { throw Object.assign(new Error('本站知识检索暂时不可用'), { code: 'QDRANT_UNAVAILABLE', cause: error }); }
     const pointsById = new Map();
     for (const response of responses) {
@@ -162,12 +164,13 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
     }
     const candidates = diversify(selectSupportedCandidates(prioritize([...byId.values()], context), config.confidence), 5);
     const lexicalSupport = Boolean(context.articleId || context.selectedText) || hasLexicalSupport(question, candidates, config.confidence?.minLexicalTerms);
+    const evaluated = degraded ? evaluateRrfConfidence(candidates) : evaluateConfidence(candidates, config.confidence);
     const confidence = lexicalSupport
-      ? evaluateConfidence(candidates, config.confidence)
-      : { ...evaluateConfidence(candidates, config.confidence), level: 'LOW', reason: 'no_lexical_support', lexicalSupport: false };
+      ? { ...evaluated, kind: degraded ? 'rrf' : 'rerank' }
+      : { ...evaluated, level: 'LOW', reason: 'no_lexical_support', lexicalSupport: false, kind: degraded ? 'rrf' : 'rerank' };
     const evidence = lexicalSupport ? candidates : [];
     const result = {
-      scope, candidates: evidence, confidence, degraded,
+      scope, queries: retrievalQueries, candidates: evidence, confidence, degraded,
       citations: evidence.map((candidate, index) => ({ id: `S${index + 1}`, ...candidate, excerpt: candidate.content.slice(0, 420) })),
     };
     retrievalCache?.set(cacheKey, result);

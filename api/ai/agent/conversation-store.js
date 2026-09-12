@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { buildStructuredSummary } = require('./conversation-summary');
 
 function createConversationStore({ db, config }) {
   const query = db.promise().query.bind(db.promise());
@@ -93,10 +94,7 @@ function createConversationStore({ db, config }) {
     if (!conversation) return null;
     const keep = config.limits.recentMessages;
     if (conversation.messages.length <= keep) return conversation.summary || null;
-    const earlier = conversation.messages.slice(0, -keep)
-      .map((message) => `${message.role === 'assistant' ? '助手' : '用户'}：${String(message.content).replace(/\s+/g, ' ').slice(0, 500)}`)
-      .join('\n');
-    const summary = `此前会话要点（自动压缩，不含隐藏推理）：\n${earlier}`.slice(0, config.limits.contextChars);
+    const summary = JSON.stringify(buildStructuredSummary(conversation.messages.slice(0, -keep), conversation.summary)).slice(0, config.limits.contextChars);
     await updateSummary(userId, conversationId, summary);
     return summary;
   }

@@ -7,6 +7,7 @@ import { createIndexer, createIndexQueue, normalizeAction } from '../../api/ai/r
 import { createRetriever, hasLexicalSupport, selectSupportedCandidates } from '../../api/ai/retrieval/retriever.js'
 import { createArticleDocument } from '../../api/ai/retrieval/article-document.js'
 import { createArticleDiscovery } from '../../api/ai/retrieval/article-discovery.js'
+import { createRetrievalQueries } from '../../api/ai/retrieval/query-rewriter.js'
 
 describe('AI RAG document preparation', () => {
   it('uses the same stable heading anchor contract as the article renderer', () => {
@@ -53,6 +54,13 @@ describe('AI RAG document preparation', () => {
     expect(first).toEqual(createArticleDocument(post))
     expect(first.content).toContain('章节：介绍；介绍 → Kalman Filter')
     expect(first.content).toContain('DeepSORT')
+  })
+
+  it('keeps semantic query rewrite bounded and contextualized by authorized selection only', () => {
+    const queries = createRetrievalQueries('帮我找目标检测相关文章', { selectedText: 'DeepSORT 使用 Kalman Filter' })
+    expect(queries).toHaveLength(3)
+    expect(queries[0]).toBe('帮我找目标检测相关文章')
+    expect(queries.at(-1)).toContain('DeepSORT')
   })
 
   it('marks absent or weak evidence as low confidence', () => {

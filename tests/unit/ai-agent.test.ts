@@ -10,6 +10,7 @@ import { createSystemPrompt } from '../../api/ai/agent/system-prompt.js'
 import { createOpenAICompatibleProvider } from '../../api/ai/providers/chat-provider.js'
 import { loadAiConfig } from '../../api/ai/config.js'
 import { createModelRegistry } from '../../api/ai/model-registry.js'
+import { buildStructuredSummary, normalizeStructuredSummary, summaryToPrompt } from '../../api/ai/agent/conversation-summary.js'
 
 const limits = { selectedTextChars: 4000, toolResultChars: 6000, toolRounds: 3, recentMessages: 8, contextChars: 12000, outputTokens: 1200 }
 
@@ -48,6 +49,28 @@ describe('AI single-agent workflow', () => {
     const result = await workflow.run({ message: '本站有多少私密文章？', pageContext: {} })
     expect(called).toBe(false)
     expect(result.response.content).toContain('不会猜测')
+  })
+
+  it('waits for all planned evidence lanes before making a low-confidence refusal and emits a redacted trace', async () => {
+    let called = false
+    const workflow = createAgentWorkflow({
+      contextBuilder: { build: async () => ({ user: null, selectedText: '', article: null, shareToken: null }) },
+      retriever: { retrieve: async () => ({ confidence: { level: 'LOW', kind: 'rerank' }, candidates: [], citations: [], degraded: false }) },
+      catalog: { list: async () => ({ total: 1, items: [{ id: 1, title: '授权文章', slug: 'safe', excerpt: '目录内容' }] }) },
+      retrievalPlanner: { plan: () => ({ semantic: true, catalog: true, articleDiscovery: false, sources: ['catalog', 'chunkRag'] }) },
+      skills: { tools: () => [], invoke: async () => [] }, gateway: { stream: async () => { called = true; return { content: '依据目录回答。', toolCalls: [], usage: { inputTokens: 1, outputTokens: 1 }, model: { id: 'qwen-fast' } } } }, memoryStore: null, config: { limits },
+    })
+    const result = await workflow.run({ message: '本站有什么？', pageContext: {} })
+    expect(called).toBe(true)
+    expect(result.trace).toMatchObject({ plan: ['catalog', 'chunkRag'], sourceCounts: { catalog: 1, chunks: 0 }, confidence: 'rerank' })
+    expect(JSON.stringify(result.trace)).not.toContain('本站有什么')
+  })
+
+  it('stores conversation compaction as structured fields, never raw historical transcript', () => {
+    const summary = buildStructuredSummary([{ role: 'user', content: '请继续 DeepSORT 的问题' }, { role: 'assistant', content: '可参考 [S1]。' }])
+    expect(normalizeStructuredSummary(summary)).toMatchObject({ version: 1, topic: '请继续 DeepSORT 的问题' })
+    expect(summaryToPrompt(JSON.stringify(summary))).toContain('当前主题')
+    expect(JSON.stringify(summary)).not.toContain('助手：')
   })
 
   it('uses the complete authorized catalog before a model answers a catalog question', async () => {

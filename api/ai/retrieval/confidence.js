@@ -18,4 +18,16 @@ function evaluateConfidence(candidates, options = {}) {
   return { level: 'LOW', reason: 'weak_evidence', ...details };
 }
 
-module.exports = { evaluateConfidence };
+// RRF ranks are not calibrated reranker probabilities. During a reranker
+// outage, evaluate rank diversity/coverage instead of comparing raw RRF
+// scores against the live-reranker thresholds above.
+function evaluateRrfConfidence(candidates) {
+  if (!candidates.length) return { level: 'LOW', reason: 'no_evidence', kind: 'rrf' };
+  const sourceCount = new Set(candidates.map((candidate) => candidate.postId)).size;
+  const supportChunkCount = candidates.length;
+  const coverage = Math.min(1, supportChunkCount / 3);
+  if (supportChunkCount >= 3 || (supportChunkCount >= 2 && sourceCount >= 2)) return { level: 'MEDIUM', reason: 'rrf_coverage', kind: 'rrf', sourceCount, supportChunkCount, coverage };
+  return { level: 'LOW', reason: 'rrf_insufficient_coverage', kind: 'rrf', sourceCount, supportChunkCount, coverage };
+}
+
+module.exports = { evaluateConfidence, evaluateRrfConfidence };

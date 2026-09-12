@@ -9,6 +9,12 @@ function createRetrievalPlanner() {
       articleDiscovery: Boolean(decision.needsArticleDiscovery),
       currentArticle: Boolean(decision.needsCurrentArticle && context.article),
       deterministicCatalog: intent === INTENTS.ARTICLE_CATALOG,
+      sources: [
+        ...(decision.needsCatalog || intent === INTENTS.ARTICLE_CATALOG ? ['catalog'] : []),
+        ...(decision.needsArticleDiscovery ? ['articleDiscovery'] : []),
+        ...(decision.needsSemanticRetrieval ? ['chunkRag'] : []),
+        ...(decision.needsCurrentArticle && context.article ? ['currentArticle'] : []),
+      ],
     };
   }
   return { plan };

@@ -16,6 +16,7 @@ const decimal = (value, fallback, minimum = 0, maximum = 1) => {
 
 const configSchema = z.object({
   enabled: z.boolean(),
+  developerTrace: z.boolean(),
   providerMode: z.enum(['live', 'mock']),
   defaultModel: z.string().min(1),
   qwen: z.object({ apiKey: z.string(), baseUrl: z.string(), chatBaseUrl: z.string(), embeddingBaseUrl: z.string(), rerankBaseUrl: z.string(), model: z.string() }),
@@ -43,6 +44,7 @@ function loadAiConfig(env = process.env) {
   const compatibleRerankBase = qwenBaseUrl.replace(/\/compatible-mode\/v1\/?$/, '/compatible-api/v1');
   return configSchema.parse({
     enabled: boolean(env.AI_ENABLED, false),
+    developerTrace: boolean(env.AI_DEVELOPER_TRACE, false),
     providerMode: String(env.AI_PROVIDER_MODE || 'mock').toLowerCase() === 'mock' ? 'mock' : 'live',
     defaultModel: String(env.AI_DEFAULT_MODEL || 'qwen-fast'),
     qwen: {

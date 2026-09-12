@@ -294,7 +294,7 @@ function mountAiRoutes(app, db, {
       await limiter.record({ requestId, subject, provider: result.model?.provider || null, model: result.model?.model || requestedModel, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, latencyMs, status, intent: result.decision.intent, toolCalls: streamedToolCalls });
       sse(res, 'usage', { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, latencyMs, degraded: result.response.degraded });
       sse(res, 'done', { messageId: assistantId, status, fallbackFrom: result.response.fallbackFrom || null });
-      log({ requestId, subject: subject.userId ? `user:${subject.userId}` : 'guest', model: requestedModel, fallbackFrom: result.response.fallbackFrom || null, intent: result.decision.intent, latencyMs, toolCalls: streamedToolCalls, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, status });
+      log({ requestId, subject: subject.userId ? `user:${subject.userId}` : 'guest', model: requestedModel, fallbackFrom: result.response.fallbackFrom || null, intent: result.decision.intent, latencyMs, toolCalls: streamedToolCalls, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, status, ...(config.developerTrace ? { trace: result.trace } : {}) });
       res.end();
     } catch (caught) {
       const isValidationError = caught instanceof z.ZodError || Array.isArray(caught?.issues);

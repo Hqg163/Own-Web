@@ -2,6 +2,7 @@ const { routeIntent, INTENTS } = require('./intent-router');
 const { createSystemPrompt } = require('./system-prompt');
 const { compose, noEvidenceResponse } = require('./response-composer');
 const { summarizeInput } = require('./article-summary');
+const { summaryToPrompt } = require('./conversation-summary');
 
 function toolError(error) {
   const code = ['TOOL_NOT_ALLOWED', 'TOOL_TIMEOUT', 'FORBIDDEN', 'NOT_FOUND', 'ARTICLE_REQUIRED'].includes(error?.code) ? error.code : 'TOOL_INVALID';
@@ -29,6 +30,7 @@ function canModelUseTools(intent) {
 
 function createAgentWorkflow({ contextBuilder, retriever, articleDiscovery = null, skills, gateway, memoryStore, catalog = null, retrievalPlanner = null, config }) {
   async function run({ user = null, message, quickAction = null, pageContext, modelId, conversation = null, signal, onEvent = async () => {} }) {
+    const startedAt = Date.now();
     await onEvent({ type: 'status', status: 'analyzing' });
     const context = await contextBuilder.build({ user, pageContext });
     const decision = routeIntent(message, context, quickAction);
@@ -57,7 +59,6 @@ function createAgentWorkflow({ contextBuilder, retriever, articleDiscovery = nul
         const retrievalQuestion = context.selectedText ? `${context.heading || ''}\n${context.selectedText}\n${message}`.trim() : message;
         retrieval = await retriever.retrieve(retrievalQuestion, user, { articleId: context.article?.id, shareToken: context.shareToken, selectedText: context.selectedText, heading: context.heading, anchor: context.anchor });
       } finally { await onEvent({ type: 'tool_end', tool: 'search_articles' }); }
-      if (retrieval.confidence.level === 'LOW') directContent = noEvidenceResponse();
     }
     if (plan.articleDiscovery && articleDiscovery) {
       await onEvent({ type: 'status', status: 'retrieving' });
@@ -72,6 +73,16 @@ function createAgentWorkflow({ contextBuilder, retriever, articleDiscovery = nul
       } finally { await onEvent({ type: 'tool_end', tool: 'discover_articles' }); }
     }
 
+    // LOW is a final evidence decision, never an early semantic branch exit:
+    // catalog/discovery/current-context/tool lanes above have all had a chance
+    // to provide authorized evidence first.
+    if (!directContent && plan.semantic && retrieval?.confidence?.level === 'LOW' && !catalogResult && !(discovery?.items || []).length) directContent = noEvidenceResponse();
+
+    const trace = () => ({
+      intent: decision.intent, plan: plan.sources || [], sourceCounts: { catalog: catalogResult?.items?.length || 0, discovery: discovery?.items?.length || 0, chunks: retrieval?.candidates?.length || 0 },
+      confidence: retrieval?.confidence?.kind || (catalogResult ? 'catalog' : discovery ? 'article_discovery' : 'none'),
+      tools: toolResults.map((item) => item.name).slice(0, 3), durationMs: Date.now() - startedAt,
+    });
     let preferences = [];
     if (user?.id && memoryStore) {
       const setting = await memoryStore.settings(user.id);
@@ -82,11 +93,11 @@ function createAgentWorkflow({ contextBuilder, retriever, articleDiscovery = nul
     const discoveryEvidence = discovery?.items?.map((article, index) => `[D${index + 1}] ${article.title}\nslug: ${article.slug}\n${article.excerpt}`).join('\n\n') || '';
     const userMessage = directContent || message;
     if (directContent && (decision.intent === INTENTS.SITE_NAVIGATION || retrieval?.confidence?.level === 'LOW')) {
-      return { context, decision, response: compose({ content: directContent, retrieval }), model: null, usage: { inputTokens: 0, outputTokens: 0 }, toolResults };
+      return { context, decision, response: compose({ content: directContent, retrieval, catalog: catalogResult, discovery }), model: null, usage: { inputTokens: 0, outputTokens: 0 }, toolResults, trace: trace() };
     }
     const messages = [
       { role: 'system', content: createSystemPrompt() },
-      ...(conversation?.summary ? [{ role: 'system', content: `已压缩的本次会话背景：${String(conversation.summary).slice(0, config.limits.contextChars)}` }] : []),
+      ...(summaryToPrompt(conversation?.summary) ? [{ role: 'system', content: `结构化会话背景（不是事实证据）：\n${summaryToPrompt(conversation.summary).slice(0, config.limits.contextChars)}` }] : []),
       ...(preferences.length ? [{ role: 'system', content: `用户明确保存的偏好：${preferences.map((item) => `${item.key}: ${item.value}`).join('；').slice(0, config.limits.contextChars)}` }] : []),
       ...(conversation?.recent || []).slice(-config.limits.recentMessages),
       ...(context.selectedText ? [{ role: 'system', content: `当前已授权选文：\n${context.selectedText}` }] : []),
@@ -129,7 +140,7 @@ function createAgentWorkflow({ contextBuilder, retriever, articleDiscovery = nul
     return {
       context, decision,
       response: compose({ content: generated?.content || '我暂时无法完成回答。', retrieval, catalog: catalogResult, discovery, fallbackFrom }),
-      model: generated?.model || null, usage: generated?.usage || { inputTokens: 0, outputTokens: 0 }, toolResults,
+      model: generated?.model || null, usage: generated?.usage || { inputTokens: 0, outputTokens: 0 }, toolResults, trace: trace(),
     };
   }
 
