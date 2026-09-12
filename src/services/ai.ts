@@ -6,11 +6,13 @@ import http from './http'
 export type AiCitation = { id: string; postId?: number; chunkId?: string; title: string; slug?: string; heading?: string; headingAnchor?: string; excerpt?: string; score?: number }
 export type AiMessage = { id: string; role: 'user' | 'assistant'; content: string; status?: 'complete' | 'streaming' | 'aborted' | 'error'; citations?: AiCitation[]; model?: string; error?: string; feedback?: number | null }
 export type AiModel = { id: string; label: string }
-export type AiPageContext = { route?: string; articleId?: number; selectedText?: string; title?: string; heading?: string; anchor?: string; shareToken?: string }
+export type AiPageContext = { route?: string; articleId?: number; selectedText?: string; heading?: string; anchor?: string; shareToken?: string }
 export type AiConversation = { id: string; title: string; selectedModel?: string; summary?: string | null; messages?: AiMessage[]; persistent?: boolean }
+export type AiQuickAction = 'summary_current' | 'explain_concept' | 'related_content' | 'selection_explain' | 'selection_expand' | 'selection_example'
+export type AiReadiness = { state: 'disabled' | 'unconfigured' | 'degraded' | 'ready'; featureEnabled: boolean; chatReady: boolean; ragReady: boolean; indexReady: boolean; message: string }
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
-const state = reactive({ open: false, availability: 'unknown' as 'unknown' | 'available' | 'disabled', error: '', status: '', models: [] as AiModel[], defaultModel: 'qwen-fast', selectedModel: 'qwen-fast', conversationId: '', persistent: false, messages: [] as AiMessage[], pageContext: null as AiPageContext | null })
+const state = reactive({ open: false, availability: 'unknown' as 'unknown' | 'available' | 'disabled', error: '', readiness: null as AiReadiness | null, status: '', models: [] as AiModel[], defaultModel: 'qwen-fast', selectedModel: 'qwen-fast', conversationId: '', persistent: false, messages: [] as AiMessage[], pageContext: null as AiPageContext | null })
 const conversations = ref<AiConversation[]>([])
 const loadingHistory = ref(false)
 const controller = ref<AbortController | null>(null)
@@ -26,7 +28,18 @@ function parseEventBlock(block: string) {
   if (!data) return null
   try { return { type, data: JSON.parse(data) } } catch { return null }
 }
-function aiError(error: any, fallback: string) { return error?.response?.data?.error?.message || error?.message || fallback }
+function aiError(error: any, fallback: string) {
+  const safeMessage = error?.response?.data?.error?.message
+  return typeof safeMessage === 'string' && safeMessage.trim() ? safeMessage : fallback
+}
+function pageContext(context: AiPageContext | null | undefined): AiPageContext | undefined {
+  if (!context) return undefined
+  const { route, articleId, selectedText, heading, anchor, shareToken } = context
+  return { ...(route ? { route } : {}), ...(articleId ? { articleId } : {}), ...(selectedText ? { selectedText } : {}), ...(heading ? { heading } : {}), ...(anchor ? { anchor } : {}), ...(shareToken ? { shareToken } : {}) }
+}
+function statusLabel(status: string) {
+  return ({ analyzing: '正在分析问题…', retrieving: '正在搜索本站…', reading: '正在读取文章…', tool: '正在调用站内工具…', generating: '正在生成回答…' } as Record<string, string>)[status] || ''
+}
 
 export function renderAiMarkdown(value: string) {
   const html = marked.parse(String(value || ''), { async: false, breaks: true }) as string
@@ -38,9 +51,17 @@ export function useAi() {
 
   async function refreshAvailability() {
     try {
-      const response = await http.get('/api/ai/models')
-      state.models = Array.isArray(response.data?.models) ? response.data.models : []
-      state.defaultModel = String(response.data?.defaultModel || state.models[0]?.id || 'qwen-fast')
+      const response = await http.get('/api/ai/status', { headers: { 'Cache-Control': 'no-store' } })
+      const readiness = response.data as AiReadiness
+      state.readiness = readiness
+      if (!readiness?.chatReady) {
+        state.models = []; state.availability = 'disabled'; state.error = String(readiness?.message || 'AI 服务尚未完成配置。')
+        return false
+      }
+      const modelsResponse = await http.get('/api/ai/models')
+      state.models = Array.isArray(modelsResponse.data?.models) ? modelsResponse.data.models : []
+      state.defaultModel = String(modelsResponse.data?.defaultModel || state.models[0]?.id || 'qwen-fast')
+      if (!state.models.length) throw new Error('AI 服务尚未返回可用模型。')
       if (!state.models.some((model) => model.id === state.selectedModel)) state.selectedModel = state.defaultModel
       state.availability = 'available'; state.error = ''
       return true
@@ -94,20 +115,31 @@ export function useAi() {
     catch (error: any) { state.error = aiError(error, '重命名会话失败。'); return false }
   }
 
+  async function updateConversation(id: string, patch: { title?: string; selectedModel?: string }) {
+    try {
+      const response = await http.patch(`/api/ai/conversations/${encodeURIComponent(id)}`, patch)
+      const item = conversations.value.find((entry) => entry.id === id)
+      if (item?.id === state.conversationId && response.data?.selectedModel) state.selectedModel = String(response.data.selectedModel)
+      if (item && response.data?.selectedModel) item.selectedModel = String(response.data.selectedModel)
+      if (item && response.data?.title) item.title = String(response.data.title)
+      return true
+    } catch (error: any) { state.error = aiError(error, '更新会话失败。'); return false }
+  }
+
   function open(trigger?: HTMLElement | null, context?: AiPageContext | null) {
     returnFocus = trigger || (document.activeElement instanceof HTMLElement ? document.activeElement : null)
-    state.open = true; state.error = ''; if (context) state.pageContext = context
+    state.open = true; state.error = ''; if (context) state.pageContext = pageContext(context) || null
     if (state.availability === 'unknown') void refreshAvailability()
   }
   function close() { if (isStreaming.value) return; state.open = false; window.setTimeout(() => returnFocus?.focus({ preventScroll: true }), 0) }
-  function setContext(context: AiPageContext | null) { state.pageContext = context }
+  function setContext(context: AiPageContext | null) { state.pageContext = pageContext(context) || null }
   function stop() { controller.value?.abort() }
 
-  async function send(message: string, options: { regenerateMessageId?: string } = {}) {
+  async function send(message: string, options: { regenerateMessageId?: string; quickAction?: AiQuickAction } = {}) {
     const value = message.trim()
-    if ((!value && !options.regenerateMessageId) || controller.value || state.availability !== 'available') return
-    state.error = ''; state.status = '正在准备回答…'
-    const userMessage: AiMessage | null = options.regenerateMessageId ? null : { id: `local-user-${Date.now()}`, role: 'user', content: value, status: 'complete' }
+    if ((!value && !options.regenerateMessageId && !options.quickAction) || controller.value || state.availability !== 'available') return
+    state.error = ''; state.status = 'analyzing'
+    const userMessage: AiMessage | null = options.regenerateMessageId || options.quickAction ? null : { id: `local-user-${Date.now()}`, role: 'user', content: value, status: 'complete' }
     if (userMessage) state.messages.push(userMessage)
     const assistant: AiMessage = { id: `local-assistant-${Date.now()}`, role: 'assistant', content: '', status: 'streaming', citations: [] }
     state.messages.push(assistant)
@@ -116,7 +148,7 @@ export function useAi() {
       const response = await fetch(`${baseUrl}/api/ai/chat`, {
         method: 'POST', credentials: 'include', signal: controller.value.signal,
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ conversationId: state.conversationId || undefined, message: value || undefined, pageContext: state.pageContext || undefined, modelId: state.selectedModel, ...(options.regenerateMessageId ? { regenerate: { assistantMessageId: options.regenerateMessageId } } : {}) }),
+        body: JSON.stringify({ conversationId: state.conversationId || undefined, ...(options.quickAction ? { quickAction: options.quickAction } : { message: value || undefined }), pageContext: pageContext(state.pageContext), modelId: state.selectedModel, ...(options.regenerateMessageId ? { regenerate: { assistantMessageId: options.regenerateMessageId } } : {}) }),
       })
       if (!response.ok || !response.body) { const payload = await response.json().catch(() => ({})); throw new Error(payload?.error?.message || 'AI 请求未能开始。') }
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''
@@ -127,15 +159,17 @@ export function useAi() {
         for (const block of blocks) {
           const event = parseEventBlock(block); if (!event) continue
           if (event.type === 'start') { state.conversationId = String(event.data.conversationId || state.conversationId); assistant.id = String(event.data.messageId || assistant.id) }
+          if (event.type === 'status') state.status = String(event.data.status || '')
           if (event.type === 'delta') assistant.content += String(event.data.text || '')
           if (event.type === 'citation') assistant.citations?.push(event.data as AiCitation)
-          if (event.type === 'tool_start') state.status = event.data.tool === 'search_articles' ? '正在搜索本站资料…' : '正在读取站内内容…'
+          if (event.type === 'tool_start') state.status = event.data.tool === 'search_articles' ? 'retrieving' : 'tool'
           if (event.type === 'usage') state.status = event.data.degraded ? '已使用降级路径完成回答。' : ''
           if (event.type === 'error') { assistant.error = String(event.data.message || 'AI 请求失败'); state.error = assistant.error }
           if (event.type === 'done') assistant.status = event.data.status === 'aborted' ? 'aborted' : event.data.status === 'error' ? 'error' : 'complete'
         }
       }
       if (assistant.status === 'streaming') assistant.status = 'complete'
+      if (assistant.status === 'complete' && !state.status.includes('降级')) state.status = ''
       await loadConversations()
     } catch (error: any) {
       assistant.status = error?.name === 'AbortError' ? 'aborted' : 'error'
@@ -150,5 +184,5 @@ export function useAi() {
     catch (error: any) { state.error = aiError(error, '反馈未保存。') }
   }
 
-  return { state, conversations, loadingHistory, isStreaming, loggedIn, refreshAvailability, loadConversations, createConversation, openConversation, removeConversation, renameConversation, open, close, setContext, stop, send, feedback }
+  return { state, conversations, loadingHistory, isStreaming, loggedIn, refreshAvailability, loadConversations, createConversation, openConversation, removeConversation, renameConversation, updateConversation, open, close, setContext, stop, send, feedback, statusLabel }
 }

@@ -9,8 +9,11 @@
         <h1 class="page-title">{{ post.title }}</h1>
         <div class="byline"><UserAvatar :src="post.avatar_url || post.avatar_path" :name="post.username" :size="36" /><div><RouterLink :to="`/u/${post.blog_slug}`">{{ post.username }}</RouterLink><span>{{ date(post.published_at) }} · {{ post.reading_minutes || 1 }} 分钟阅读 · {{ post.view_count || 0 }} 次阅读</span></div></div>
         <img v-if="post.cover_image" class="cover" :src="post.cover_image" :alt="post.cover_alt_text || '文章封面'" width="1280" height="720" fetchpriority="high" /><p v-if="post.excerpt" class="lead">{{ post.excerpt }}</p>
-        <div ref="articleRef" class="article article-typography" v-html="html" @mouseup="captureSelection" @keyup="captureSelection"></div>
-        <button v-if="selectionAsk" ref="selectionAskButton" class="selection-ask-ai" type="button" :style="{ top: `${selectionAsk.top}px`, left: `${selectionAsk.left}px` }" @click="askSelection"><AppIcon name="sparkles" :size="16" />询问 AI</button>
+        <div ref="articleRef" class="article article-typography" tabindex="-1" v-html="html" @mouseup="captureSelection" @keyup="captureSelection" @keydown.esc.prevent="closeSelectionMenu"></div>
+        <div v-if="selectionAsk" class="selection-ask-ai" role="menu" aria-label="针对选文询问 AI" :style="{ top: `${selectionAsk.top}px`, left: `${selectionAsk.left}px` }" @keydown.esc.prevent.stop="closeSelectionMenu">
+          <button ref="selectionAskButton" type="button" role="menuitem" @click="askSelection()"><AppIcon name="sparkles" :size="15" />询问 AI</button>
+          <button v-for="action in selectionActions" :key="action.id" type="button" role="menuitem" @click="askSelection(action.id)">{{ action.label }}</button>
+        </div>
         <div class="article-actions" aria-label="文章操作"><button class="button" :class="{ selected: liked }" type="button" :disabled="actionPending.like" :aria-pressed="liked" @click="toggleLike"><AppIcon name="heart" :size="17" />{{ actionPending.like ? '处理中' : liked ? '已喜欢' : '喜欢' }} <span>{{ post.like_count }}</span></button><button class="button" :class="{ selected: bookmarked }" type="button" :disabled="actionPending.bookmark" :aria-pressed="bookmarked" @click="toggleBookmark"><AppIcon name="bookmark" :size="17" />{{ actionPending.bookmark ? '处理中' : bookmarked ? '取消收藏' : '收藏' }}</button><button class="button button-secondary" type="button" @click="shareArticle"><AppIcon name="external-link" :size="17" />分享</button><button class="button button-ghost" type="button" :disabled="actionPending.report || reported" @click="report"><AppIcon name="shield" :size="17" />{{ reported ? '已举报' : actionPending.report ? '提交中' : '举报' }}</button></div>
         <p v-if="actionMessage" class="action-status" :class="{ error: actionError }" role="status">{{ actionMessage }}</p>
         <nav v-if="related.previous || related.next" class="post-nav" aria-label="全站前后文章"><RouterLink v-if="related.previous" :to="`/posts/${related.previous.slug}`">← {{ related.previous.title }}</RouterLink><RouterLink v-if="related.next" :to="`/posts/${related.next.slug}`">{{ related.next.title }} →</RouterLink></nav>
@@ -72,6 +75,12 @@ const articleRef = ref<HTMLElement>()
 const ai = useAi()
 const selectionAsk = ref<{ text: string; top: number; left: number; heading: string; anchor: string } | null>(null)
 const selectionAskButton = ref<HTMLButtonElement | null>(null)
+const selectionReturnFocus = ref<HTMLElement | null>(null)
+const selectionActions = [
+  { id: 'selection_explain', label: '解释' },
+  { id: 'selection_expand', label: '展开说明' },
+  { id: 'selection_example', label: '举例' },
+]
 const loading = ref(true)
 const commentsLoading = ref(false)
 const commentsLoadingMore = ref(false)
@@ -144,16 +153,33 @@ function captureSelection() {
     const headings = [...root.querySelectorAll<HTMLElement>('h2,h3,h4')]
     const matched = headings.filter((heading) => heading.getBoundingClientRect().top <= rect.top + 2)
     const current = matched.length ? matched[matched.length - 1] : undefined
-    selectionAsk.value = { text, top: Math.max(8, rect.top - 42), left: Math.min(window.innerWidth - 126, Math.max(8, rect.left)), heading: current?.textContent?.trim() || '', anchor: current?.id || '' }
+    const menuWidth = Math.min(310, Math.max(220, window.innerWidth - 16))
+    const below = rect.top < 58
+    selectionReturnFocus.value = document.activeElement instanceof HTMLElement ? document.activeElement : root
+    selectionAsk.value = {
+      text,
+      top: below ? Math.min(window.innerHeight - 44, rect.bottom + 8) : Math.max(8, rect.top - 44),
+      left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.left)),
+      heading: current?.textContent?.trim() || '',
+      anchor: current?.id || '',
+    }
     nextTick(() => selectionAskButton.value?.focus({ preventScroll: true }))
   }, 0)
 }
-function askSelection() {
-  if (!post.value || !selectionAsk.value) return
-  const selected = selectionAsk.value
-  ai.open(document.activeElement instanceof HTMLElement ? document.activeElement : null, { route: route.fullPath, articleId: post.value.id, selectedText: selected.text, title: post.value.title, heading: selected.heading, anchor: selected.anchor, ...(route.query.share ? { shareToken: String(route.query.share) } : {}) })
+function closeSelectionMenu() {
   selectionAsk.value = null
   window.getSelection()?.removeAllRanges()
+  const target = selectionReturnFocus.value || articleRef.value
+  selectionReturnFocus.value = null
+  nextTick(() => target?.focus({ preventScroll: true }))
+}
+function askSelection(action?: string) {
+  if (!post.value || !selectionAsk.value) return
+  const selected = selectionAsk.value
+  ai.open(document.activeElement instanceof HTMLElement ? document.activeElement : null, { route: route.fullPath, articleId: post.value.id, selectedText: selected.text, heading: selected.heading, anchor: selected.anchor, ...(route.query.share ? { shareToken: String(route.query.share) } : {}) })
+  selectionAsk.value = null
+  window.getSelection()?.removeAllRanges()
+  if (action) nextTick(() => void ai.send('', { quickAction: action as import('@/services/ai').AiQuickAction }))
 }
 
 function setActionMessage(message: string, isError = false) { actionMessage.value = message; actionError.value = isError }
@@ -206,7 +232,7 @@ function closeCommentPreview() {
   })
 }
 function setMetadata() { if (!post.value) return; const description = post.value.excerpt || `${post.value.username} 的公开文章`; setPageMetadata({ title: `${post.value.title} · Own-Web`, description, canonical: window.location.href, type: 'article', image: post.value.cover_image, jsonLd: { '@context': 'https://schema.org', '@type': 'BlogPosting', headline: post.value.title, description, url: window.location.href, datePublished: post.value.published_at, author: { '@type': 'Person', name: post.value.username, url: `${window.location.origin}/u/${encodeURIComponent(post.value.blog_slug)}` }, image: post.value.cover_image ? new URL(post.value.cover_image, window.location.origin).toString() : undefined } }) }
-async function load() { loading.value = true; error.value = ''; commentError.value = ''; actionMessage.value = ''; seriesDetail.value = null; try { const response = await http.get(`/api/public/posts/${route.params.slug}`, shareConfig()); post.value = response.data.post; canComment.value = Boolean(response.data.canComment); liked.value = Boolean(post.value?.viewer_liked); bookmarked.value = Boolean(post.value?.viewer_bookmarked); commentCount.value = Number(post.value?.comment_count || 0); await Promise.all([loadComments(), http.get(`/api/public/posts/${route.params.slug}/related`).then((response) => { related.value = response.data }).catch(() => {}), post.value?.series?.slug ? http.get(`/api/public/series/${post.value.series.slug}`).then((response) => { seriesDetail.value = response.data.series }).catch(() => {}) : Promise.resolve()]); setMetadata(); loading.value = false; await nextTick(); enhance() } catch (e: any) { error.value = e.response?.data?.error?.message || '文章不可用' } finally { loading.value = false } }
+async function load() { loading.value = true; error.value = ''; commentError.value = ''; actionMessage.value = ''; seriesDetail.value = null; try { const response = await http.get(`/api/public/posts/${route.params.slug}`, shareConfig()); post.value = response.data.post; if (post.value) ai.setContext({ route: route.fullPath, articleId: post.value.id, ...(route.query.share ? { shareToken: String(route.query.share) } : {}) }); canComment.value = Boolean(response.data.canComment); liked.value = Boolean(post.value?.viewer_liked); bookmarked.value = Boolean(post.value?.viewer_bookmarked); commentCount.value = Number(post.value?.comment_count || 0); await Promise.all([loadComments(), http.get(`/api/public/posts/${route.params.slug}/related`).then((response) => { related.value = response.data }).catch(() => {}), post.value?.series?.slug ? http.get(`/api/public/series/${post.value.series.slug}`).then((response) => { seriesDetail.value = response.data.series }).catch(() => {}) : Promise.resolve()]); setMetadata(); loading.value = false; await nextTick(); enhance() } catch (e: any) { error.value = e.response?.data?.error?.message || '文章不可用' } finally { loading.value = false } }
 async function toggleLike() { if (!loggedIn.value) return login(); if (!post.value || actionPending.value.like) return; actionPending.value.like = true; const wasLiked = liked.value; const oldCount = post.value.like_count; try { if (wasLiked) { await http.delete(`/api/posts/${post.value.id}/like`, shareConfig()); liked.value = false; post.value.like_count = Math.max(0, oldCount - 1); setActionMessage('已取消喜欢。') } else { await http.post(`/api/posts/${post.value.id}/like`, {}, shareConfig()); liked.value = true; post.value.like_count = oldCount + 1; setActionMessage('已喜欢这篇文章。') } } catch (e: any) { liked.value = wasLiked; post.value.like_count = oldCount; setActionMessage(e.response?.data?.error?.message || '操作未完成，请稍后重试。', true) } finally { actionPending.value.like = false } }
 async function toggleBookmark() { if (!loggedIn.value) return login(); if (!post.value || actionPending.value.bookmark) return; actionPending.value.bookmark = true; const old = bookmarked.value; try { if (old) { await http.delete(`/api/posts/${post.value.id}/bookmark`, shareConfig()); bookmarked.value = false; setActionMessage('已取消收藏。') } else { await http.post(`/api/posts/${post.value.id}/bookmark`, {}, shareConfig()); bookmarked.value = true; setActionMessage('已收藏到你的工作台。') } } catch (e: any) { bookmarked.value = old; setActionMessage(e.response?.data?.error?.message || '收藏未完成，请稍后重试。', true) } finally { actionPending.value.bookmark = false } }
 async function shareArticle() { try { await navigator.clipboard.writeText(window.location.href); setActionMessage('文章链接已复制。') } catch (_) { setActionMessage('请从浏览器地址栏复制文章链接。') } }
@@ -217,7 +243,7 @@ watch(() => route.hash, restoreHash)
 watch(activeHeading, (id) => { nextTick(() => scrollActiveTocItem(id)) })
 onMounted(() => { load(); updateProgress(); window.addEventListener('scroll', updateProgress, { passive: true }); window.addEventListener('hashchange', handleHashChange) })
 onMounted(() => { window.addEventListener('popstate', handlePopState) })
-onBeforeUnmount(() => { headingObserver?.disconnect(); window.removeEventListener('scroll', updateProgress); window.removeEventListener('hashchange', handleHashChange); window.removeEventListener('popstate', handlePopState) })
+onBeforeUnmount(() => { if (ai.state.pageContext?.articleId === post.value?.id) ai.setContext(null); headingObserver?.disconnect(); window.removeEventListener('scroll', updateProgress); window.removeEventListener('hashchange', handleHashChange); window.removeEventListener('popstate', handlePopState) })
 </script>
 
 <style scoped>
@@ -235,7 +261,11 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); window.removeEventListene
 .cover { display: block; width: 100%; max-height: 440px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); margin: var(--space-6) 0; }
 .lead { font-size: 1.18rem; color: var(--muted); border-left: 3px solid var(--accent); padding-left: var(--space-4); }
 .article :deep(.copy-code) { position: absolute; top: var(--space-2); right: var(--space-2); min-height: 30px; padding: 0 var(--space-2); font-size: .75rem; }
-.selection-ask-ai { position: fixed; z-index: 25; display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 10px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow); font-size: .82rem; font-weight: 700; }
+.selection-ask-ai { position: fixed; z-index: 25; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; max-width: min(310px, calc(100vw - 16px)); padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); box-shadow: var(--shadow); }
+.selection-ask-ai button { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font-size: .76rem; font-weight: 700; }
+.selection-ask-ai button:first-child { background: var(--accent); color: var(--on-accent); }
+.selection-ask-ai button:hover, .selection-ask-ai button:focus-visible { background: var(--accent-soft); color: var(--accent-strong); }
+.selection-ask-ai button:first-child:hover, .selection-ask-ai button:first-child:focus-visible { background: var(--accent-strong); color: var(--on-accent); }
 .toc-wrap { align-self: start; position: sticky; top: 88px; max-height: calc(100vh - 220px); overflow-y: auto; min-height: 0; }
 .toc { display: grid; gap: var(--space-2); padding: var(--space-3); font-size: .82rem; }
 .toc a, .toc-mobile a { color: var(--muted); text-decoration: none; }

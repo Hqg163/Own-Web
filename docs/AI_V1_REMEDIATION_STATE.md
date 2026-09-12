@@ -21,7 +21,14 @@ is an external blocker, not completion.
 
 ## Current phase
 
-Phase 0 -- baseline freeze and API contract. Goal created on 2026-09-12.
+Phase 2 -- live Provider and genuine Function Calling remediation. Goal created
+on 2026-09-12.
+
+Completed phase:
+
+- Phase 0 baseline freeze and requirement matrix: `8b28891 audit(ai): document v1 remediation gaps`
+- Phase 1 shared status contract and AI experience: pending this checkpoint's
+  selective commit (all local checks below passed).
 
 ## Starting repository state
 
@@ -71,15 +78,29 @@ Phase 0 -- baseline freeze and API contract. Goal created on 2026-09-12.
 | `npm run api:check` | PASS | Phase 0 baseline, 2026-09-12 |
 | `npm run build` | PASS | Phase 0 baseline; existing bundle-size advisory only |
 | `npm run test:ai` | PASS | 30 unit/API/security checks plus 12 desktop/dark/mobile UI checks |
+| Phase 1 `npm run test:ai` | PASS | 7 RAG + 7 Agent + 6 API + 19 security assertions; 12 Mock browser flows passed and 4 deliberately skipped under Mock configuration |
+| Phase 1 disabled browser flow | PASS | Desktop unavailable launcher/shell run separately with AI Mock runner disabled |
+| Phase 1 typecheck/API/build | PASS | `typecheck`, `api:check`, and production build; existing bundle-size advisory only |
+| Phase 1 visual review | PASS | Actual local 1440px desktop and 390px narrow layouts, light/dark, floating panel/bottom sheet, unavailable states and focus behavior checked |
 | Evaluation command | Mock contract only | 20 rows; real metrics are null |
 | Isolated Qdrant integration | BLOCKED_EXTERNAL | explicit Docker run fails: Docker CLI absent |
 | Live provider tests | BLOCKED_EXTERNAL | no local Qwen/DeepSeek configuration |
 | Existing full test history | Historical only | prior commit report; rerun after each remediation phase |
 
-## Changed files in this phase
+## Phase 1 implementation and verification
 
-- `docs/AI_V1_REMEDIATION_STATE.md` (this durable recovery record)
-- `docs/AI_V1_GAP_AUDIT.md` (complete 20-item requirement matrix from Agent A)
+- Added `GET /api/ai/status` with an exact, cache-bypassed safe readiness
+  contract. It exposes only `state`, readiness booleans, and a product message.
+- Added server-owned quick-action enum, exact request validation, selected model
+  persistence scoped to the requesting user/session, and product-only SSE
+  status events.
+- Removed browser-provided article titles from the AI request contract and
+  centralized client context allowlisting.
+- Rebuilt persistent AI entry points, unavailable state, responsive panel,
+  chat-first `/ai`, contextual quick actions, article selection popover,
+  source cards, dialog focus management, and AI personalization state.
+- Visual verification used temporary local preview only; the preview process was
+  stopped afterward. No user data or secret was sent.
 
 ## External blockers
 
@@ -92,6 +113,7 @@ Phase 0 -- baseline freeze and API contract. Goal created on 2026-09-12.
 
 ## Next exact action
 
-Review Agent A's completed gap matrix; verify both Phase 0 documents with
-`git diff --check`, run the focused baseline checks, then explicitly stage only
-the two documentation files and commit `audit(ai): document v1 remediation gaps`.
+Commit this Phase 1 allowlist without `.codex/HANDOFF.md`; then Agent C audits
+and implements the Phase 2 Provider/Gateway/Function Calling and quota changes
+using deterministic tests only. Do not run a live request until Docker/Qdrant
+and local Qwen configuration have been independently confirmed.
