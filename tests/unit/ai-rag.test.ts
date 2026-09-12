@@ -75,17 +75,19 @@ describe('AI RAG document preparation', () => {
     expect(qdrantCalls.map((call) => call.kind)).toEqual(['upsert', 'delete'])
     const firstPoint: any = (qdrantCalls[0].body as any).points[0]
     expect(firstPoint.vector.dense).toHaveLength(1024)
-    expect(firstPoint.vector.bm25.options.tokenizer).toBe('multilingual')
+    expect(firstPoint.vector.bm25.options).toEqual({ tokenizer: 'multilingual', stemmer: { type: 'none' }, stopwords: {} })
     expect(qdrantCalls[1].body).toMatchObject({ points: ['obsolete-point'] })
     expect(calls.some((call) => call.sql.startsWith('INSERT INTO ai_index_chunks'))).toBe(true)
   })
 
   it('uses hybrid RRF, rehydrates content from MySQL, and degrades safely when reranking fails', async () => {
+    const markdown = '# 资料\n\n授权的站内证据'
+    const chunk = createChunks({ id: 5, content_markdown: markdown })[0]!
     const query = async (sql: string) => {
       if (sql.startsWith('SELECT version FROM ai_index_state')) return [[{ version: 4 }]]
       if (sql.includes('FROM ai_index_chunks c JOIN posts p')) return [[{
-        chunk_id: 'point-1', post_id: 5, content: '授权的站内证据', heading: '资料', heading_path: '资料', heading_anchor: '资料',
-        author_id: 2, status: 'published', visibility: 'public', share_token: null, title: '文章', slug: 'post', published_at: null, updated_at: null,
+        chunk_id: chunk.chunkId, post_id: 5, content: chunk.content, content_hash: chunk.contentHash, heading: '资料', heading_path: '资料', heading_anchor: '资料',
+        author_id: 2, status: 'published', visibility: 'public', share_token: null, title: '文章', slug: 'post', published_at: null, updated_at: null, content_markdown: markdown,
       }]]
       throw new Error(`Unexpected query: ${sql}`)
     }
@@ -93,15 +95,17 @@ describe('AI RAG document preparation', () => {
     const retriever = createRetriever({
       db: { promise: () => ({ query }) },
       config: { confidence: {}, cache: {} },
-      qdrant: { collection: 'fixture', client: { query: async (_collection: string, body: unknown) => { qdrantBody = body; return { points: [{ id: 'point-1', score: 0.7 }] } } } },
+      qdrant: { collection: 'fixture', client: { query: async (_collection: string, body: unknown) => { qdrantBody = body; return { points: [{ id: chunk.chunkId, score: 0.7, payload: { content_hash: chunk.contentHash } }] } } } },
       embeddingProvider: { embed: async () => [deterministicEmbedding('question', 1024)] },
       rerankerProvider: { rerank: async () => { throw new Error('reranker down') } },
       retrievalCache: { get: () => undefined, set: () => undefined },
     })
     const result = await retriever.retrieve('问题', null, {})
     expect(qdrantBody.prefetch).toHaveLength(2)
+    expect(qdrantBody.prefetch[1].query.options).toEqual({ tokenizer: 'multilingual', stemmer: { type: 'none' }, stopwords: {} })
     expect(qdrantBody.query).toEqual({ rrf: { k: 60 } })
     expect(result.degraded).toBe(true)
-    expect(result.citations[0]).toMatchObject({ slug: 'post', excerpt: '授权的站内证据' })
+    expect(result.citations[0]).toMatchObject({ slug: 'post' })
+    expect(result.citations[0].excerpt).toContain('授权的站内证据')
   })
 })

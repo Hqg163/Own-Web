@@ -28,8 +28,9 @@ Completed phase:
 
 - Phase 0 baseline freeze and requirement matrix: `8b28891 audit(ai): document v1 remediation gaps`
 - Phase 1 shared status contract and AI experience: `37d6b87` and `c07bcb9`.
-- Phase 2 live Provider/Function Calling implementation: pending this
-  checkpoint's selective commit (Mock-only validation below passed).
+- Phase 2 live Provider/Function Calling implementation: `9014152
+  fix(ai-provider): implement live providers and tool calling` (the local
+  automated evidence remains Mock-only until a Qwen credential is configured).
 
 ## Starting repository state
 
@@ -85,6 +86,7 @@ Completed phase:
 | Phase 1 visual review | PASS | Actual local 1440px desktop and 390px narrow layouts, light/dark, floating panel/bottom sheet, unavailable states and focus behavior checked |
 | Phase 2 AI suite | PASS | 7 RAG + 12 Agent + 7 API + 25 security assertions; 12 Mock browser flows passed and 4 intentionally skipped under Mock configuration |
 | Phase 2 typecheck/API/build | PASS | `typecheck`, `api:check`, and production build; existing bundle-size advisory only |
+| Phase 3 deterministic RAG guards | PASS | `test:ai-rag` (7 tests) and `api:check`; live Qdrant schema and integration are deliberately not represented as passes |
 | Evaluation command | Mock contract only | 20 rows; real metrics are null |
 | Isolated Qdrant integration | BLOCKED_EXTERNAL | explicit Docker run fails: Docker CLI absent |
 | Live provider tests | BLOCKED_EXTERNAL | no local Qwen/DeepSeek configuration |
@@ -124,6 +126,21 @@ Completed phase:
 - Mock contract tests prove the sequence `model tool call -> Zod/Skill -> tool
   result -> second model call`; no real provider request was made.
 
+## Phase 3 partial checkpoint
+
+- Qdrant collection creation now distinguishes an actual missing collection
+  from connection or authentication failure, so a failed Qdrant connection can
+  never be silently converted into a new-collection attempt.
+- BM25 ingest and query now share the fixed Qdrant 1.19 language-neutral
+  configuration: `multilingual` tokenizer, no stemmer, and empty stopwords.
+- Before a retrieved Qdrant candidate can reach reranking or a model, the
+  server reconstructs the current Markdown chunks from MySQL and requires the
+  stable chunk ID and content hash to match. This prevents an asynchronously
+  stale vector point from becoming external context.
+- The above behavior has deterministic unit coverage. Index lifecycle actions,
+  live collection/schema checks, backfill diagnostics, and real evaluation
+  ground truth remain pending the local Qdrant runtime.
+
 ## External blockers
 
 1. **BLOCKED_EXTERNAL_QDRANT** until the user installs WSL 2 and Docker
@@ -135,8 +152,9 @@ Completed phase:
 
 ## Next exact action
 
-Commit this Phase 2 allowlist without `.codex/HANDOFF.md`; then Agent D audits
-and implements the Phase 3 Qdrant schema, job lifecycle, hybrid retrieval,
-evaluation ground truth, and `ai:doctor` using isolated deterministic tests.
-Do not run a live request until Docker/Qdrant and local Qwen configuration have
-been independently confirmed.
+After Docker Desktop is running and its three verification commands succeed,
+run `docker compose up -d qdrant` in `E:\own_web`, then inspect its health with
+`docker compose ps`. Do not run a live request until Docker/Qdrant and local
+Qwen configuration have been independently confirmed. The next code work is
+the remaining Phase 3 indexing lifecycle, doctor, real-ground-truth, and
+isolated-Qdrant integration work.

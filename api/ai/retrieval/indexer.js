@@ -49,7 +49,7 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
       id: chunk.chunkId,
       vector: {
         dense: vectors[index],
-        bm25: { text: chunk.content, model: 'Qdrant/bm25', options: { tokenizer: 'multilingual' } },
+        bm25: { text: chunk.content, model: 'Qdrant/bm25', options: qdrant.bm25 || { tokenizer: 'multilingual', stemmer: { type: 'none' }, stopwords: {} } },
       },
       payload: payloadFor(post, chunk),
     }));
