@@ -60,7 +60,7 @@
             </select>
           </label>
         </div>
-        <AiChatSurface ref="surface" compact />
+        <AiChatSurface ref="surface" compact variant="panel" />
       </template>
     </aside>
   </div>

@@ -8,8 +8,8 @@ Runtime Agent and all existing Own-Web authorization behavior.
 
 ## Current phase
 
-Phase 4 — live quality evaluation and real-provider acceptance complete;
-Phase 5 Chat-first workspace UI is next.
+Phase 5 — Chat-first workspace UI complete; Phase 6 final security,
+documentation and full-regression acceptance is next.
 
 ## Recovery record
 
@@ -18,10 +18,10 @@ Phase 5 Chat-first workspace UI is next.
 | Starting HEAD / remote | `1a7807f633ca6d2152d395921e2bdcdc7c2c0fa1`, identical locally and on `origin/codex/community-blog-v1` |
 | User-owned staged file | `.codex/HANDOFF.md`; do not edit, unstage or commit it |
 | Current live prerequisites | Docker Qdrant v1.19 healthy; Qwen/Qdrant v1.5 backfill completed with 4 posts, 32 chunks and 36 total points |
-| Completed work | Phases 0–3 plus a 25-case quality dataset, separate catalog/discovery evaluation, real Qwen Function Calling trace, real chunk citation/LOW refusal/catalog/discovery acceptance and updated evaluation documentation |
-| Phase 4 verification | Mock contract: 25 cases. Live: Recall@5 1.0000, catalog completeness 1.0000, intent routing 1.0000, valid refusal 1.0000, discovery precision 0.5000 (correct targets first but broad Top-5 candidates retained), p50/p95 743/875ms. `ai:live:acceptance` PASS with model tool call → Zod Skill → tool result → second model call. |
-| Current architectural gaps | Chat-first workspace visual/mobile/accessibility validation and final security/full regression/documentation delivery |
-| Next exact action | audit `AiPage`, `AiChatSurface`, panel and selection components, then rebuild the `/ai` layout without changing existing site containers |
+| Completed work | Phases 0–4 plus a shared `panel`/`workspace` chat surface, full-height `/ai` reading workspace, responsive history drawer, centered message column, automatic capped composer, compact assistant presentation and preserved source/action/context behaviors |
+| Phase 5 verification | `typecheck` PASS, `build` PASS. AI Playwright suite: 12 PASS across desktop/mobile/light/dark; 4 intentionally skipped unavailable-shell cases. AI security/API/agent suite: 29 PASS. Existing build-size advisory only. |
+| Current architectural gaps | final documentation/security/full regression and visual/performance acceptance |
+| Next exact action | run v1.5-focused tests plus API/E2E/visual/performance/full suite, update operational/security documentation and record every pass, skip or external block honestly |
 
 ## Non-negotiable guardrails
 
