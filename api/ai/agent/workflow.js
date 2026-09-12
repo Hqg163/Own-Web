@@ -108,7 +108,7 @@ function createAgentWorkflow({ contextBuilder, retriever, articleDiscovery = nul
     ];
     const enabledTools = canModelUseTools(decision.intent) ? (skills.tools?.() || []) : [];
     const maxToolRounds = Math.max(1, Number(config.limits.toolRounds || 3));
-    const mockResponse = catalogResult ? `当前可访问目录共有 ${catalogResult.total} 篇文章：${catalogResult.items.map((item, index) => `[C${index + 1}] ${item.title}`).join('\n')}` : discovery?.items?.length ? `根据已授权文章级发现结果：${discovery.items.map((item, index) => `[D${index + 1}] ${item.title}`).join('\n')}` : retrieval ? `根据已授权的站内资料，我找到以下相关信息：${retrieval.candidates.map((item, index) => `[S${index + 1}] ${item.excerpt || item.content.slice(0, 160)}`).join('\n')}` : `这是一个 Mock 模式的直接回复：${message}`;
+    const mockResponse = discovery?.items?.length ? `根据已授权文章级发现结果：${discovery.items.map((item, index) => `[D${index + 1}] ${item.title}`).join('\n')}` : catalogResult ? `当前可访问目录共有 ${catalogResult.total} 篇文章：${catalogResult.items.map((item, index) => `[C${index + 1}] ${item.title}`).join('\n')}` : retrieval ? `根据已授权的站内资料，我找到以下相关信息：${retrieval.candidates.map((item, index) => `[S${index + 1}] ${item.excerpt || item.content.slice(0, 160)}`).join('\n')}` : `这是一个 Mock 模式的直接回复：${message}`;
     let generated = null;
     let fallbackFrom = null;
 
@@ -139,7 +139,7 @@ function createAgentWorkflow({ contextBuilder, retriever, articleDiscovery = nul
     }
     return {
       context, decision,
-      response: compose({ content: generated?.content || '我暂时无法完成回答。', retrieval, catalog: catalogResult, discovery, fallbackFrom }),
+      response: compose({ content: generated?.content || '我暂时无法完成回答。', retrieval, catalog: decision.intent === INTENTS.ARTICLE_CATALOG ? catalogResult : null, discovery, fallbackFrom }),
       model: generated?.model || null, usage: generated?.usage || { inputTokens: 0, outputTokens: 0 }, toolResults, trace: trace(),
     };
   }

@@ -8,8 +8,8 @@ Runtime Agent and all existing Own-Web authorization behavior.
 
 ## Current phase
 
-Phase 3 — adaptive evidence planner/runtime safeguards complete; Phase 4 live
-quality evaluation and acceptance is next.
+Phase 4 — live quality evaluation and real-provider acceptance complete;
+Phase 5 Chat-first workspace UI is next.
 
 ## Recovery record
 
@@ -18,10 +18,10 @@ quality evaluation and acceptance is next.
 | Starting HEAD / remote | `1a7807f633ca6d2152d395921e2bdcdc7c2c0fa1`, identical locally and on `origin/codex/community-blog-v1` |
 | User-owned staged file | `.codex/HANDOFF.md`; do not edit, unstage or commit it |
 | Current live prerequisites | Docker Qdrant v1.19 healthy; Qwen/Qdrant v1.5 backfill completed with 4 posts, 32 chunks and 36 total points |
-| Completed work | Phases 0–2 plus Phase 3 bounded multilingual query rewrites, executable source plan, final-only LOW refusal, independent RRF-degraded confidence, structured conversation summaries, strengthened evidence prompts and opt-in redacted server trace |
-| Phase 3 verification | `test:ai-agent` 18 PASS; `test:ai-rag` 17 PASS plus isolated Qdrant fixture PASS; `typecheck` PASS; `api:check` PASS; `build` PASS; `git diff --check` PASS; existing bundle-size advisory only |
-| Current architectural gaps | expanded quality fixtures/metrics/live acceptance and Chat-first workspace visual/mobile/accessibility validation |
-| Next exact action | audit existing evaluation and live acceptance scripts, then add v1.5 catalog/discovery/recommendation metrics and real-provider evidence traces |
+| Completed work | Phases 0–3 plus a 25-case quality dataset, separate catalog/discovery evaluation, real Qwen Function Calling trace, real chunk citation/LOW refusal/catalog/discovery acceptance and updated evaluation documentation |
+| Phase 4 verification | Mock contract: 25 cases. Live: Recall@5 1.0000, catalog completeness 1.0000, intent routing 1.0000, valid refusal 1.0000, discovery precision 0.5000 (correct targets first but broad Top-5 candidates retained), p50/p95 743/875ms. `ai:live:acceptance` PASS with model tool call → Zod Skill → tool result → second model call. |
+| Current architectural gaps | Chat-first workspace visual/mobile/accessibility validation and final security/full regression/documentation delivery |
+| Next exact action | audit `AiPage`, `AiChatSurface`, panel and selection components, then rebuild the `/ai` layout without changing existing site containers |
 
 ## Non-negotiable guardrails
 

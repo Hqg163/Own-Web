@@ -8,6 +8,9 @@ const { createQdrantStore } = require('../ai/qdrant');
 const { createEmbeddingProvider } = require('../ai/providers/embedding-provider');
 const { createRerankerProvider } = require('../ai/providers/reranker-provider');
 const { createRetriever } = require('../ai/retrieval/retriever');
+const { createArticleDiscovery } = require('../ai/retrieval/article-discovery');
+const { createArticleCatalog } = require('../ai/agent/article-catalog');
+const { createRetrievalPlanner } = require('../ai/agent/retrieval-planner');
 const { TtlLruCache } = require('../ai/cache');
 const { createContextBuilder } = require('../ai/agent/context-builder');
 const { createSkillRegistry } = require('../ai/agent/skills');
@@ -32,10 +35,16 @@ async function main() {
   });
   installUtcPool(db);
   const qdrant = createQdrantStore(config);
+  const embedding = createEmbeddingProvider(config);
+  const reranker = createRerankerProvider(config);
+  const cache = new TtlLruCache(config.cache);
+  const articleDiscovery = createArticleDiscovery({ db, config, qdrant, embeddingProvider: embedding, rerankerProvider: reranker, retrievalCache: cache });
+  const catalogService = createArticleCatalog({ db });
   const workflow = createAgentWorkflow({
     contextBuilder: createContextBuilder({ db, config }),
-    retriever: createRetriever({ db, config, qdrant, embeddingProvider: createEmbeddingProvider(config), rerankerProvider: createRerankerProvider(config), retrievalCache: new TtlLruCache(config.cache) }),
-    skills: createSkillRegistry({ db, config }), gateway: createModelGateway({ config }), memoryStore: createMemoryStore({ db }), config,
+    retriever: createRetriever({ db, config, qdrant, embeddingProvider: embedding, rerankerProvider: reranker, retrievalCache: cache }),
+    articleDiscovery, catalog: catalogService, retrievalPlanner: createRetrievalPlanner(),
+    skills: createSkillRegistry({ db, config, articleDiscovery }), gateway: createModelGateway({ config }), memoryStore: createMemoryStore({ db }), config,
   });
   const run = async (message) => {
     const events = [];
@@ -56,12 +65,23 @@ async function main() {
     const low = await run('站内文章有没有给出量子计算芯片的价格？');
     if (low.result.model || low.result.response.citations.length || low.result.response.content !== noEvidenceResponse()) fail('LOW_CONFIDENCE_REFUSAL_FAILED');
 
+    // These data-source probes deliberately avoid a needless model generation:
+    // catalog completeness and article selection are evaluated at their
+    // authoritative source boundary, while the workflow paths are covered by
+    // the real tool and RAG calls above.
+    const catalog = await catalogService.list({ limit: 50, sort: 'published_desc' }, { user: null, shareToken: null });
+    if (catalog.total !== catalog.items.length || catalog.items.length < 4) fail('CATALOG_COMPLETENESS_FAILED');
+    const discovery = await articleDiscovery.discover('哪些文章与 Vue 响应式调度有关？', null, {}, { limit: 5 });
+    if (!discovery.items.some((citation) => citation.slug === 'vue-3-响应式与调度-一次更新为什么不会立刻触发十次渲染')) fail('ARTICLE_DISCOVERY_FAILED');
+
     console.log(JSON.stringify({
       requestId: crypto.randomUUID(), status: 'PASS',
       checks: [
         { name: 'tool_call_roundtrip', status: 'PASS', trace: ['model_tool_call:search_articles', 'server_validation_and_skill:search_articles', 'tool_result_returned', 'second_model_call'] },
         { name: 'rag_citation', status: 'PASS', citationCount: rag.result.response.citations.length },
         { name: 'low_confidence_refusal', status: 'PASS', citationCount: 0 },
+        { name: 'catalog_completeness', status: 'PASS', citationCount: catalog.items.length },
+        { name: 'article_discovery', status: 'PASS', citationCount: discovery.items.length },
       ],
     }));
   } finally {
