@@ -37,10 +37,12 @@ Completed phase:
 - Branch: `codex/community-blog-v1`
 - Starting implementation commit: `2ca95c4 test(ai): cover article selection and preserve visual baseline`
 - External staged file: `.codex/HANDOFF.md` (preserve unchanged)
-- Local `.env` exists and is ignored by Git. Presence-only inspection found no
-  AI/Qwen/DeepSeek/Qdrant configuration.
-- Docker CLI is unavailable; `wsl.exe` exists but reports that WSL needs
-  installation. `winget` is available.
+- Local `.env` exists and is ignored by Git. A presence-only inspection on
+  2026-09-12 confirmed the required Qwen/Qdrant variables exist; their values
+  were neither read into logs nor stored here.
+- Docker CLI 29.7.2 and Docker Compose v5.5.1 are installed. Docker Desktop's
+  Linux daemon is not currently running (`dockerDesktopLinuxEngine` pipe is
+  unavailable), so Compose cannot start Qdrant yet.
 - Real MySQL audit: 4 posts, 0 `ai_index_chunks`, 0 `ai_index_jobs`, index
   version 0. All currently observed posts are public/published.
 
@@ -143,18 +145,20 @@ Completed phase:
 
 ## External blockers
 
-1. **BLOCKED_EXTERNAL_QDRANT** until the user installs WSL 2 and Docker
-   Desktop, starts it, and confirms `docker version`, `docker compose version`,
-   and `docker run --rm hello-world` succeed.
-2. **BLOCKED_EXTERNAL_QWEN_KEY** for the final live gate until the user locally
-   configures the ignored `.env` or current process environment. Codex must
-   inspect only configuration booleans, never the secret value.
+1. **BLOCKED_EXTERNAL_QDRANT_ENGINE** until the already installed Docker
+   Desktop is started with its WSL 2 Linux engine and `docker version` reports
+   both Client and Server versions. Compose currently cannot connect to the
+   `dockerDesktopLinuxEngine` pipe.
+2. **QWEN_CONFIGURATION_PRESENT**: the required ignored local `.env`
+   variables were found by presence-only inspection. Live calls remain pending
+   Qdrant startup and the ensuing isolated provider checks; Codex must inspect
+   only configuration booleans, never the secret value.
 
 ## Next exact action
 
-After Docker Desktop is running and its three verification commands succeed,
-run `docker compose up -d qdrant` in `E:\own_web`, then inspect its health with
-`docker compose ps`. Do not run a live request until Docker/Qdrant and local
-Qwen configuration have been independently confirmed. The next code work is
-the remaining Phase 3 indexing lifecycle, doctor, real-ground-truth, and
+Open Docker Desktop and wait until its tray/menu status says **Engine running**.
+Then run `docker version` and `docker run --rm hello-world`. Once both succeed,
+the next exact project command is `docker compose up -d qdrant` in
+`E:\own_web`, followed by `docker compose ps`. The next code work is the
+remaining Phase 3 indexing lifecycle, doctor, real-ground-truth, and
 isolated-Qdrant integration work.
