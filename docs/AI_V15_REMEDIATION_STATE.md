@@ -8,7 +8,8 @@ Runtime Agent and all existing Own-Web authorization behavior.
 
 ## Current phase
 
-Phase 0 — baseline audit and implementation plan complete; Phase 1 is next.
+Phase 1 — access-scoped catalog and deterministic query-understanding contract
+complete; Phase 2 article-level discovery index is next.
 
 ## Recovery record
 
@@ -17,9 +18,10 @@ Phase 0 — baseline audit and implementation plan complete; Phase 1 is next.
 | Starting HEAD / remote | `1a7807f633ca6d2152d395921e2bdcdc7c2c0fa1`, identical locally and on `origin/codex/community-blog-v1` |
 | User-owned staged file | `.codex/HANDOFF.md`; do not edit, unstage or commit it |
 | Current live prerequisites | Docker Qdrant v1.19 healthy; Qwen/Qdrant `ai:doctor` all PASS, collection count 32 |
-| Completed work | baseline source audit and full v1.5 phased plan written in this docs set |
-| Current architectural gaps | regex routing, chunk-only discovery, early LOW, no complete catalog tool, raw conversation compaction, constrained Card-based workspace |
-| Next exact action | inspect existing post lifecycle and AI migration/index contracts, then implement Phase 1 query understanding and access-scoped catalog service |
+| Completed work | Phase 0 audit/plan plus Phase 1 strict router decisions, deterministic catalog lane, access-scoped `list_articles`, normalized weighted article search, `EvidenceSet`-ready catalog citations and focused tests |
+| Phase 1 verification | `test:ai-agent` 16 PASS, `typecheck` PASS, `api:check` PASS, `build` PASS, `git diff --check` PASS; existing bundle-size advisory only |
+| Current architectural gaps | article-level discovery index, adaptive multi-source planner, fallback-specific semantic confidence, structured conversation summary, expanded evaluation/trace and Chat-first workspace |
+| Next exact action | inspect index lifecycle/migration contracts, then implement article-level discovery documents and permission-safe discovery retrieval |
 
 ## Non-negotiable guardrails
 

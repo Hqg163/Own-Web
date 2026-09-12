@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const { canAccessPost } = require('../../lib/post-access');
+const { createArticleCatalog } = require('./article-catalog');
 
 const maxText = (value, maximum) => String(value || '').slice(0, maximum);
 function withTimeout(promise, timeoutMs = 2500) {
@@ -15,6 +16,7 @@ const tool = (name, description, parameters) => ({ type: 'function', function: {
 function createSkillRegistry({ db, config }) {
   const query = db.promise().query.bind(db.promise());
   const maxResultChars = config.limits.toolResultChars;
+  const catalog = createArticleCatalog({ db });
 
   async function permittedPosts(rows, user, shareToken) {
     const allowed = [];
@@ -24,15 +26,20 @@ function createSkillRegistry({ db, config }) {
 
   const definitions = {
     search_articles: {
-      schema: z.object({ query: z.string().min(1).max(300), limit: z.number().int().min(1).max(5).default(5) }).strict(),
-      tool: tool('search_articles', '搜索当前用户有权读取的站内文章。', { type: 'object', additionalProperties: false, properties: { query: { type: 'string', minLength: 1, maxLength: 300 }, limit: { type: 'integer', minimum: 1, maximum: 5 } }, required: ['query'] }),
+      schema: z.object({ query: z.string().min(1).max(300), limit: z.number().int().min(1).max(20).default(5) }).strict(),
+      tool: tool('search_articles', '按标题、摘要、标签、分类、专栏和正文关键词搜索当前用户有权读取的站内文章。', { type: 'object', additionalProperties: false, properties: { query: { type: 'string', minLength: 1, maxLength: 300 }, limit: { type: 'integer', minimum: 1, maximum: 20 } }, required: ['query'] }),
       async run(input, context) {
-        const term = `%${input.query.trim().slice(0, 300)}%`;
-        const [rows] = await query('SELECT * FROM posts WHERE title LIKE ? OR excerpt LIKE ? OR content_markdown LIKE ? ORDER BY updated_at DESC,id DESC LIMIT 20', [term, term, term]);
-        return (await permittedPosts(rows, context.user, context.shareToken)).slice(0, input.limit).map((post) => ({
-          id: Number(post.id), title: post.title, slug: post.slug, excerpt: maxText(post.excerpt || post.content_markdown, 600),
-        }));
+        return catalog.search(input, context);
       },
+    },
+    list_articles: {
+      schema: z.object({
+        limit: z.number().int().min(1).max(50).default(20), offset: z.number().int().min(0).max(5000).default(0),
+        sort: z.enum(['published_desc', 'published_asc', 'updated_desc', 'title_asc']).default('published_desc'),
+        category: z.string().max(120).nullable().default(null), tag: z.string().max(120).nullable().default(null), seriesId: z.number().int().positive().nullable().default(null),
+      }).strict(),
+      tool: tool('list_articles', '列出当前用户有权访问的站内文章目录；用于“有哪些、全部、数量、最近发布”等完整目录问题。', { type: 'object', additionalProperties: false, properties: { limit: { type: 'integer', minimum: 1, maximum: 50 }, offset: { type: 'integer', minimum: 0, maximum: 5000 }, sort: { type: 'string', enum: ['published_desc', 'published_asc', 'updated_desc', 'title_asc'] }, category: { type: ['string', 'null'], maxLength: 120 }, tag: { type: ['string', 'null'], maxLength: 120 }, seriesId: { type: ['integer', 'null'], minimum: 1 } } }),
+      async run(input, context) { return catalog.list(input, context); },
     },
     get_article: {
       schema: z.object({ postId: z.number().int().positive().optional() }).strict(),

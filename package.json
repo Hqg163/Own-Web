@@ -23,7 +23,7 @@
     "test:unit": "vitest run --config vitest.config.ts",
     "test:ai-rag:unit": "vitest run --config vitest.config.ts tests/unit/ai-rag.test.ts",
     "test:ai-rag": "npm run test:ai-rag:unit && node tests/support/ai-qdrant-integration.cjs",
-    "test:ai-agent": "vitest run --config vitest.config.ts tests/unit/ai-agent.test.ts",
+    "test:ai-agent": "vitest run --config vitest.config.ts tests/unit/ai-agent.test.ts tests/unit/ai-catalog.test.ts",
     "test:ai-api": "vitest run --config vitest.config.ts tests/unit/ai-api.test.ts",
     "test:ai-ui": "node tests/support/run-ai-e2e.cjs",
     "test:ai-security": "vitest run --config vitest.config.ts tests/unit/ai-security.test.ts tests/unit/ai-api.test.ts tests/unit/ai-agent.test.ts",
