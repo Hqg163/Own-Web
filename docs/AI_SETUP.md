@@ -55,7 +55,21 @@ Run live calibration only with an explicit environment opt-in:
 ```powershell
 $env:AI_LIVE_TESTS='1'
 npm run ai:eval
+npm run ai:live:account
+npm run ai:live:acceptance
+npm run ai:live:security
 ```
+
+`ai:live:account` creates a random temporary user, verifies a real Qwen
+ordinary-chat response plus selected-model/explicit-Memory persistence and
+cross-user isolation, then deletes the user and its cascade-owned AI rows.
+`ai:live:acceptance` verifies a real Qwen Function Calling round trip, cited
+RAG answer and LOW-confidence refusal. `ai:live:security` creates only
+synthetic private/followers/unlisted fixtures, verifies guest denial and
+authorized follower/share-token access, then removes its database rows and
+Qdrant points even after a failure. All three commands output only request IDs,
+check names and numeric counts. They are opt-in because they consume live
+Provider quota; do not run them in routine CI.
 
 Never place provider credentials, API keys, Cookies, raw guest IDs, or copied private article text in `.env.example`, evaluation fixtures, browser logs or commits.
 
@@ -79,3 +93,7 @@ and [API-key workspace/permission rules](https://help.aliyun.com/en/model-studio
 - Check Qdrant collection creation/indexing by running `npm run ai:index:backfill` and reviewing `ai_index_jobs` failures; application article edits are never rolled back because indexing failed.
 - Rebuild after a content migration, lost Qdrant volume or embedding model change: stop writes if required, back up MySQL, recreate the collection, run backfill, then sample authorized article queries.
 - Tune `AI_GUEST_DAILY_LIMIT`, `AI_USER_DAILY_LIMIT`, `AI_MAX_CONCURRENT_PER_USER`, `AI_GLOBAL_DAILY_REQUEST_LIMIT`, and `AI_GLOBAL_DAILY_TOKEN_LIMIT` before production. Defaults are deliberately conservative (5 guest, 50 user requests/day, two concurrent requests per subject).
+- Tune `AI_CONFIDENCE_MIN_EVIDENCE_SCORE` (default `0.4`) and
+  `AI_CONFIDENCE_MIN_LEXICAL_TERMS` (default `1`) through live calibration.
+  These reject weak or lexically unsupported cross-article evidence; they do
+  not replace permission checks or human answer review.

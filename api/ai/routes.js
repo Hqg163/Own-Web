@@ -268,7 +268,16 @@ function mountAiRoutes(app, db, {
           if (event.type === 'tool_start' || event.type === 'tool_end') { if (event.type === 'tool_start') streamedToolCalls += 1; sse(res, event.type, { tool: event.tool }); }
         },
       });
-      streamedContent = result.response.content || streamedContent;
+      const completedContent = String(result.response.content || '');
+      // Some safe workflow exits (navigation and LOW-confidence refusal) do
+      // not invoke a streaming provider. Still send their completed product
+      // response through the single client delta channel.
+      if (!streamedContent && completedContent) {
+        streamedContent = completedContent;
+        sse(res, 'delta', { text: completedContent });
+      } else {
+        streamedContent = completedContent || streamedContent;
+      }
       for (const citation of result.response.citations) sse(res, 'citation', citation);
       const latencyMs = Date.now() - startedAt;
       const status = controller.signal.aborted ? 'aborted' : 'complete';

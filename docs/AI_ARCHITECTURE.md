@@ -2,7 +2,7 @@
 
 ## Scope and trust boundary
 
-AI is an additive feature. The public blog and private workspace retain their existing APIs, routes, sessions and visibility semantics. `AI_ENABLED=false` is the default: the API returns a product-disabled state, `/ai` explains that state, and the global launcher hides after the availability check.
+AI is an additive feature. The public blog and private workspace retain their existing APIs, routes, sessions and visibility semantics. `AI_ENABLED=false` is the default: the API returns a product-disabled state, `/ai` explains that state, and the global launcher remains discoverable as a safe status entry point.
 
 ```text
 Vue panel / /ai / article selection
@@ -27,7 +27,7 @@ ModelGateway (registry only; at most one DeepSeek → Qwen fallback)
 ResponseComposer ── citations, product status, no hidden reasoning
 ```
 
-The browser can send an article ID, route, title/heading/anchor and at most 4,000 selected characters. It cannot assert article body, author, visibility, permission, conversation owner or model capability. Those values are reloaded on the server.
+The browser can send an article ID, route, heading/anchor and at most 4,000 selected characters. It cannot assert an article title/body, author, visibility, permission, conversation owner or model capability. Those values are reloaded on the server.
 
 ## RAG path
 
@@ -47,4 +47,4 @@ The model registry exposes `qwen-fast` (Qwen 3.8 Flash) and `deepseek-quality` (
 
 Signed-in conversations, messages, sources, explicit Memory, settings, feedback, usage and index jobs live in the additive `ai_*` MySQL tables. Guest conversations and preferences live only in process memory for the browser-session cookie lifetime. The database records only a HMAC of the guest ID for quota accounting, never the raw value. No chain-of-thought, secret, Cookie or raw anonymous ID is persisted.
 
-`POST /api/ai/chat` is a `fetch` readable stream rather than EventSource. It emits `start`, `delta`, `citation`, `tool_start`, `tool_end`, `usage`, `done`, and `error`. An aborted browser request aborts the upstream signal, marks its assistant row aborted where applicable, and records actual or estimated usage.
+`POST /api/ai/chat` is a `fetch` readable stream rather than EventSource. It emits `start`, product-only `status`, `delta`, `citation`, `tool_start`, `tool_end`, `usage`, `done`, and `error`. Safe non-streaming exits such as a LOW-confidence refusal are still sent through `delta`, so the client never sees an empty assistant bubble. An aborted browser request aborts the upstream signal, marks its assistant row aborted where applicable, and records actual or estimated usage.

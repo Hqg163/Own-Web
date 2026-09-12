@@ -53,6 +53,17 @@ describe('AI HTTP boundary', () => {
     expect(result.text).toContain('event: done')
   })
 
+  it('sends a completed safe workflow response as a delta when no model stream exists', async () => {
+    const app = mount({ workflow: { run: async () => ({
+      response: { content: '没有足够可信的站内资料，因此不会猜测。', citations: [], degraded: false },
+      usage: { inputTokens: 0, outputTokens: 0 }, model: null, decision: { intent: 'SITE_QA' },
+    }) } })
+    const result = await request(app).post('/api/ai/chat').send({ message: '站内有这个答案吗？' }).expect(200)
+    expect(result.text).toContain('event: delta')
+    expect(result.text).toContain('没有足够可信的站内资料，因此不会猜测。')
+    expect(result.text.indexOf('event: delta')).toBeLessThan(result.text.indexOf('event: done'))
+  })
+
   it('checks conversation ownership through the authenticated user rather than a supplied user id', async () => {
     const get = vi.fn(async (userId: number) => userId === 88 ? null : { id: 'unexpected' })
     const app = mount({ conversationStore: { get, list: async () => [], create: async () => ({}), context: async () => null, append: async () => null, updateMessage: async () => true, compact: async () => null, rename: async () => null, remove: async () => false } })

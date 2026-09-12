@@ -34,3 +34,22 @@ For each calibration run, save the JSON report outside the repository and review
 - Latency: record p50/p95 retrieval and rerank latency, degraded reranker count, provider fallback count and rejected LOW-confidence questions.
 
 Live provider and Qdrant evaluation is explicitly opt-in. The unit/Mock suite proves software contracts, not provider quality or production calibration.
+
+## Recorded local live calibration
+
+After Qdrant backfill produced 32 chunks for the four existing public posts,
+the opt-in 2026-09-12 run evaluated 20 retrieval cases (two no-answer/security
+cases are intentionally excluded from retrieval recall):
+
+- Recall@5: `1.0000`
+- Citation correctness: `0.9792`
+- Confidence-as-answerable accuracy: `1.0000`
+- Retrieval latency: p50 `698ms`, p95 `744ms`
+- The no-answer quantum-price case had zero citations and `LOW` confidence.
+
+This is a local calibration sample, not a production quality claim. The one
+non-matching citation was a secondary personal-knowledge source returned with
+the expected source; retain it as a reranker/citation presentation follow-up.
+Hallucination remains a human answer review metric. Permission leakage is not
+derived from this public corpus; it is separately verified by the opt-in
+synthetic protected-fixture security check.

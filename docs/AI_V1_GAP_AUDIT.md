@@ -12,7 +12,7 @@
 | 内容与索引 | 本机 MySQL 有 4 篇已发布公开文章，`ai_index_chunks=0`、`ai_index_jobs=0`、索引版本为 0。 |
 | 既有安全基础 | `api/lib/post-access.js` 已被博客/API/AI 路径复用；AI 路由在全局强制鉴权之前挂载，并自行做 optional auth、会话和配额处理。该基础必须保留。 |
 
-## 2026-09-12 恢复更新（以 State 为准）
+## 2026-09-12 真实恢复更新（以 State 为准）
 
 上面的“审计基线”和下表记录整改开始时的缺口，不能作为当前完成
 状态。当前可复核证据如下：
@@ -23,14 +23,21 @@
 - #12 的本地 Qdrant 1.19 容器已健康；隔离测试验证了 1024/Cosine、
   BM25-IDF、多语言术语和 RRF。Compose healthcheck 已修复为镜像可用的
   Bash TCP 探针。
-- #13–#14 新增内容哈希复核、每文最多三块、选区相邻块、tombstone、
-  action、lease/recovery、合并和精确 backfill 统计。迁移与单元/API
-  回归已覆盖，但非零真实索引仍依赖 Qwen embedding。
-- #16 已实现脱敏 `ai:doctor`；migration 与 Qdrant 为 PASS，provider
-  三项因 HTTP 403 为 FAIL。#17 已有 22 条四篇公开文章的 ground truth，
-  但 live metrics 尚未产生。#18 因 Qwen workspace/key authorization
-  被阻塞；#19–#20 仍须在 Provider 恢复后做 live security、浏览器、
-  性能和全量验收。
+- #13–#14 的最终真实 backfill 已索引 4 篇既有公开文章为 32 chunks/points，
+  并安全清理 8 个没有 MySQL chunk 的测试 post points（此前的 16 个历史点
+  也已完成清理）。嵌套 Qdrant filter
+  被替换为逐授权分支的合法顶层 filter，再在服务端合并候选。
+- #16 `ai:doctor` 当前全部 PASS（配置、两项 migration、32 points、
+  embedding、rerank、chat）；只输出 request ID、PASS/FAIL 和计数。
+- #17 的最终 live retrieval evaluation 已产生结果：20 个检索案例的 Recall@5
+  为 1.0000、citation correctness 为 0.9792、answerable accuracy 为
+  1.0000；hallucination 的人工语义审查仍单列，不能由检索指标代替。
+- #18 的 mandatory Qwen path（chat/stream/tool/embedding/rerank/RAG/citation/
+  LOW）、文章/选区浏览器流程、真实登录态会话/模型/Memory 持久化均有验收；
+  DeepSeek 未配置，保持 optional blocked。#19 追加了真实
+  private/followers/unlisted fixture、工具 allowlist、上下文分享令牌复核和
+  会话/Memory IDOR 隔离。#20 的最终全量质量门已通过：90 unit、133 E2E、
+  20 visual、security、performance 和四项既有 access smoke 均 PASS。
 
 详情、命令和外部阻塞始终以 `AI_V1_REMEDIATION_STATE.md` 为权威恢复点。
 

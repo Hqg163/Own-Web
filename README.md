@@ -77,6 +77,10 @@ npm run test:performance
 npm run test:all
 ```
 
+## AI/RAG 运行与验收
+
+AI 默认关闭，保持既有站点行为不变。启用真实 Provider、Qdrant 与索引的安全配置说明见 [AI_SETUP.md](docs/AI_SETUP.md)，安全边界见 [AI_SECURITY.md](docs/AI_SECURITY.md)。日常诊断使用 `npm run ai:doctor`；真实 Provider 验收必须在当前 shell 显式设置 `AI_LIVE_TESTS=1` 后运行 `npm run ai:eval`、`npm run ai:live:account`、`npm run ai:live:acceptance` 和 `npm run ai:live:security`。这些命令不会输出或保存密钥；后 3 项会消耗 Provider 额度。
+
 视觉测试覆盖 Light/Dark 的 1440、1280、1024、768、390 viewport；性能脚本分别验证 Long、Math、Comment-heavy fixtures，并记录 Lighthouse requested URL 与 final URL。真实部署没有凭据时，生产匿名/作者/第二账号验证必须标记为 `Needs Production Verification`，不能用测试数据库证据替代。
 
 视频元数据读取依赖系统中的 FFmpeg/ffprobe。上传失败时请检查 FFmpeg 是否已安装并加入 PATH。

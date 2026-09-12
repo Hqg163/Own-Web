@@ -97,6 +97,30 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
     return { indexed: chunks.length, contentHash: hash(post.content_markdown) };
   }
 
+  async function pruneOrphanedPostPoints() {
+    if (!qdrant.client) return 0;
+    const [stored] = await query('SELECT chunk_id FROM ai_index_chunks');
+    const validIds = new Set(stored.map((row) => String(row.chunk_id)));
+    const orphaned = [];
+    let offset;
+    do {
+      const page = await qdrant.client.scroll(qdrant.collection, {
+        limit: 100,
+        offset,
+        with_payload: ['source_type'],
+        with_vector: false,
+      });
+      for (const point of page.points || []) {
+        if (point.payload?.source_type === 'post' && !validIds.has(String(point.id))) orphaned.push(String(point.id));
+      }
+      offset = page.next_page_offset;
+    } while (offset);
+    for (let start = 0; start < orphaned.length; start += 100) {
+      await qdrant.client.delete(qdrant.collection, { wait: true, points: orphaned.slice(start, start + 100) });
+    }
+    return orphaned.length;
+  }
+
   async function backfill() {
     const [posts] = await query('SELECT id FROM posts ORDER BY id');
     const summary = { scannedPosts: posts.length, indexedPosts: 0, indexedChunks: 0, failures: [], qdrantPointCount: null };
@@ -109,6 +133,8 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
         summary.failures.push({ postId: Number(post.id), code: error.code || 'INDEX_FAILED' });
       }
     }
+    try { summary.prunedOrphanedPoints = await pruneOrphanedPostPoints(); }
+    catch (error) { summary.failures.push({ postId: null, code: error.code || 'ORPHAN_PRUNE_FAILED' }); }
     if (qdrant.client) {
       try { summary.qdrantPointCount = Number((await qdrant.client.count(qdrant.collection, { exact: true })).count || 0); } catch (_) { summary.qdrantPointCount = null; }
     }
@@ -116,7 +142,7 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
     return { ...summary, scanned: summary.scannedPosts, indexed: summary.indexedChunks, errors: summary.failures };
   }
 
-  return { loadPost, indexPost, removePost, backfill };
+  return { loadPost, indexPost, removePost, backfill, pruneOrphanedPostPoints };
 }
 
 function createIndexQueue({ db, config, indexer }) {

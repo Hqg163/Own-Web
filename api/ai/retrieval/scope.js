@@ -22,7 +22,11 @@ async function buildRetrievalScope(query, user, context = {}) {
     }
   }
   const scope = { userId: user?.id ? Number(user.id) : null, explicitPostIds, branches };
-  scope.filter = { should: branches.map((branch) => ({ filter: branch })), min_should: { min_count: 1 } };
+  // Qdrant 1.19 accepts a Filter as the query filter, but does not accept a
+  // nested Filter as an item in `should`. Keep each access branch as a valid
+  // top-level filter; the retriever merges their bounded hybrid results.
+  scope.filters = branches;
+  scope.filter = branches[0];
   scope.hash = crypto.createHash('sha256').update(JSON.stringify({ userId: scope.userId, explicitPostIds, branches })).digest('hex');
   return scope;
 }

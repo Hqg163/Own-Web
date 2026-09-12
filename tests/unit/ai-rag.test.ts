@@ -4,7 +4,7 @@ import { createHeadingId } from '../../api/ai/retrieval/heading.js'
 import { evaluateConfidence } from '../../api/ai/retrieval/confidence.js'
 import { deterministicEmbedding } from '../../api/ai/providers/embedding-provider.js'
 import { createIndexer, createIndexQueue, normalizeAction } from '../../api/ai/retrieval/indexer.js'
-import { createRetriever } from '../../api/ai/retrieval/retriever.js'
+import { createRetriever, hasLexicalSupport, selectSupportedCandidates } from '../../api/ai/retrieval/retriever.js'
 
 describe('AI RAG document preparation', () => {
   it('uses the same stable heading anchor contract as the article renderer', () => {
@@ -49,6 +49,23 @@ describe('AI RAG document preparation', () => {
     expect(evaluateConfidence([])).toMatchObject({ level: 'LOW', reason: 'no_evidence' })
     expect(evaluateConfidence([{ postId: 1, score: 0.1 }])).toMatchObject({ level: 'LOW', reason: 'weak_evidence' })
     expect(evaluateConfidence([{ postId: 1, score: 0.8 }, { postId: 2, score: 0.5 }])).toMatchObject({ level: 'HIGH' })
+  })
+
+  it('does not present weak cross-article candidates as evidence', () => {
+    const candidates = selectSupportedCandidates([
+      { chunkId: 'strong', rerankScore: 0.9 },
+      { chunkId: 'supported', rerankScore: 0.5 },
+      { chunkId: 'weak', rerankScore: 0.31 },
+      { chunkId: 'selection', rerankScore: 0.1, selectionEvidence: true },
+    ], { minEvidenceScore: 0.4 })
+    expect(candidates.map((item) => item.chunkId)).toEqual(['strong', 'supported', 'selection'])
+    expect(selectSupportedCandidates([{ chunkId: 'weak', rerankScore: 0.31 }], { minEvidenceScore: 0.4 })).toEqual([])
+  })
+
+  it('requires a meaningful multilingual term overlap before site-wide evidence is presented', () => {
+    const vueEvidence = [{ title: 'Vue 调度', heading: '批量写入', content: '多个同步写入会在队列中合并，并在微任务中渲染。' }]
+    expect(hasLexicalSupport('Vue 的同步写入为什么会合并渲染？', vueEvidence)).toBe(true)
+    expect(hasLexicalSupport('站内文章有没有给出量子计算芯片的价格？', vueEvidence)).toBe(false)
   })
 
   it('upserts fresh hybrid points before removing obsolete point IDs', async () => {
@@ -100,13 +117,33 @@ describe('AI RAG document preparation', () => {
       rerankerProvider: { rerank: async () => { throw new Error('reranker down') } },
       retrievalCache: { get: () => undefined, set: () => undefined },
     })
-    const result = await retriever.retrieve('问题', null, {})
+    const result = await retriever.retrieve('授权的站内证据是什么？', null, {})
     expect(qdrantBody.prefetch).toHaveLength(2)
     expect(qdrantBody.prefetch[1].query.options).toEqual({ tokenizer: 'multilingual', stemmer: { type: 'none' }, stopwords: {} })
     expect(qdrantBody.query).toEqual({ rrf: { k: 60 } })
     expect(result.degraded).toBe(true)
     expect(result.citations[0]).toMatchObject({ slug: 'post' })
     expect(result.citations[0].excerpt).toContain('授权的站内证据')
+  })
+
+  it('runs each exact retrieval access branch as a valid top-level Qdrant filter', async () => {
+    const query = async (sql: string) => {
+      if (sql.startsWith('SELECT version FROM ai_index_state')) return [[{ version: 4 }]]
+      if (sql.startsWith('SELECT following_id FROM follows')) return [[{ following_id: 9 }]]
+      throw new Error(`Unexpected query: ${sql}`)
+    }
+    const qdrantBodies: any[] = []
+    const retriever = createRetriever({
+      db: { promise: () => ({ query }) }, config: { confidence: {}, cache: {} },
+      qdrant: { collection: 'fixture', client: { query: async (_collection: string, body: unknown) => { qdrantBodies.push(body); return { points: [] } } } },
+      embeddingProvider: { embed: async () => [deterministicEmbedding('scope', 1024)] },
+      rerankerProvider: { rerank: async () => [] }, retrievalCache: { get: () => undefined, set: () => undefined },
+    })
+    await retriever.retrieve('范围', { id: 2 }, {})
+    expect(qdrantBodies).toHaveLength(3)
+    expect(qdrantBodies[0].prefetch[0].filter).toEqual({ must: [{ key: 'status', match: { value: 'published' } }, { key: 'visibility', match: { value: 'public' } }] })
+    expect(qdrantBodies[1].prefetch[0].filter).toEqual({ must: [{ key: 'author_id', match: { value: 2 } }] })
+    expect(qdrantBodies[2].prefetch[0].filter).toEqual({ must: [{ key: 'status', match: { value: 'published' } }, { key: 'visibility', match: { value: 'followers' } }, { key: 'author_id', match: { any: [9] } }] })
   })
 
   it('removes recorded tombstones and the server-owned post filter before clearing index state', async () => {
@@ -124,6 +161,28 @@ describe('AI RAG document preparation', () => {
     await expect(indexer.removePost(9)).resolves.toEqual({ deleted: 2 })
     expect(qdrantCalls[0]).toMatchObject({ points: expect.arrayContaining(['stored-point', 'tombstone-point']) })
     expect(qdrantCalls[1]).toEqual({ wait: true, filter: { must: [{ key: 'post_id', match: { value: 9 } }] } })
+  })
+
+  it('prunes only orphaned post points after a backfill and preserves other source types', async () => {
+    const qdrantCalls: Array<any> = []
+    const query = async (sql: string) => {
+      if (sql === 'SELECT chunk_id FROM ai_index_chunks') return [[{ chunk_id: 'current-post-point' }]]
+      throw new Error(`Unexpected query: ${sql}`)
+    }
+    const indexer = createIndexer({
+      db: { promise: () => ({ query }) }, config: { enabled: true, embedding: { dimensions: 1024 } },
+      qdrant: { collection: 'fixture', client: {
+        scroll: async () => ({ points: [
+          { id: 'current-post-point', payload: { source_type: 'post' } },
+          { id: 'orphaned-post-point', payload: { source_type: 'post' } },
+          { id: 'other-source-point', payload: { source_type: 'project' } },
+        ], next_page_offset: null }),
+        delete: async (_collection: string, body: unknown) => qdrantCalls.push(body),
+      } },
+      embeddingProvider: { embed: async () => [] },
+    })
+    await expect(indexer.pruneOrphanedPostPoints()).resolves.toBe(1)
+    expect(qdrantCalls).toEqual([{ wait: true, points: ['orphaned-post-point'] }])
   })
 
   it('coalesces a post action and claims it with a lease before the worker runs it', async () => {

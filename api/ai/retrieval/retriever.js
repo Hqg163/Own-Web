@@ -3,6 +3,44 @@ const { evaluateConfidence } = require('./confidence');
 const { canAccessPost } = require('../../lib/post-access');
 const { createChunks } = require('./chunker');
 
+function rerankScore(candidate) {
+  return Number(candidate?.rerankScore ?? candidate?.score ?? 0);
+}
+
+function selectSupportedCandidates(candidates, confidence = {}) {
+  const topScore = rerankScore(candidates[0]);
+  const minimum = Number(confidence.minEvidenceScore ?? 0.4);
+  const floor = Math.max(minimum, topScore * 0.5);
+  return candidates.filter((candidate) => candidate.selectionEvidence || rerankScore(candidate) >= floor);
+}
+
+const GENERIC_TERMS = new Set(['本站', '文章', '问题', '关于', '相关', '内容', '什么', '为何', '为什么', '如何', '怎么', '有没', '没有', '给出', '哪些', '多少', '是否', '这个', '那个', '其中', '一下', '请问', '解释', '说明', '推荐', 'which', 'what', 'when', 'where', 'why', 'how', 'the', 'and', 'for', 'with', 'from', 'post', 'article', 'site']);
+
+function meaningfulTerms(value) {
+  const terms = new Set();
+  const text = String(value || '').toLocaleLowerCase();
+  for (const word of text.match(/[a-z0-9_./:-]{2,}/g) || []) if (!GENERIC_TERMS.has(word)) terms.add(word);
+  for (const run of text.match(/[\u3400-\u9fff\uf900-\ufaff]+/g) || []) {
+    for (let index = 0; index < run.length - 1; index += 1) {
+      const term = run.slice(index, index + 2);
+      if (!GENERIC_TERMS.has(term)) terms.add(term);
+    }
+  }
+  return terms;
+}
+
+function hasLexicalSupport(question, candidates, minimum = 1) {
+  const questionTerms = meaningfulTerms(question);
+  if (!questionTerms.size) return true;
+  const evidenceTerms = new Set();
+  for (const candidate of candidates) {
+    for (const term of meaningfulTerms(`${candidate.title || ''}\n${candidate.heading || ''}\n${candidate.content || ''}`)) evidenceTerms.add(term);
+  }
+  let matches = 0;
+  for (const term of questionTerms) if (evidenceTerms.has(term) && ++matches >= Math.max(1, Number(minimum) || 1)) return true;
+  return false;
+}
+
 function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvider, retrievalCache }) {
   const query = db.promise().query.bind(db.promise());
 
@@ -96,17 +134,23 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
     const cached = retrievalCache?.get(cacheKey);
     if (cached) return cached;
     const [vector] = await embeddingProvider.embed([question]);
-    let response;
+    let responses;
     try {
-      response = await qdrant.client.query(qdrant.collection, {
+      responses = await Promise.all((scope.filters || [scope.filter]).map((filter) => qdrant.client.query(qdrant.collection, {
         prefetch: [
-          { query: vector, using: 'dense', limit: 20, filter: scope.filter },
-          { query: { text: question, model: 'Qdrant/bm25', options: qdrant.bm25 || { tokenizer: 'multilingual', stemmer: { type: 'none' }, stopwords: {} } }, using: 'bm25', limit: 20, filter: scope.filter },
+          { query: vector, using: 'dense', limit: 20, filter },
+          { query: { text: question, model: 'Qdrant/bm25', options: qdrant.bm25 || { tokenizer: 'multilingual', stemmer: { type: 'none' }, stopwords: {} } }, using: 'bm25', limit: 20, filter },
         ], query: { rrf: { k: 60 } }, limit: 20, with_payload: true,
-      });
+      })));
     } catch (error) { throw Object.assign(new Error('本站知识检索暂时不可用'), { code: 'QDRANT_UNAVAILABLE', cause: error }); }
-    const points = response?.points || response || [];
-    const hydrated = await hydrate(Array.isArray(points) ? points : [], user, context);
+    const pointsById = new Map();
+    for (const response of responses) {
+      for (const point of response?.points || response || []) {
+        const existing = pointsById.get(String(point.id));
+        if (!existing || Number(point.score || 0) > Number(existing.score || 0)) pointsById.set(String(point.id), point);
+      }
+    }
+    const hydrated = await hydrate([...pointsById.values()], user, context);
     let reranked = hydrated;
     let degraded = false;
     try { reranked = await rerankerProvider.rerank(question, hydrated); } catch (_) { degraded = true; }
@@ -116,10 +160,15 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
       if (existing) Object.assign(existing, { selectionEvidence: true, rerankScore: Math.max(Number(existing.rerankScore ?? existing.score ?? 0), 1) });
       else byId.set(String(neighbor.chunkId), neighbor);
     }
-    const candidates = diversify(prioritize([...byId.values()], context), 5);
+    const candidates = diversify(selectSupportedCandidates(prioritize([...byId.values()], context), config.confidence), 5);
+    const lexicalSupport = Boolean(context.articleId || context.selectedText) || hasLexicalSupport(question, candidates, config.confidence?.minLexicalTerms);
+    const confidence = lexicalSupport
+      ? evaluateConfidence(candidates, config.confidence)
+      : { ...evaluateConfidence(candidates, config.confidence), level: 'LOW', reason: 'no_lexical_support', lexicalSupport: false };
+    const evidence = lexicalSupport ? candidates : [];
     const result = {
-      scope, candidates, confidence: evaluateConfidence(candidates, config.confidence), degraded,
-      citations: candidates.map((candidate, index) => ({ id: `S${index + 1}`, ...candidate, excerpt: candidate.content.slice(0, 420) })),
+      scope, candidates: evidence, confidence, degraded,
+      citations: evidence.map((candidate, index) => ({ id: `S${index + 1}`, ...candidate, excerpt: candidate.content.slice(0, 420) })),
     };
     retrievalCache?.set(cacheKey, result);
     return result;
@@ -127,4 +176,4 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
   return { retrieve, buildRetrievalScope: (user, context) => buildRetrievalScope(query, user, context) };
 }
 
-module.exports = { createRetriever };
+module.exports = { createRetriever, selectSupportedCandidates, hasLexicalSupport };

@@ -21,8 +21,10 @@ is an external blocker, not completion.
 
 ## Current phase
 
-Phase 3 -- RAG, indexing lifecycle, and diagnostics remediation. Goal created
-on 2026-09-12.
+Phase 7 -- final acceptance complete; clean, scoped commit pending.
+The previously blocked Goal resumed on 2026-09-12 after the operator restored
+the Qwen account. The Goal service retains its historical `blocked` value until
+the final acceptance decision; this document is the current recovery record.
 
 Completed phase:
 
@@ -31,23 +33,25 @@ Completed phase:
 - Phase 2 live Provider/Function Calling implementation: `9014152
   fix(ai-provider): implement live providers and tool calling` (the local
   automated evidence remains Mock-only until a Qwen credential is configured).
+- Phase 3 live diagnostics and lifecycle safety: `0c15892 fix(ai-rag): harden
+  lifecycle and live diagnostics`.
 
 ## Starting repository state
 
 - Branch: `codex/community-blog-v1`
 - Starting implementation commit: `2ca95c4 test(ai): cover article selection and preserve visual baseline`
 - External staged file: `.codex/HANDOFF.md` (preserve unchanged)
-- Local `.env` exists and is ignored by Git. A presence-only inspection on
-  2026-09-12 confirmed the required Qwen/Qdrant variables exist; their values
-  were neither read into logs nor stored here.
+- Local `.env` exists and is ignored by Git. Presence-only inspection confirms
+  the required Qwen/Qdrant variables exist; values were never read into logs
+  or stored here.
 - Docker CLI 29.7.2 and Docker Compose v5.5.1 are installed. The pinned
   `qdrant/qdrant:v1.19.0` container is healthy and bound only to
   `127.0.0.1:6333`; its Compose healthcheck now uses Bash TCP probing because
   this image does not include `curl` or `wget`.
-- Real MySQL audit: 4 posts, 0 `ai_index_chunks`, 0 `ai_index_jobs`, index
-  version 0. All currently observed posts are public/published.
+- Real MySQL audit: 4 existing public/published posts are indexed into 32
+  chunks. The Qdrant collection also has 32 points after orphan cleanup.
 
-## Confirmed gaps
+## Confirmed gaps at freeze time
 
 - The global launcher hides when AI is disabled; `/ai` is a sparse disabled
   state rather than a complete product state.
@@ -56,12 +60,12 @@ Completed phase:
   `tools` nor `tool_calls`; the workflow chooses Skills itself.
 - Rerank uses the wrong `/rerank` endpoint. Qwen chat, embedding, and rerank
   need distinct endpoint handling.
-- Qdrant schema and hybrid-query integration are verified, but backfill and
-  Qwen chat/embedding/rerank/tool-call remain blocked by Provider HTTP 403.
+- Qdrant schema and hybrid-query integration were verified, but the first
+  live backfill and Qwen calls were blocked by Provider HTTP 403.
 - RAG job deletion can leave Qdrant points after database cascade; scheduled
   publication and stale-job recovery need coverage.
-- Real answers, citations, browser flows and security fixtures remain
-  unverified until Qwen authorizes a live request.
+- Real answers, citations, browser flows and protected-content fixtures were
+  awaiting live Provider authorization.
 
 ## Decisions locked
 
@@ -98,6 +102,15 @@ Completed phase:
 | `ai:doctor` infrastructure | PARTIAL | configuration/migration/Qdrant PASS; embedding/rerank/chat FAIL with safe HTTP 403 evidence |
 | Live provider tests | BLOCKED_EXTERNAL | all three Qwen interfaces returned 403; no response body, URL or secret was recorded |
 | Existing full test history | Historical only | prior commit report; rerun after each remediation phase |
+| Qwen/Qdrant readiness after recovery | PASS | `ai:doctor`: configuration, two AI migrations, Qdrant count 32, embedding, rerank and chat all PASS; output contained only a request ID and counts |
+| Real index rebuild | PASS | Final `ai:index:backfill`: 4 scanned/indexed posts, 32 chunks/points, 8 test-origin orphan points pruned; no failures |
+| Real hybrid evaluation | PASS with calibration follow-up | Final 20-case public-retrieval run: Recall@5 1.0000, citation correctness 0.9792, answerable accuracy 1.0000, p50 698ms, p95 744ms; two security/no-answer cases are intentionally outside retrieval recall |
+| Real Qwen tool trace | PASS | `ai:live:acceptance` recorded model-selected `search_articles` -> server validation/Skill -> tool result -> second model call, plus a real citation and LOW-confidence refusal |
+| Real logged-in persistence | PASS | `ai:live:account` used a temporary account to verify real-Qwen conversation response, two persisted messages, selected model, explicit Memory and cross-user conversation/Memory isolation; the account was deleted in `finally` |
+| Real protected-content validation | PASS | `ai:live:security` indexed three synthetic private/followers/unlisted fixtures; guest citations 0, authorized follower/share-token reads passed, tool/context authorization passed, then fixture rows and vector points were removed |
+| Browser live flows | PASS | Actual localhost UI: public RAG answer with source-anchor jump, keyboard Escape/focus recovery in selection Ask AI, selection context response, and visible LOW-confidence refusal without sources |
+| Current real-index cleanup | PASS | Final backfill: 4 scanned/indexed posts, 32 chunks/points, 8 test-origin orphan points pruned; final `ai:doctor` reports Qdrant count 32 and all six checks PASS |
+| Full legacy regression | PASS | Final serialized `test:all`: typecheck, production build, API syntax, 90 unit, AI, API, 133 E2E (19 explicit environment/config skips), security, 20 visual, Lighthouse and all four account/study/media/blog smoke gates passed. The production build retains its existing >500 kB advisory; Lighthouse correctly marks editor performance `Needs Runtime Verification` without an authenticated test cookie. |
 
 ## Phase 1 implementation and verification
 
@@ -159,28 +172,57 @@ Completed phase:
 - The 22-case evaluation set now maps each answerable public retrieval case to
   one of the actual four public article slugs. This is genuine ground truth,
   but its live metrics remain absent until embedding succeeds.
-- A real Provider check found HTTP 403 for chat, embedding and rerank. This is
-  consistent with a Workspace/Region, custom API-key scope, allowlist or key
-  status mismatch; no secret, endpoint or response body was saved.
+- The earlier HTTP 403 was resolved externally by the operator. It is retained
+  only as historical diagnostic evidence; current live diagnostics are PASS.
+
+## Phase 4--5 live acceptance checkpoint
+
+- Qwen chat, streaming, embeddings, reranking, hybrid retrieval, citations and
+  actual LLM-selected Function Calling now run against the configured local
+  service. The acceptance script prints only a generated request ID, check
+  names and counts; it does not store prompts, tool results, URLs or secrets.
+- A live backfill initially revealed 16 legacy Qdrant points that had no
+  corresponding MySQL chunk. Backfill now removes only orphaned `post` points,
+  preserving other source types. The collection is now 32 live points for 32
+  MySQL chunks.
+- Qdrant 1.19 rejected the former nested `should.filter` shape. Retrieval now
+  sends one valid top-level exact access filter per permission branch and merges
+  their bounded hybrid result IDs before MySQL authorization/re-hydration.
+- Weak cross-article candidates are suppressed with a configurable evidence
+  floor and meaningful multilingual lexical-support check. A no-answer browser
+  query now returns the safe refusal through SSE `delta`, instead of an empty
+  assistant bubble.
+- The protected-content live fixture creates a private author, a follower and
+  an outsider plus three synthetic articles. It removes all fixture database
+  rows and filtered Qdrant points in `finally`; post-run verification found
+  zero temporary rows and `ai:doctor` still reported 32 points.
+- The final live evaluation recorded Recall@5 1.0000, citation correctness
+  0.9792 and confidence-as-answerable accuracy 1.0000 on 20 retrieval cases.
+  Retrieval latency was p50 698ms and p95 744ms in the final run. It does not
+  manufacture hallucination or permission-leakage rates; those retain their
+  separate review/fixture evidence.
+- `ai:live:account` adds a real logged-in Qwen round trip over a temporary
+  user. It verifies selected-model and explicit-Memory persistence plus
+  cross-user conversation/Memory isolation, then deletes that user and all
+  cascade-owned AI rows in `finally`.
+- The global launcher is intentional on every route, so all 60 visual
+  baselines across desktop/tablet/mobile and light/dark were refreshed after
+  manual inspection. Serial visual verification passes. Do not run visual and
+  performance suites concurrently: both use the isolated fixture database.
 
 ## External blockers
 
-1. **BLOCKED_EXTERNAL_QWEN_AUTHORIZATION**: all required variables are present
-   in the ignored local `.env`, and Qdrant is healthy, but Qwen chat,
-   embedding and rerank all return HTTP 403. The next action requires the user
-   to correct the API Key's Region/Workspace/API Host or custom model/IP scope
-   in Model Studio. Codex must inspect only safe outcome codes, never key or
-   endpoint values.
-2. **BLOCKED_OPTIONAL_DEEPSEEK**: no local DeepSeek configuration has been
-   requested or tested. It does not block Qwen acceptance.
+1. **BLOCKED_OPTIONAL_DEEPSEEK**: DeepSeek is deliberately optional and has no
+   configured local credential, so its real model-switch/fallback leg remains
+   `BLOCKED_OPTIONAL_PROVIDER`. This does not block the mandatory Qwen v1 path.
+2. **Operational note**: Qwen quotas may change after acceptance. A future
+   quota response is an external pause, not a successful or failed historical
+   check; rerun only the explicitly opt-in live commands after service recovery.
 
 ## Next exact action
 
-In Model Studio, select the Key's Region, open Workspace Management and copy
-the target Workspace's **API Host**. Ensure the Key belongs to that exact
-Workspace/Region, is enabled, its custom scope permits Qwen chat,
-`text-embedding-v4` and `qwen3-rerank`, and its IPv4 allowlist includes this
-machine (or uses the workspace default). Update only the ignored local `.env`,
-then reply `Qwen 已重新配置`. The next exact validation command is
-`npm run ai:doctor`; only after it is all PASS may `npm run ai:index:backfill`
-run again.
+Review the final scoped diff, run `git diff --check`, and commit only the
+listed AI remediation files. Keep the user-staged `.codex/HANDOFF.md` outside
+that commit. If a future provider quota error occurs, preserve this file and
+resume with `$env:AI_LIVE_TESTS='1'; npm run ai:doctor` after service recovery.
+Never add a secret to a command, log or tracked file.

@@ -34,7 +34,7 @@ const configSchema = z.object({
   cache: z.object({ maxEntries: z.number().int().positive(), ttlMs: z.number().int().positive() }),
   confidence: z.object({
     highThreshold: z.number().min(0).max(1), mediumThreshold: z.number().min(0).max(1),
-    minScoreGap: z.number().min(0).max(1), highCoverage: z.number().min(0).max(1), mediumCoverage: z.number().min(0).max(1),
+    minScoreGap: z.number().min(0).max(1), minEvidenceScore: z.number().min(0).max(1), minLexicalTerms: z.number().int().positive(), highCoverage: z.number().min(0).max(1), mediumCoverage: z.number().min(0).max(1),
   }),
 });
 
@@ -69,7 +69,7 @@ function loadAiConfig(env = process.env) {
     cache: { maxEntries: integer(env.AI_CACHE_MAX_ENTRIES, 500, 1), ttlMs: integer(env.AI_CACHE_TTL_MS, 5 * 60 * 1000, 1000) },
     confidence: {
       highThreshold: decimal(env.AI_CONFIDENCE_HIGH, 0.55), mediumThreshold: decimal(env.AI_CONFIDENCE_MEDIUM, 0.25),
-      minScoreGap: decimal(env.AI_CONFIDENCE_MIN_GAP, 0.05), highCoverage: decimal(env.AI_CONFIDENCE_HIGH_COVERAGE, 0.5), mediumCoverage: decimal(env.AI_CONFIDENCE_MEDIUM_COVERAGE, 0.25),
+      minScoreGap: decimal(env.AI_CONFIDENCE_MIN_GAP, 0.05), minEvidenceScore: decimal(env.AI_CONFIDENCE_MIN_EVIDENCE_SCORE, 0.4), minLexicalTerms: integer(env.AI_CONFIDENCE_MIN_LEXICAL_TERMS, 1, 1), highCoverage: decimal(env.AI_CONFIDENCE_HIGH_COVERAGE, 0.5), mediumCoverage: decimal(env.AI_CONFIDENCE_MEDIUM_COVERAGE, 0.25),
     },
   });
 }
