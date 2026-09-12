@@ -36,8 +36,8 @@ async function main() {
     checks.push({ name: 'configuration', status: configured ? 'PASS' : 'FAIL', count: configured ? 1 : 0 });
     checks.push(await check('migration', async () => {
       await runMigrations(pool);
-      const [rows] = await pool.promise().query("SELECT COUNT(*) AS count FROM schema_migrations WHERE id IN ('20260911_ai_v1','20260912_ai_index_lifecycle_v1')");
-      if (Number(rows[0]?.count || 0) !== 2) throw new Error('migration missing');
+      const [rows] = await pool.promise().query("SELECT COUNT(*) AS count FROM schema_migrations WHERE id IN ('20260911_ai_v1','20260912_ai_index_lifecycle_v1','20260912_ai_article_discovery_v15')");
+      if (Number(rows[0]?.count || 0) !== 3) throw new Error('migration missing');
       return rows[0].count;
     }));
     checks.push(await check('qdrant', async () => {

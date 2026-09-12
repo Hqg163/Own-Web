@@ -27,6 +27,7 @@ const { createEmbeddingProvider } = require('./ai/providers/embedding-provider')
 const { createRerankerProvider } = require('./ai/providers/reranker-provider');
 const { createIndexer, createIndexQueue } = require('./ai/retrieval/indexer');
 const { createRetriever } = require('./ai/retrieval/retriever');
+const { createArticleDiscovery } = require('./ai/retrieval/article-discovery');
 const { TtlLruCache } = require('./ai/cache');
 const { createContextBuilder } = require('./ai/agent/context-builder');
 const { createSkillRegistry } = require('./ai/agent/skills');
@@ -283,6 +284,9 @@ const aiQdrant = createQdrantStore(aiConfig);
 const aiEmbeddingProvider = createEmbeddingProvider(aiConfig);
 const aiIndexer = createIndexer({ db, config: aiConfig, qdrant: aiQdrant, embeddingProvider: aiEmbeddingProvider });
 const aiIndexQueue = createIndexQueue({ db, config: aiConfig, indexer: aiIndexer });
+const aiRerankerProvider = createRerankerProvider(aiConfig);
+const aiRetrievalCache = new TtlLruCache(aiConfig.cache);
+const aiArticleDiscovery = createArticleDiscovery({ db, config: aiConfig, qdrant: aiQdrant, embeddingProvider: aiEmbeddingProvider, rerankerProvider: aiRerankerProvider, retrievalCache: aiRetrievalCache });
 const aiGateway = createModelGateway({ config: aiConfig });
 const aiMemoryStore = createMemoryStore({ db });
 const aiCatalog = createArticleCatalog({ db });
@@ -290,8 +294,8 @@ const aiRetrievalPlanner = createRetrievalPlanner();
 const aiConversationStore = createConversationStore({ db, config: aiConfig });
 const aiWorkflow = createAgentWorkflow({
   contextBuilder: createContextBuilder({ db, config: aiConfig }),
-  retriever: createRetriever({ db, config: aiConfig, qdrant: aiQdrant, embeddingProvider: aiEmbeddingProvider, rerankerProvider: createRerankerProvider(aiConfig), retrievalCache: new TtlLruCache(aiConfig.cache) }),
-  skills: createSkillRegistry({ db, config: aiConfig }), gateway: aiGateway, memoryStore: aiMemoryStore, catalog: aiCatalog, retrievalPlanner: aiRetrievalPlanner, config: aiConfig,
+  retriever: createRetriever({ db, config: aiConfig, qdrant: aiQdrant, embeddingProvider: aiEmbeddingProvider, rerankerProvider: aiRerankerProvider, retrievalCache: aiRetrievalCache }),
+  articleDiscovery: aiArticleDiscovery, skills: createSkillRegistry({ db, config: aiConfig, articleDiscovery: aiArticleDiscovery }), gateway: aiGateway, memoryStore: aiMemoryStore, catalog: aiCatalog, retrievalPlanner: aiRetrievalPlanner, config: aiConfig,
 });
 
 // 博客路由在旧的全局鉴权前注册：公开读取接口自行做可选会话识别，

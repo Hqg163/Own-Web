@@ -17,7 +17,8 @@ function createQdrantStore(config) {
     }
     const indexes = [
       ['post_id', 'integer'], ['author_id', 'integer'], ['status', 'keyword'], ['visibility', 'keyword'],
-      ['series_id', 'integer'], ['published_at', 'datetime'], ['updated_at', 'datetime'],
+      ['series_id', 'integer'], ['published_at', 'datetime'], ['updated_at', 'datetime'], ['source_type', 'keyword'],
+      ['category', 'keyword'], ['tags', 'keyword'],
     ];
     for (const [field, schema] of indexes) {
       try { await client.createPayloadIndex(collection, { field_name: field, field_schema: schema }); } catch (_) { /* idempotent across Qdrant minor versions */ }

@@ -385,6 +385,28 @@ async function runMigrations(db) {
     )`);
     await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260912_ai_index_lifecycle_v1']);
   }
+
+  const [aiDiscoveryDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260912_ai_article_discovery_v15']);
+  if (!aiDiscoveryDone.length) {
+    // Article discovery is deliberately separate from chunk evidence.  Both
+    // point types share one Qdrant collection, while this table preserves the
+    // server-owned freshness and deletion record needed to re-authorize every
+    // discovery result before it is shown to a model.
+    await query(`CREATE TABLE IF NOT EXISTS ai_article_index (
+      post_id BIGINT PRIMARY KEY, point_id CHAR(36) NOT NULL UNIQUE,
+      content_hash CHAR(64) NOT NULL, discovery_content MEDIUMTEXT NOT NULL,
+      metadata JSON NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+      KEY idx_ai_article_index_hash (content_hash)
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS ai_article_index_tombstones (
+      post_id BIGINT PRIMARY KEY, point_id CHAR(36) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, processed_at DATETIME NULL,
+      KEY idx_ai_article_tombstones_pending (processed_at, created_at)
+    )`);
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260912_ai_article_discovery_v15']);
+  }
 }
 
 async function indexExists(db, table, indexName) {

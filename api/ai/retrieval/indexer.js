@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { createChunks, hash } = require('./chunker');
+const { createArticleDocument } = require('./article-document');
 
 const INDEX_ACTIONS = new Set(['upsert', 'delete']);
 const LEASE_SECONDS = 5 * 60;
@@ -24,6 +25,10 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
     const [posts] = await query('SELECT * FROM posts WHERE id = ?', [Number(postId)]);
     const post = posts[0];
     if (!post) return null;
+    if (post.series_id != null) {
+      const [series] = await query('SELECT name FROM series WHERE id=?', [post.series_id]);
+      post.series_name = series[0]?.name || null;
+    }
     const [categories] = await query('SELECT c.name,c.slug FROM post_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.post_id=?', [post.id]);
     const [tags] = await query('SELECT t.name,t.slug FROM post_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.post_id=?', [post.id]);
     return { ...post, categories, tags };
@@ -31,11 +36,21 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
 
   function payloadFor(post, chunk) {
     return {
-      source_type: 'post', post_id: Number(post.id), title: post.title, slug: post.slug, author_id: Number(post.author_id),
+      source_type: 'chunk', post_id: Number(post.id), title: post.title, slug: post.slug, author_id: Number(post.author_id),
       status: post.status, visibility: post.visibility, series_id: post.series_id == null ? null : Number(post.series_id),
       category: post.categories.map((category) => category.slug), tags: post.tags.map((tag) => tag.slug),
       heading: chunk.heading, heading_path: chunk.headingPath, heading_anchor: chunk.headingAnchor, chunk_index: chunk.chunkIndex,
       content_hash: chunk.contentHash, published_at: post.published_at || null, updated_at: post.updated_at || null,
+    };
+  }
+
+  function articlePayloadFor(post, document) {
+    return {
+      source_type: 'article', post_id: Number(post.id), title: post.title, slug: post.slug, author_id: Number(post.author_id),
+      status: post.status, visibility: post.visibility, series_id: post.series_id == null ? null : Number(post.series_id),
+      series_name: post.series_name || null, category: post.categories.map((category) => category.slug), tags: post.tags.map((tag) => tag.slug),
+      headings: document.headings.slice(0, 30), content_hash: document.contentHash,
+      published_at: post.published_at || null, updated_at: post.updated_at || null,
     };
   }
 
@@ -54,10 +69,23 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
     const normalizedPostId = Number(postId);
     const [stored] = await query('SELECT chunk_id FROM ai_index_chunks WHERE post_id=?', [normalizedPostId]);
     const [tombstones] = await query('SELECT chunk_id FROM ai_index_tombstones WHERE post_id=? AND processed_at IS NULL', [normalizedPostId]);
-    const pointIds = [...new Set([...stored, ...tombstones].map((row) => String(row.chunk_id)))];
+    let articles = [];
+    let articleTombstones = [];
+    try {
+      [articles] = await query('SELECT point_id FROM ai_article_index WHERE post_id=?', [normalizedPostId]);
+      [articleTombstones] = await query('SELECT point_id FROM ai_article_index_tombstones WHERE post_id=? AND processed_at IS NULL', [normalizedPostId]);
+    } catch (error) {
+      // A rolling deployment can process an old delete job before the additive
+      // v1.5 migration reaches this connection. The payload filter below still
+      // removes every server-owned point for the post.
+      if (!/ai_article_index/i.test(String(error?.message || ''))) throw error;
+    }
+    const pointIds = [...new Set([...stored, ...tombstones, ...articles, ...articleTombstones].map((row) => String(row.chunk_id || row.point_id)))];
     await deletePostPoints(normalizedPostId, pointIds);
     await query('DELETE FROM ai_index_chunks WHERE post_id=?', [normalizedPostId]);
     await query('DELETE FROM ai_index_tombstones WHERE post_id=?', [normalizedPostId]);
+    await query('DELETE FROM ai_article_index WHERE post_id=?', [normalizedPostId]).catch(() => {});
+    await query('DELETE FROM ai_article_index_tombstones WHERE post_id=?', [normalizedPostId]).catch(() => {});
     await query('UPDATE ai_index_state SET version=version+1 WHERE id=1');
     return { deleted: pointIds.length };
   }
@@ -69,7 +97,8 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
     if (!qdrant.client) throw Object.assign(new Error('Qdrant 未配置'), { code: 'QDRANT_UNAVAILABLE' });
     await qdrant.ensureCollection();
     const chunks = createChunks(post);
-    const vectors = await embeddingProvider.embed(chunks.map((chunk) => chunk.content));
+    const document = createArticleDocument(post);
+    const vectors = await embeddingProvider.embed([...chunks.map((chunk) => chunk.content), document.content]);
     const [oldRows] = await query('SELECT chunk_id FROM ai_index_chunks WHERE post_id=?', [post.id]);
     const oldIds = new Set(oldRows.map((row) => row.chunk_id));
     const points = chunks.map((chunk, index) => ({
@@ -80,6 +109,11 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
       },
       payload: payloadFor(post, chunk),
     }));
+    points.push({
+      id: document.pointId,
+      vector: { dense: vectors[chunks.length], bm25: { text: document.content, model: 'Qdrant/bm25', options: qdrant.bm25 || { tokenizer: 'multilingual', stemmer: { type: 'none' }, stopwords: {} } } },
+      payload: articlePayloadFor(post, document),
+    });
     if (points.length) await qdrant.client.upsert(qdrant.collection, { wait: true, points });
     const newIds = new Set(chunks.map((chunk) => chunk.chunkId));
     const stale = [...oldIds].filter((id) => !newIds.has(id));
@@ -93,14 +127,22 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
         [chunk.chunkId, post.id, chunk.contentHash, chunk.heading, chunk.headingPath, chunk.headingAnchor, chunk.chunkIndex, chunk.content, JSON.stringify(metadata)],
       );
     }
+    await query('DELETE FROM ai_article_index WHERE post_id=?', [post.id]);
+    await query(
+      'INSERT INTO ai_article_index (post_id,point_id,content_hash,discovery_content,metadata) VALUES (?,?,?,?,?)',
+      [post.id, document.pointId, document.contentHash, document.content, JSON.stringify(articlePayloadFor(post, document))],
+    );
     await query('UPDATE ai_index_state SET version=version+1 WHERE id=1');
-    return { indexed: chunks.length, contentHash: hash(post.content_markdown) };
+    return { indexed: chunks.length, indexedArticles: 1, contentHash: hash(post.content_markdown) };
   }
 
   async function pruneOrphanedPostPoints() {
     if (!qdrant.client) return 0;
     const [stored] = await query('SELECT chunk_id FROM ai_index_chunks');
+    let articleRows = [];
+    try { [articleRows] = await query('SELECT point_id FROM ai_article_index'); } catch (_) { articleRows = []; }
     const validIds = new Set(stored.map((row) => String(row.chunk_id)));
+    const validArticleIds = new Set(articleRows.map((row) => String(row.point_id)));
     const orphaned = [];
     let offset;
     do {
@@ -111,7 +153,8 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
         with_vector: false,
       });
       for (const point of page.points || []) {
-        if (point.payload?.source_type === 'post' && !validIds.has(String(point.id))) orphaned.push(String(point.id));
+        if (['post', 'chunk'].includes(point.payload?.source_type) && !validIds.has(String(point.id))) orphaned.push(String(point.id));
+        if (point.payload?.source_type === 'article' && !validArticleIds.has(String(point.id))) orphaned.push(String(point.id));
       }
       offset = page.next_page_offset;
     } while (offset);
@@ -170,6 +213,14 @@ function createIndexQueue({ db, config, indexer }) {
     const [chunks] = await lockedQuery('SELECT chunk_id FROM ai_index_chunks WHERE post_id=?', [Number(postId)]);
     for (const chunk of chunks) {
       await lockedQuery('INSERT IGNORE INTO ai_index_tombstones (chunk_id,post_id) VALUES (?,?)', [String(chunk.chunk_id), Number(postId)]);
+    }
+    try {
+      const [articles] = await lockedQuery('SELECT point_id FROM ai_article_index WHERE post_id=?', [Number(postId)]);
+      for (const article of articles) {
+        await lockedQuery('INSERT IGNORE INTO ai_article_index_tombstones (post_id,point_id) VALUES (?,?)', [Number(postId), String(article.point_id)]);
+      }
+    } catch (error) {
+      if (!/ai_article_index/i.test(String(error?.message || ''))) throw error;
     }
     return chunks.length;
   }

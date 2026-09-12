@@ -13,7 +13,7 @@ function withTimeout(promise, timeoutMs = 2500) {
 
 const tool = (name, description, parameters) => ({ type: 'function', function: { name, description, parameters } });
 
-function createSkillRegistry({ db, config }) {
+function createSkillRegistry({ db, config, articleDiscovery = null }) {
   const query = db.promise().query.bind(db.promise());
   const maxResultChars = config.limits.toolResultChars;
   const catalog = createArticleCatalog({ db });
@@ -62,8 +62,15 @@ function createSkillRegistry({ db, config }) {
         const [baseRows] = await query('SELECT * FROM posts WHERE id=?', [id]);
         const base = baseRows[0];
         if (!base || !await canAccessPost(query, base, context.user, context.shareToken)) throw Object.assign(new Error('无权读取文章'), { code: 'FORBIDDEN' });
-        const [rows] = await query('SELECT * FROM posts WHERE id<>? AND (title LIKE ? OR content_markdown LIKE ?) ORDER BY published_at DESC,id DESC LIMIT 20', [base.id, `%${String(base.title).slice(0, 80)}%`, `%${String(base.title).slice(0, 80)}%`]);
-        return (await permittedPosts(rows, context.user, context.shareToken)).slice(0, input.limit).map((post) => ({ id: Number(post.id), title: post.title, slug: post.slug, excerpt: maxText(post.excerpt || post.content_markdown, 500) }));
+        if (articleDiscovery) {
+          const result = await articleDiscovery.related(base, context, input.limit);
+          return result.items.map((post) => ({ id: Number(post.articleId), title: post.title, slug: post.slug, excerpt: maxText(post.excerpt, 500) }));
+        }
+        // The no-Qdrant fallback remains server-authorized and deterministic;
+        // it deliberately searches the catalog rather than performing a raw
+        // title LIKE query that would make "related" depend on a title match.
+        const result = await catalog.search({ query: String(base.title || '').slice(0, 300), limit: input.limit + 1 }, context);
+        return result.items.filter((post) => Number(post.id) !== Number(base.id)).slice(0, input.limit);
       },
     },
     search_projects: {

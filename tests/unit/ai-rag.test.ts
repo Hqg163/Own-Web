@@ -5,6 +5,8 @@ import { evaluateConfidence } from '../../api/ai/retrieval/confidence.js'
 import { deterministicEmbedding } from '../../api/ai/providers/embedding-provider.js'
 import { createIndexer, createIndexQueue, normalizeAction } from '../../api/ai/retrieval/indexer.js'
 import { createRetriever, hasLexicalSupport, selectSupportedCandidates } from '../../api/ai/retrieval/retriever.js'
+import { createArticleDocument } from '../../api/ai/retrieval/article-document.js'
+import { createArticleDiscovery } from '../../api/ai/retrieval/article-discovery.js'
 
 describe('AI RAG document preparation', () => {
   it('uses the same stable heading anchor contract as the article renderer', () => {
@@ -43,6 +45,14 @@ describe('AI RAG document preparation', () => {
     expect(first).toHaveLength(1024)
     expect(first).toEqual(deterministicEmbedding('Own-Web RAG 检索', 1024))
     expect(Math.hypot(...first)).toBeCloseTo(1, 10)
+  })
+
+  it('builds one stable whole-article discovery document without changing chunk evidence', () => {
+    const post = { id: 18, title: 'YOLOv8 跟踪', excerpt: '检测与 DeepSORT', content_markdown: '# 介绍\n\nYOLOv8\n\n## Kalman Filter\n\n轨迹预测', categories: [{ name: '视觉', slug: 'vision' }], tags: [{ name: 'DeepSORT', slug: 'deepsort' }], series_name: 'CV' }
+    const first = createArticleDocument(post)
+    expect(first).toEqual(createArticleDocument(post))
+    expect(first.content).toContain('章节：介绍；介绍 → Kalman Filter')
+    expect(first.content).toContain('DeepSORT')
   })
 
   it('marks absent or weak evidence as low confidence', () => {
@@ -141,9 +151,9 @@ describe('AI RAG document preparation', () => {
     })
     await retriever.retrieve('范围', { id: 2 }, {})
     expect(qdrantBodies).toHaveLength(3)
-    expect(qdrantBodies[0].prefetch[0].filter).toEqual({ must: [{ key: 'status', match: { value: 'published' } }, { key: 'visibility', match: { value: 'public' } }] })
-    expect(qdrantBodies[1].prefetch[0].filter).toEqual({ must: [{ key: 'author_id', match: { value: 2 } }] })
-    expect(qdrantBodies[2].prefetch[0].filter).toEqual({ must: [{ key: 'status', match: { value: 'published' } }, { key: 'visibility', match: { value: 'followers' } }, { key: 'author_id', match: { any: [9] } }] })
+    expect(qdrantBodies[0].prefetch[0].filter).toEqual({ must: [{ key: 'status', match: { value: 'published' } }, { key: 'visibility', match: { value: 'public' } }, { key: 'source_type', match: { any: ['post', 'chunk'] } }] })
+    expect(qdrantBodies[1].prefetch[0].filter).toEqual({ must: [{ key: 'author_id', match: { value: 2 } }, { key: 'source_type', match: { any: ['post', 'chunk'] } }] })
+    expect(qdrantBodies[2].prefetch[0].filter).toEqual({ must: [{ key: 'status', match: { value: 'published' } }, { key: 'visibility', match: { value: 'followers' } }, { key: 'author_id', match: { any: [9] } }, { key: 'source_type', match: { any: ['post', 'chunk'] } }] })
   })
 
   it('removes recorded tombstones and the server-owned post filter before clearing index state', async () => {
@@ -151,6 +161,7 @@ describe('AI RAG document preparation', () => {
     const query = async (sql: string) => {
       if (sql.startsWith('SELECT chunk_id FROM ai_index_chunks')) return [[{ chunk_id: 'stored-point' }]]
       if (sql.startsWith('SELECT chunk_id FROM ai_index_tombstones')) return [[{ chunk_id: 'tombstone-point' }]]
+      if (sql.startsWith('SELECT point_id FROM ai_article_index')) return [[]]
       return [{ affectedRows: 1 }]
     }
     const indexer = createIndexer({
@@ -167,6 +178,7 @@ describe('AI RAG document preparation', () => {
     const qdrantCalls: Array<any> = []
     const query = async (sql: string) => {
       if (sql === 'SELECT chunk_id FROM ai_index_chunks') return [[{ chunk_id: 'current-post-point' }]]
+      if (sql === 'SELECT point_id FROM ai_article_index') return [[]]
       throw new Error(`Unexpected query: ${sql}`)
     }
     const indexer = createIndexer({
@@ -183,6 +195,27 @@ describe('AI RAG document preparation', () => {
     })
     await expect(indexer.pruneOrphanedPostPoints()).resolves.toBe(1)
     expect(qdrantCalls).toEqual([{ wait: true, points: ['orphaned-post-point'] }])
+  })
+
+  it('queries only article discovery points, rechecks authorization and excludes the seed article', async () => {
+    const post = { id: 6, author_id: 2, title: 'DeepSORT 实践', slug: 'deepsort', excerpt: '目标检测跟踪', status: 'published', visibility: 'public', content_markdown: '# DeepSORT\n\nKalman Filter', categories: [], tags: [], series_name: null }
+    const document = createArticleDocument(post)
+    const query = async (sql: string) => {
+      if (sql.startsWith('SELECT version FROM ai_index_state')) return [[{ version: 7 }]]
+      if (sql.includes('FROM ai_article_index a')) return [[{ ...post, point_id: document.pointId, content_hash: document.contentHash, discovery_content: document.content }]]
+      if (sql.includes('FROM post_categories') || sql.includes('FROM post_tags')) return [[]]
+      throw new Error(`Unexpected article discovery query: ${sql}`)
+    }
+    let body: any
+    const discovery = createArticleDiscovery({
+      db: { promise: () => ({ query }) }, config: { cache: {} },
+      qdrant: { collection: 'fixture', client: { query: async (_collection: string, value: any) => { body = value; return { points: [{ id: document.pointId, score: 0.8, payload: { content_hash: document.contentHash } }] } } }, bm25: undefined },
+      embeddingProvider: { embed: async () => [deterministicEmbedding('DeepSORT', 1024)] }, rerankerProvider: { rerank: async (_q: string, items: any[]) => items.map((item) => ({ ...item, rerankScore: 0.9 })) }, retrievalCache: { get: () => undefined, set: () => undefined },
+    })
+    const result = await discovery.discover('DeepSORT', null, {}, { limit: 5 })
+    expect(body.prefetch[0].filter.must.at(-1)).toEqual({ key: 'source_type', match: { value: 'article' } })
+    expect(result.citations[0]).toMatchObject({ title: 'DeepSORT 实践', slug: 'deepsort' })
+    expect((await discovery.discover('DeepSORT', null, {}, { limit: 5, excludePostId: 6 })).items).toEqual([])
   })
 
   it('coalesces a post action and claims it with a lease before the worker runs it', async () => {
