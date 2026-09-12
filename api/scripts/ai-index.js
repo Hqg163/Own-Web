@@ -38,7 +38,8 @@ async function main() {
       return;
     }
     const queue = createIndexQueue({ db: pool, config, indexer });
-    console.log(JSON.stringify({ retried: await queue.retryFailed() }));
+    const retried = await queue.retryFailed();
+    console.log(JSON.stringify({ retried, processed: await queue.drain() }));
   } finally {
     await pool.promise().end();
   }

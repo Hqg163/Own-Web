@@ -109,12 +109,12 @@ async function assertMigrationSchema() {
     const [tables] = await connection.query(
       `SELECT TABLE_NAME
        FROM information_schema.TABLES
-       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('projects', 'series', 'ai_conversations', 'ai_messages', 'ai_index_chunks', 'ai_usage')
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('projects', 'series', 'ai_conversations', 'ai_messages', 'ai_index_chunks', 'ai_index_jobs', 'ai_index_tombstones', 'ai_usage')
        ORDER BY TABLE_NAME`,
     )
     assert.deepEqual(
       tables.map((row: { TABLE_NAME: string }) => row.TABLE_NAME),
-      ['ai_conversations', 'ai_index_chunks', 'ai_messages', 'ai_usage', 'projects', 'series'],
+      ['ai_conversations', 'ai_index_chunks', 'ai_index_jobs', 'ai_index_tombstones', 'ai_messages', 'ai_usage', 'projects', 'series'],
     )
 
     const [columns] = await connection.query(
@@ -200,10 +200,10 @@ async function assertMigrationSchema() {
 
     const [aiColumns] = await connection.query(
       `SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('ai_conversations', 'ai_messages', 'ai_index_chunks', 'ai_usage')`,
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('ai_conversations', 'ai_messages', 'ai_index_chunks', 'ai_index_jobs', 'ai_index_tombstones', 'ai_usage')`,
     )
     const aiColumnNames = new Set(aiColumns.map((row: { TABLE_NAME: string; COLUMN_NAME: string }) => `${row.TABLE_NAME}.${row.COLUMN_NAME}`))
-    for (const name of ['ai_conversations.user_id', 'ai_messages.conversation_id', 'ai_index_chunks.post_id', 'ai_usage.request_id']) {
+    for (const name of ['ai_conversations.user_id', 'ai_messages.conversation_id', 'ai_index_chunks.post_id', 'ai_index_jobs.action', 'ai_index_jobs.lease_expires_at', 'ai_index_tombstones.chunk_id', 'ai_usage.request_id']) {
       assert.ok(aiColumnNames.has(name), `missing AI migration column ${name}`)
     }
 
@@ -214,6 +214,8 @@ async function assertMigrationSchema() {
     assert.equal(sentinel.length, 1, 'personal-site migration sentinel was not recorded')
     const [aiSentinel] = await connection.query('SELECT id FROM schema_migrations WHERE id = ?', ['20260911_ai_v1'])
     assert.equal(aiSentinel.length, 1, 'AI migration sentinel was not recorded')
+    const [aiLifecycleSentinel] = await connection.query('SELECT id FROM schema_migrations WHERE id = ?', ['20260912_ai_index_lifecycle_v1'])
+    assert.equal(aiLifecycleSentinel.length, 1, 'AI index lifecycle migration sentinel was not recorded')
   } finally {
     await connection.end()
   }

@@ -1,8 +1,20 @@
+const crypto = require('crypto');
 const { createChunks, hash } = require('./chunker');
+
+const INDEX_ACTIONS = new Set(['upsert', 'delete']);
+const LEASE_SECONDS = 5 * 60;
 
 function parseJson(value, fallback) {
   if (Array.isArray(value) || (value && typeof value === 'object')) return value;
   try { return value ? JSON.parse(value) : fallback; } catch (_) { return fallback; }
+}
+
+function normalizeAction(action) {
+  return INDEX_ACTIONS.has(action) ? action : 'upsert';
+}
+
+function queueLockName(postId, action) {
+  return `own_web_ai_index_${normalizeAction(action)}_${Number(postId)}`.slice(0, 64);
 }
 
 function createIndexer({ db, config, qdrant, embeddingProvider }) {
@@ -27,12 +39,27 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
     };
   }
 
+  async function deletePostPoints(postId, pointIds) {
+    if (!qdrant.client) throw Object.assign(new Error('Qdrant 未配置'), { code: 'QDRANT_UNAVAILABLE' });
+    if (pointIds.length) await qdrant.client.delete(qdrant.collection, { wait: true, points: pointIds });
+    // A pre-v1 lifecycle failure may have lost the relational chunk record.
+    // The server-owned post_id payload is still safe to use for this cleanup.
+    await qdrant.client.delete(qdrant.collection, {
+      wait: true,
+      filter: { must: [{ key: 'post_id', match: { value: Number(postId) } }] },
+    });
+  }
+
   async function removePost(postId) {
-    const [stored] = await query('SELECT chunk_id FROM ai_index_chunks WHERE post_id=?', [Number(postId)]);
-    if (qdrant.client && stored.length) await qdrant.client.delete(qdrant.collection, { wait: true, points: stored.map((row) => row.chunk_id) });
-    await query('DELETE FROM ai_index_chunks WHERE post_id=?', [Number(postId)]);
+    const normalizedPostId = Number(postId);
+    const [stored] = await query('SELECT chunk_id FROM ai_index_chunks WHERE post_id=?', [normalizedPostId]);
+    const [tombstones] = await query('SELECT chunk_id FROM ai_index_tombstones WHERE post_id=? AND processed_at IS NULL', [normalizedPostId]);
+    const pointIds = [...new Set([...stored, ...tombstones].map((row) => String(row.chunk_id)))];
+    await deletePostPoints(normalizedPostId, pointIds);
+    await query('DELETE FROM ai_index_chunks WHERE post_id=?', [normalizedPostId]);
+    await query('DELETE FROM ai_index_tombstones WHERE post_id=?', [normalizedPostId]);
     await query('UPDATE ai_index_state SET version=version+1 WHERE id=1');
-    return { deleted: stored.length };
+    return { deleted: pointIds.length };
   }
 
   async function indexPost(postId) {
@@ -54,6 +81,9 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
       payload: payloadFor(post, chunk),
     }));
     if (points.length) await qdrant.client.upsert(qdrant.collection, { wait: true, points });
+    const newIds = new Set(chunks.map((chunk) => chunk.chunkId));
+    const stale = [...oldIds].filter((id) => !newIds.has(id));
+    if (stale.length) await qdrant.client.delete(qdrant.collection, { wait: true, points: stale });
 
     await query('DELETE FROM ai_index_chunks WHERE post_id=?', [post.id]);
     for (const chunk of chunks) {
@@ -63,20 +93,27 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
         [chunk.chunkId, post.id, chunk.contentHash, chunk.heading, chunk.headingPath, chunk.headingAnchor, chunk.chunkIndex, chunk.content, JSON.stringify(metadata)],
       );
     }
-    const newIds = new Set(chunks.map((chunk) => chunk.chunkId));
-    const stale = [...oldIds].filter((id) => !newIds.has(id));
-    if (stale.length) await qdrant.client.delete(qdrant.collection, { wait: true, points: stale });
     await query('UPDATE ai_index_state SET version=version+1 WHERE id=1');
     return { indexed: chunks.length, contentHash: hash(post.content_markdown) };
   }
 
   async function backfill() {
     const [posts] = await query('SELECT id FROM posts ORDER BY id');
-    const summary = { scanned: posts.length, indexed: 0, errors: [] };
+    const summary = { scannedPosts: posts.length, indexedPosts: 0, indexedChunks: 0, failures: [], qdrantPointCount: null };
     for (const post of posts) {
-      try { summary.indexed += Number((await indexPost(post.id)).indexed || 0); } catch (error) { summary.errors.push({ postId: post.id, code: error.code || 'INDEX_FAILED' }); }
+      try {
+        const result = await indexPost(post.id);
+        summary.indexedPosts += 1;
+        summary.indexedChunks += Number(result.indexed || 0);
+      } catch (error) {
+        summary.failures.push({ postId: Number(post.id), code: error.code || 'INDEX_FAILED' });
+      }
     }
-    return summary;
+    if (qdrant.client) {
+      try { summary.qdrantPointCount = Number((await qdrant.client.count(qdrant.collection, { exact: true })).count || 0); } catch (_) { summary.qdrantPointCount = null; }
+    }
+    // Keep the initial CLI fields so existing local automation remains readable.
+    return { ...summary, scanned: summary.scannedPosts, indexed: summary.indexedChunks, errors: summary.failures };
   }
 
   return { loadPost, indexPost, removePost, backfill };
@@ -85,41 +122,99 @@ function createIndexer({ db, config, qdrant, embeddingProvider }) {
 function createIndexQueue({ db, config, indexer }) {
   const query = db.promise().query.bind(db.promise());
   let running = false;
-  async function processNext() {
-    if (running || !config.enabled) return;
+
+  async function withQueueConnection(operation) {
+    const pool = db.promise();
+    if (typeof pool.getConnection !== 'function') return operation(query);
+    const connection = await pool.getConnection();
+    try { return await operation(connection.query.bind(connection)); } finally { connection.release(); }
+  }
+
+  async function withQueueLock(postId, action, operation) {
+    return withQueueConnection(async (lockedQuery) => {
+      const name = queueLockName(postId, action);
+      const [rows] = await lockedQuery('SELECT GET_LOCK(?, 2) AS acquired', [name]);
+      if (!rows[0]?.acquired) throw Object.assign(new Error('索引队列繁忙'), { code: 'INDEX_QUEUE_BUSY' });
+      try { return await operation(lockedQuery); }
+      finally { await lockedQuery('SELECT RELEASE_LOCK(?)', [name]).catch(() => {}); }
+    });
+  }
+
+  async function captureDeleteTombstones(lockedQuery, postId) {
+    const [chunks] = await lockedQuery('SELECT chunk_id FROM ai_index_chunks WHERE post_id=?', [Number(postId)]);
+    for (const chunk of chunks) {
+      await lockedQuery('INSERT IGNORE INTO ai_index_tombstones (chunk_id,post_id) VALUES (?,?)', [String(chunk.chunk_id), Number(postId)]);
+    }
+    return chunks.length;
+  }
+
+  async function recoverExpiredLeases() {
+    await query("UPDATE ai_index_jobs SET status='pending', lease_token=NULL, lease_expires_at=NULL, error='worker lease expired' WHERE status='running' AND lease_expires_at IS NOT NULL AND lease_expires_at<=UTC_TIMESTAMP()");
+  }
+
+  async function processNext({ reschedule = true } = {}) {
+    if (running || !config.enabled) return { handled: false };
     running = true;
-    let handledJob = false;
+    let handled = false;
     try {
-      const [jobs] = await query("SELECT * FROM ai_index_jobs WHERE status='pending' ORDER BY id LIMIT 1");
+      await recoverExpiredLeases();
+      const [jobs] = await query("SELECT * FROM ai_index_jobs WHERE status='pending' AND (available_at IS NULL OR available_at<=UTC_TIMESTAMP()) ORDER BY id LIMIT 1");
       const job = jobs[0];
-      if (!job) return;
-      handledJob = true;
-      await query("UPDATE ai_index_jobs SET status='running',error=NULL WHERE id=?", [job.id]);
+      if (!job) return { handled: false };
+      const leaseToken = crypto.randomUUID();
+      const [claimed] = await query("UPDATE ai_index_jobs SET status='running',lease_token=?,lease_expires_at=DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? SECOND),attempts=attempts+1,error=NULL WHERE id=? AND status='pending'", [leaseToken, LEASE_SECONDS, job.id]);
+      if (!claimed.affectedRows) return { handled: false };
+      handled = true;
       try {
-        const result = await indexer.indexPost(job.source_id);
-        await query("UPDATE ai_index_jobs SET status='completed',indexed_at=NOW(),error=NULL WHERE id=?", [job.id]);
-        return result;
+        const action = normalizeAction(job.action);
+        const result = action === 'delete' ? await indexer.removePost(job.source_id) : await indexer.indexPost(job.source_id);
+        await query("UPDATE ai_index_jobs SET status='completed',indexed_at=UTC_TIMESTAMP(),error=NULL,lease_token=NULL,lease_expires_at=NULL WHERE id=? AND lease_token=?", [job.id, leaseToken]);
+        return { handled: true, result };
       } catch (error) {
-        await query("UPDATE ai_index_jobs SET status='failed',error=? WHERE id=?", [String(error.message || 'Index failed').slice(0, 4000), job.id]);
+        await query("UPDATE ai_index_jobs SET status='failed',error=?,lease_token=NULL,lease_expires_at=NULL WHERE id=? AND lease_token=?", [String(error.code || error.message || 'Index failed').slice(0, 4000), job.id, leaseToken]);
+        return { handled: true, error: error.code || 'INDEX_FAILED' };
       }
     } finally {
       running = false;
-      if (handledJob) setImmediate(() => { processNext().catch(() => {}); });
+      if (handled && reschedule) setImmediate(() => { processNext().catch(() => {}); });
     }
   }
-  async function enqueue(postId, contentHash = null) {
+
+  async function enqueue(postId, contentHash = null, action = 'upsert') {
     if (!config.enabled) return null;
-    const [result] = await query('INSERT INTO ai_index_jobs (source_type,source_id,content_hash,embedding_model,status) VALUES (\'post\',?,?,?,\'pending\')', [Number(postId), contentHash, config.embedding.model]);
+    const normalizedPostId = Number(postId);
+    const normalizedAction = normalizeAction(action);
+    const jobId = await withQueueLock(normalizedPostId, normalizedAction, async (lockedQuery) => {
+      if (normalizedAction === 'delete') await captureDeleteTombstones(lockedQuery, normalizedPostId);
+      const [existing] = await lockedQuery("SELECT id FROM ai_index_jobs WHERE source_type='post' AND source_id=? AND action=? AND status IN ('pending','running') ORDER BY id DESC LIMIT 1", [normalizedPostId, normalizedAction]);
+      if (existing[0]) {
+        await lockedQuery('UPDATE ai_index_jobs SET content_hash=?,embedding_model=?,updated_at=UTC_TIMESTAMP() WHERE id=?', [contentHash, config.embedding.model, existing[0].id]);
+        return Number(existing[0].id);
+      }
+      const [result] = await lockedQuery("INSERT INTO ai_index_jobs (source_type,source_id,action,content_hash,embedding_model,status,available_at) VALUES ('post',?,?,?,?, 'pending',UTC_TIMESTAMP())", [normalizedPostId, normalizedAction, contentHash, config.embedding.model]);
+      return Number(result.insertId);
+    });
     setImmediate(() => { processNext().catch(() => {}); });
-    return result.insertId;
+    return jobId;
   }
+
   async function retryFailed() {
     if (!config.enabled) return 0;
-    const [result] = await query("UPDATE ai_index_jobs SET status='pending',error=NULL WHERE status='failed'");
+    const [result] = await query("UPDATE ai_index_jobs SET status='pending',error=NULL,lease_token=NULL,lease_expires_at=NULL,available_at=UTC_TIMESTAMP() WHERE status='failed'");
     if (result.affectedRows) setImmediate(() => { processNext().catch(() => {}); });
     return result.affectedRows;
   }
-  return { enqueue, processNext, retryFailed };
+
+  async function drain() {
+    let handled = 0;
+    while (true) {
+      const result = await processNext({ reschedule: false });
+      if (!result.handled) return handled;
+      handled += 1;
+    }
+  }
+
+  return { enqueue, processNext, retryFailed, drain, captureDeleteTombstones };
 }
 
-module.exports = { createIndexer, createIndexQueue, parseJson };
+module.exports = { createIndexer, createIndexQueue, parseJson, normalizeAction, queueLockName };

@@ -44,12 +44,46 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
     return allowed;
   }
 
-  function diversify(candidates, limit = 5, currentArticleId = null) {
+  async function selectionNeighbors(user, context) {
+    if (!context.articleId || !context.selectedText) return [];
+    const [rows] = await query(
+      `SELECT c.*,p.author_id,p.status,p.visibility,p.share_token,p.title,p.slug,p.published_at,p.updated_at,p.content_markdown
+       FROM ai_index_chunks c JOIN posts p ON p.id=c.post_id WHERE c.post_id=? ORDER BY c.chunk_index ASC`,
+      [Number(context.articleId)],
+    );
+    if (!rows.length || !await canAccessPost(query, rows[0], user, context.shareToken)) return [];
+    const current = new Map(createChunks({ id: Number(context.articleId), content_markdown: rows[0].content_markdown || '' }).map((chunk) => [chunk.chunkId, chunk.contentHash]));
+    const valid = rows.filter((row) => current.get(String(row.chunk_id)) === row.content_hash);
+    const needle = String(context.selectedText).trim().slice(0, 160);
+    const bySelectedText = valid.findIndex((row) => needle && String(row.content || '').includes(needle));
+    const center = valid.findIndex((row) => String(row.heading_anchor || '') === String(context.anchor || ''));
+    const byHeading = center >= 0 ? center : valid.findIndex((row) => context.heading && String(row.heading || '') === String(context.heading));
+    const selectedIndex = bySelectedText >= 0 ? bySelectedText : byHeading;
+    if (selectedIndex < 0) return [];
+    const wanted = new Set([selectedIndex - 1, selectedIndex, selectedIndex + 1]);
+    return valid.filter((_row, index) => wanted.has(index)).map((row) => ({
+      chunkId: row.chunk_id, postId: Number(row.post_id), content: row.content, heading: row.heading || '',
+      headingPath: row.heading_path || '', headingAnchor: row.heading_anchor || '', title: row.title, slug: row.slug,
+      score: 1, rerankScore: 1, selectionEvidence: true,
+    }));
+  }
+
+  function prioritize(candidates, context) {
+    const currentArticleId = Number(context.articleId || 0);
+    return [...candidates].sort((left, right) => {
+      const selectionOrder = Number(Boolean(right.selectionEvidence)) - Number(Boolean(left.selectionEvidence));
+      if (selectionOrder) return selectionOrder;
+      const currentOrder = Number(Number(right.postId) === currentArticleId) - Number(Number(left.postId) === currentArticleId);
+      if (currentOrder) return currentOrder;
+      return Number(right.rerankScore ?? right.score ?? 0) - Number(left.rerankScore ?? left.score ?? 0);
+    });
+  }
+
+  function diversify(candidates, limit = 5) {
     const counts = new Map();
     return candidates.filter((candidate) => {
       const current = counts.get(candidate.postId) || 0;
-      const allowed = currentArticleId && Number(currentArticleId) === candidate.postId ? 5 : 3;
-      if (current >= allowed) return false;
+      if (current >= 3) return false;
       counts.set(candidate.postId, current + 1); return true;
     }).slice(0, limit);
   }
@@ -76,7 +110,13 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
     let reranked = hydrated;
     let degraded = false;
     try { reranked = await rerankerProvider.rerank(question, hydrated); } catch (_) { degraded = true; }
-    const candidates = diversify(reranked, 5, context.articleId);
+    const byId = new Map(reranked.map((candidate) => [String(candidate.chunkId), candidate]));
+    for (const neighbor of await selectionNeighbors(user, context)) {
+      const existing = byId.get(String(neighbor.chunkId));
+      if (existing) Object.assign(existing, { selectionEvidence: true, rerankScore: Math.max(Number(existing.rerankScore ?? existing.score ?? 0), 1) });
+      else byId.set(String(neighbor.chunkId), neighbor);
+    }
+    const candidates = diversify(prioritize([...byId.values()], context), 5);
     const result = {
       scope, candidates, confidence: evaluateConfidence(candidates, config.confidence), degraded,
       citations: candidates.map((candidate, index) => ({ id: `S${index + 1}`, ...candidate, excerpt: candidate.content.slice(0, 420) })),

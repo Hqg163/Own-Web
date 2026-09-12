@@ -12,7 +12,29 @@
 | 内容与索引 | 本机 MySQL 有 4 篇已发布公开文章，`ai_index_chunks=0`、`ai_index_jobs=0`、索引版本为 0。 |
 | 既有安全基础 | `api/lib/post-access.js` 已被博客/API/AI 路径复用；AI 路由在全局强制鉴权之前挂载，并自行做 optional auth、会话和配额处理。该基础必须保留。 |
 
-## 需求—证据—整改矩阵
+## 2026-09-12 恢复更新（以 State 为准）
+
+上面的“审计基线”和下表记录整改开始时的缺口，不能作为当前完成
+状态。当前可复核证据如下：
+
+- #2–#11 的状态 API、共享 UI、受控上下文、SSE、Provider tool loop、
+  端点拆分、注册表和配额 reservation 已在 `37d6b87`、`c07bcb9` 与
+  `9014152` 中落地，并通过 Mock 定向测试；这不是 live 通过。
+- #12 的本地 Qdrant 1.19 容器已健康；隔离测试验证了 1024/Cosine、
+  BM25-IDF、多语言术语和 RRF。Compose healthcheck 已修复为镜像可用的
+  Bash TCP 探针。
+- #13–#14 新增内容哈希复核、每文最多三块、选区相邻块、tombstone、
+  action、lease/recovery、合并和精确 backfill 统计。迁移与单元/API
+  回归已覆盖，但非零真实索引仍依赖 Qwen embedding。
+- #16 已实现脱敏 `ai:doctor`；migration 与 Qdrant 为 PASS，provider
+  三项因 HTTP 403 为 FAIL。#17 已有 22 条四篇公开文章的 ground truth，
+  但 live metrics 尚未产生。#18 因 Qwen workspace/key authorization
+  被阻塞；#19–#20 仍须在 Provider 恢复后做 live security、浏览器、
+  性能和全量验收。
+
+详情、命令和外部阻塞始终以 `AI_V1_REMEDIATION_STATE.md` 为权威恢复点。
+
+## 需求—证据—整改矩阵（初始差距）
 
 | # | 强制要求 | 当前代码/运行证据 | 状态 | 整改动作与验收证据 | 负责人 |
 | --- | --- | --- | --- | --- | --- |

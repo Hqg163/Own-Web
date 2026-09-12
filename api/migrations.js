@@ -360,6 +360,31 @@ async function runMigrations(db) {
     await query('INSERT IGNORE INTO ai_index_state (id, version) VALUES (1, 0)');
     await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260911_ai_v1']);
   }
+
+  const [aiLifecycleDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260912_ai_index_lifecycle_v1']);
+  if (!aiLifecycleDone.length) {
+    // These fields are deliberately additive: the v1 table may already exist
+    // on a live site, where replacing it would lose the recovery queue.
+    await addColumn(db, 'ai_index_jobs', 'action', "ENUM('upsert','delete') NOT NULL DEFAULT 'upsert'");
+    await addColumn(db, 'ai_index_jobs', 'attempts', 'INT UNSIGNED NOT NULL DEFAULT 0');
+    await addColumn(db, 'ai_index_jobs', 'available_at', 'DATETIME NULL');
+    await addColumn(db, 'ai_index_jobs', 'lease_token', 'CHAR(36) NULL');
+    await addColumn(db, 'ai_index_jobs', 'lease_expires_at', 'DATETIME NULL');
+    await query("UPDATE ai_index_jobs SET action='upsert' WHERE action IS NULL OR action=''");
+    await query('UPDATE ai_index_jobs SET available_at=COALESCE(available_at, created_at, UTC_TIMESTAMP())');
+    if (!await indexExists(db, 'ai_index_jobs', 'idx_ai_index_jobs_lease')) {
+      await query('CREATE INDEX idx_ai_index_jobs_lease ON ai_index_jobs (status, lease_expires_at, available_at, id)');
+    }
+    if (!await indexExists(db, 'ai_index_jobs', 'idx_ai_index_jobs_action')) {
+      await query('CREATE INDEX idx_ai_index_jobs_action ON ai_index_jobs (source_type, source_id, action, status, id)');
+    }
+    await query(`CREATE TABLE IF NOT EXISTS ai_index_tombstones (
+      chunk_id CHAR(36) PRIMARY KEY, post_id BIGINT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, processed_at DATETIME NULL,
+      KEY idx_ai_index_tombstones_post (post_id, processed_at, created_at)
+    )`);
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260912_ai_index_lifecycle_v1']);
+  }
 }
 
 async function indexExists(db, table, indexName) {

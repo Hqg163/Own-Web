@@ -9,7 +9,9 @@ AI_ENABLED=false
 AI_PROVIDER_MODE=mock
 ```
 
-With that default, existing Own-Web behavior remains unchanged. `/ai` returns an explicit disabled state and the global launcher disappears after its availability check.
+With that default, existing Own-Web behavior remains unchanged. `/ai` and the
+global launcher remain discoverable, but show an explicit safe disabled state
+and never send a model request.
 
 For a local deterministic UI/API verification, set `AI_ENABLED=true` and keep `AI_PROVIDER_MODE=mock`; no third-party model key is used. Run `npm run test:ai` for the isolated Mock suite.
 
@@ -26,7 +28,10 @@ The health endpoint is `http://127.0.0.1:6333/healthz`. `npm run ai:index:backfi
 
 For production, use `docker-compose.production.yml`, set a strong `QDRANT_API_KEY`, and place the Own-Web API on its `ai-internal` private network with `QDRANT_URL=http://qdrant:6333`. That profile publishes no host port and sets Qdrant's API key. Do not expose port 6333 through a reverse proxy or public firewall rule. Back up the named `qdrant_data` volume together with MySQL; restore MySQL first and then run a backfill whenever index consistency is uncertain.
 
-`npm run test:ai-rag-integration` is intentionally opt-in. Run it with `AI_RAG_INTEGRATION=1`; it starts the pinned Compose service, verifies an isolated collection schema and removes that ephemeral collection. It fails clearly when Docker Compose is unavailable.
+`npm run test:ai-rag` starts the pinned Compose service, verifies an isolated
+collection schema, multilingual BM25 terms and RRF, then removes the ephemeral
+collection. It fails clearly when Docker Compose is unavailable; it never
+reports a skipped Docker test as a pass.
 
 ## Live provider configuration
 
@@ -38,7 +43,8 @@ AI_PROVIDER_MODE=live
 QDRANT_URL=http://127.0.0.1:6333
 QDRANT_API_KEY=replace-with-qdrant-api-key
 DASHSCOPE_API_KEY=replace-with-qwen-key
-QWEN_BASE_URL=https://your-compatible-provider.example/v1
+QWEN_BASE_URL=https://<WorkspaceId>.<region>.maas.aliyuncs.com/compatible-mode/v1
+QWEN_RERANK_BASE_URL=https://<WorkspaceId>.<region>.maas.aliyuncs.com/compatible-api/v1
 DEEPSEEK_API_KEY=replace-with-deepseek-key
 ```
 
@@ -53,9 +59,23 @@ npm run ai:eval
 
 Never place provider credentials, API keys, Cookies, raw guest IDs, or copied private article text in `.env.example`, evaluation fixtures, browser logs or commits.
 
+For a Model Studio workspace-dedicated endpoint, the API Key must belong to
+that exact workspace and region. Copy the **API Host** from Workspace Management
+rather than guessing a region code. A 403 across chat, embedding and rerank
+usually means the key's workspace/region, its custom model/IP access scope, or
+its enabled state does not match that host. Do not send the key to Codex.
+Instead, create or select a key in the same Region and Workspace, allow the
+Qwen chat, embedding and rerank models (or use the workspace's default All
+scope), and check the IPv4 allowlist for this machine. Model Studio documents
+the [dedicated base URL contract](https://help.aliyun.com/en/model-studio/base-url)
+and [API-key workspace/permission rules](https://help.aliyun.com/en/model-studio/get-api-key).
+
 ## Runtime checks and recovery
 
 - API health: `GET /api/health`; Qdrant health: `GET /healthz` on its private endpoint.
+- Run `npm run ai:doctor` for a secret-safe PASS/FAIL check of migration,
+  collection/schema/count, embedding, rerank and chat. It emits only counts
+  and a request ID, never endpoint values or response bodies.
 - Check Qdrant collection creation/indexing by running `npm run ai:index:backfill` and reviewing `ai_index_jobs` failures; application article edits are never rolled back because indexing failed.
 - Rebuild after a content migration, lost Qdrant volume or embedding model change: stop writes if required, back up MySQL, recreate the collection, run backfill, then sample authorized article queries.
 - Tune `AI_GUEST_DAILY_LIMIT`, `AI_USER_DAILY_LIMIT`, `AI_MAX_CONCURRENT_PER_USER`, `AI_GLOBAL_DAILY_REQUEST_LIMIT`, and `AI_GLOBAL_DAILY_TOKEN_LIMIT` before production. Defaults are deliberately conservative (5 guest, 50 user requests/day, two concurrent requests per subject).

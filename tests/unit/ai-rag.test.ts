@@ -3,7 +3,7 @@ import { createChunks, parseSections } from '../../api/ai/retrieval/chunker.js'
 import { createHeadingId } from '../../api/ai/retrieval/heading.js'
 import { evaluateConfidence } from '../../api/ai/retrieval/confidence.js'
 import { deterministicEmbedding } from '../../api/ai/providers/embedding-provider.js'
-import { createIndexer } from '../../api/ai/retrieval/indexer.js'
+import { createIndexer, createIndexQueue, normalizeAction } from '../../api/ai/retrieval/indexer.js'
 import { createRetriever } from '../../api/ai/retrieval/retriever.js'
 
 describe('AI RAG document preparation', () => {
@@ -107,5 +107,92 @@ describe('AI RAG document preparation', () => {
     expect(result.degraded).toBe(true)
     expect(result.citations[0]).toMatchObject({ slug: 'post' })
     expect(result.citations[0].excerpt).toContain('授权的站内证据')
+  })
+
+  it('removes recorded tombstones and the server-owned post filter before clearing index state', async () => {
+    const qdrantCalls: Array<any> = []
+    const query = async (sql: string) => {
+      if (sql.startsWith('SELECT chunk_id FROM ai_index_chunks')) return [[{ chunk_id: 'stored-point' }]]
+      if (sql.startsWith('SELECT chunk_id FROM ai_index_tombstones')) return [[{ chunk_id: 'tombstone-point' }]]
+      return [{ affectedRows: 1 }]
+    }
+    const indexer = createIndexer({
+      db: { promise: () => ({ query }) }, config: { enabled: true, embedding: { dimensions: 1024 } },
+      qdrant: { collection: 'fixture', client: { delete: async (_collection: string, body: unknown) => qdrantCalls.push(body) } },
+      embeddingProvider: { embed: async () => [] },
+    })
+    await expect(indexer.removePost(9)).resolves.toEqual({ deleted: 2 })
+    expect(qdrantCalls[0]).toMatchObject({ points: expect.arrayContaining(['stored-point', 'tombstone-point']) })
+    expect(qdrantCalls[1]).toEqual({ wait: true, filter: { must: [{ key: 'post_id', match: { value: 9 } }] } })
+  })
+
+  it('coalesces a post action and claims it with a lease before the worker runs it', async () => {
+    const jobs: Array<any> = []
+    const query = async (sql: string, params: any[] = []) => {
+      if (sql.startsWith('SELECT GET_LOCK')) return [[{ acquired: 1 }]]
+      if (sql.startsWith('SELECT RELEASE_LOCK')) return [[{ released: 1 }]]
+      if (sql.startsWith('SELECT id FROM ai_index_jobs')) return [jobs.filter((job) => job.source_id === params[0] && job.action === params[1] && ['pending', 'running'].includes(job.status)).slice(-1)]
+      if (sql.startsWith('INSERT INTO ai_index_jobs')) {
+        const job = { id: jobs.length + 1, source_id: params[0], action: params[1], status: 'pending', attempts: 0 }
+        jobs.push(job)
+        return [{ insertId: job.id }]
+      }
+      if (sql.startsWith('UPDATE ai_index_jobs SET content_hash')) return [{ affectedRows: 1 }]
+      if (sql.startsWith("UPDATE ai_index_jobs SET status='pending'")) return [{ affectedRows: 0 }]
+      if (sql.startsWith("SELECT * FROM ai_index_jobs WHERE status='pending'")) return [jobs.filter((job) => job.status === 'pending').slice(0, 1)]
+      if (sql.startsWith("UPDATE ai_index_jobs SET status='running'")) {
+        const job = jobs.find((item) => item.id === params[2] && item.status === 'pending')
+        if (!job) return [{ affectedRows: 0 }]
+        job.status = 'running'; job.lease_token = params[0]; job.attempts += 1
+        return [{ affectedRows: 1 }]
+      }
+      if (sql.startsWith("UPDATE ai_index_jobs SET status='completed'")) {
+        const job = jobs.find((item) => item.id === params[0] && item.lease_token === params[1])
+        if (job) job.status = 'completed'
+        return [{ affectedRows: job ? 1 : 0 }]
+      }
+      throw new Error(`Unexpected queue query: ${sql}`)
+    }
+    const indexed: number[] = []
+    const queue = createIndexQueue({
+      db: { promise: () => ({ query }) }, config: { enabled: true, embedding: { model: 'fixture' } },
+      indexer: { indexPost: async (postId: number) => { indexed.push(postId); return { indexed: 1 } }, removePost: async () => ({ deleted: 0 }) },
+    })
+    await queue.enqueue(12)
+    await queue.enqueue(12)
+    expect(jobs).toHaveLength(1)
+    expect(await queue.drain()).toBe(1)
+    expect(jobs[0]).toMatchObject({ status: 'completed', attempts: 1 })
+    expect(indexed).toEqual([12])
+    expect(normalizeAction('not-allowed')).toBe('upsert')
+  })
+
+  it('uses server-authorized selection neighbors as current-article evidence and caps one article at three chunks', async () => {
+    const markdown = `# 选区主题\n\n${'解释 '.repeat(900)}`
+    const chunks = createChunks({ id: 5, content_markdown: markdown })
+    expect(chunks.length).toBeGreaterThanOrEqual(2)
+    const rows = chunks.map((chunk) => ({
+      chunk_id: chunk.chunkId, post_id: 5, content: chunk.content, content_hash: chunk.contentHash, heading: chunk.heading,
+      heading_path: chunk.headingPath, heading_anchor: chunk.headingAnchor, chunk_index: chunk.chunkIndex,
+      author_id: 2, status: 'published', visibility: 'public', share_token: null, title: '文章', slug: 'post', published_at: null, updated_at: null, content_markdown: markdown,
+    }))
+    const query = async (sql: string) => {
+      if (sql.startsWith('SELECT version FROM ai_index_state')) return [[{ version: 4 }]]
+      if (sql.startsWith('SELECT * FROM posts WHERE id = ?')) return [[rows[0]]]
+      if (sql.includes('WHERE c.chunk_id IN')) return [[]]
+      if (sql.includes('WHERE c.post_id=? ORDER BY c.chunk_index')) return [rows]
+      throw new Error(`Unexpected selection query: ${sql}`)
+    }
+    const retriever = createRetriever({
+      db: { promise: () => ({ query }) }, config: { confidence: {}, cache: {} },
+      qdrant: { collection: 'fixture', client: { query: async () => ({ points: [] }) } },
+      embeddingProvider: { embed: async () => [deterministicEmbedding('选区', 1024)] },
+      rerankerProvider: { rerank: async () => [] }, retrievalCache: { get: () => undefined, set: () => undefined },
+    })
+    const selected = chunks[Math.floor(chunks.length / 2)]
+    const result = await retriever.retrieve('解释这里', null, { articleId: 5, selectedText: selected.content.slice(-100), heading: '选区主题', anchor: selected.headingAnchor })
+    expect(result.candidates).toHaveLength(Math.min(3, chunks.length))
+    expect(result.candidates.every((candidate) => candidate.postId === 5 && candidate.selectionEvidence)).toBe(true)
+    expect(result.confidence.level).not.toBe('LOW')
   })
 })

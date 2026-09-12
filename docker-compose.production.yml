@@ -11,7 +11,9 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:6333/healthz >/dev/null || exit 1"]
+      # qdrant/qdrant:v1.19.0 does not ship curl or wget. Bash is available,
+      # so use its TCP socket support to verify the actual HTTP health endpoint.
+      test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q '200'"]
       interval: 10s
       timeout: 3s
       retries: 12

@@ -42,11 +42,19 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot, aiInde
   const siteOwnerId = () => parseSiteOwnerUserId();
   // Indexing is intentionally asynchronous and best-effort: a Qdrant outage
   // must never turn a successful article write into a failed blog request.
-  const queueAiIndex = (postId) => {
+  const queueAiIndex = (postId, action = 'upsert') => {
     if (!aiIndexQueue || !Number.isSafeInteger(Number(postId))) return;
-    Promise.resolve(aiIndexQueue.enqueue(Number(postId))).catch((indexError) => {
+    Promise.resolve(aiIndexQueue.enqueue(Number(postId), null, action)).catch((indexError) => {
       console.warn('[ai-index] Failed to enqueue post', Number(postId), indexError?.code || indexError?.message || 'unknown');
     });
+  };
+  // Deletion snapshots point IDs before the post FK cascade can remove the
+  // relational index rows. A queue failure is logged but never blocks a post
+  // deletion; the retriever's MySQL rehydration remains the access boundary.
+  const queueAiDelete = async (postId) => {
+    if (!aiIndexQueue || !Number.isSafeInteger(Number(postId))) return;
+    try { await aiIndexQueue.enqueue(Number(postId), null, 'delete'); }
+    catch (indexError) { console.warn('[ai-index] Failed to queue deletion', Number(postId), indexError?.code || indexError?.message || 'unknown'); }
   };
   async function nextFeaturedOrder(excludeId) {
     const [[row]] = await query('SELECT COALESCE(MAX(featured_order),0) max_order FROM posts WHERE featured=TRUE AND id<>?', [excludeId || 0]);
@@ -556,10 +564,10 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot, aiInde
     if (!post) return error(res, 404, 'NOT_FOUND', '文章不存在');
     if (post.status === 'published') return error(res, 409, 'POST_NOT_DELETABLE', '已发布文章不能从此处删除');
     const [media] = await query('SELECT file_path FROM post_media WHERE post_id=? AND owner_id=?', [post.id, req.user.id]);
+    await queueAiDelete(post.id);
     await query('DELETE FROM post_media WHERE post_id=? AND owner_id=?', [post.id, req.user.id]);
     await query('DELETE FROM posts WHERE id=? AND author_id=? AND status IN (\'draft\',\'scheduled\')', [post.id, req.user.id]);
     for (const item of media) removeUploadedFile({ path:path.resolve(path.dirname(uploadRoot), String(item.file_path || '').replace(/^[/\\]+/, '')) });
-    queueAiIndex(post.id);
     res.status(204).end();
   } catch (e) { next(e); } });
   app.post('/api/posts/media', optionalAuth, requireAuth, mediaUpload.single('image'), async (req, res, next) => { try {
@@ -824,17 +832,27 @@ function mountBlogRoutes(app, db, { getAuthToken, authSecret, uploadRoot, aiInde
     isAdmin,
   });
   async function publishDuePosts() {
+    let publishedIds = [];
     if (typeof db.getConnection !== 'function') {
+      const [due] = await query("SELECT id FROM posts WHERE status='scheduled' AND scheduled_at IS NOT NULL AND scheduled_at<=UTC_TIMESTAMP()");
       await query("UPDATE posts SET status='published',published_at=COALESCE(published_at,UTC_TIMESTAMP()),scheduled_at=NULL WHERE status='scheduled' AND scheduled_at IS NOT NULL AND scheduled_at<=UTC_TIMESTAMP()");
-      return;
+      publishedIds = due.map((post) => Number(post.id));
+    } else {
+      const connection = await new Promise((resolve, reject) => db.getConnection((connectError, poolConnection) => connectError ? reject(connectError) : resolve(poolConnection)));
+      let acquired = false;
+      try {
+        const [lockRows] = await connection.promise().query("SELECT GET_LOCK('own_web_scheduled_publisher', 0) AS acquired");
+        acquired = Boolean(lockRows[0]?.acquired);
+        if (!acquired) return;
+        const [due] = await connection.promise().query("SELECT id FROM posts WHERE status='scheduled' AND scheduled_at IS NOT NULL AND scheduled_at<=UTC_TIMESTAMP()");
+        await connection.promise().query("UPDATE posts SET status='published',published_at=COALESCE(published_at,UTC_TIMESTAMP()),scheduled_at=NULL WHERE status='scheduled' AND scheduled_at IS NOT NULL AND scheduled_at<=UTC_TIMESTAMP()");
+        publishedIds = due.map((post) => Number(post.id));
+      } finally {
+        if (acquired) await connection.promise().query("SELECT RELEASE_LOCK('own_web_scheduled_publisher')").catch(() => {});
+        connection.release();
+      }
     }
-    const connection = await new Promise((resolve, reject) => db.getConnection((connectError, poolConnection) => connectError ? reject(connectError) : resolve(poolConnection)));
-    try {
-      const [lockRows] = await connection.promise().query("SELECT GET_LOCK('own_web_scheduled_publisher', 0) AS acquired");
-      if (!lockRows[0]?.acquired) return;
-      await connection.promise().query("UPDATE posts SET status='published',published_at=COALESCE(published_at,UTC_TIMESTAMP()),scheduled_at=NULL WHERE status='scheduled' AND scheduled_at IS NOT NULL AND scheduled_at<=UTC_TIMESTAMP()");
-      await connection.promise().query("SELECT RELEASE_LOCK('own_web_scheduled_publisher')");
-    } finally { connection.release(); }
+    for (const postId of publishedIds) queueAiIndex(postId);
   }
   const reportSchedulerError = (label) => (schedulerError) => {
     // On a brand-new database the first timer can fire while migrations are

@@ -1,6 +1,11 @@
 # AI Agent / RAG v1 evaluation
 
-`api/ai/evals/own-web-eval.json` contains 20 review cases: direct/site navigation, current article and selection questions, Chinese/English terminology, cross-article search, exact keywords, projects/series, ambiguity, no-answer, privacy, citation precision and prompt injection. It intentionally contains no copied local article body or secret/private slug.
+`api/ai/evals/own-web-eval.json` contains 22 review cases grounded in the four
+currently indexed public Own-Web articles: Vue scheduling, Adam/RMSProp,
+Kyoto observation, and the personal knowledge website. Every answerable
+retrieval case has at least one expected public slug. The no-answer and
+security cases intentionally require no citation; they are not counted as
+source-ground-truth cases.
 
 ## Modes
 
@@ -10,7 +15,12 @@ npm run ai:eval
 
 The default Mock result validates the dataset contract and reports quality metrics as `null`. It does not invent Recall, citation correctness, answer accuracy, hallucination or permission-leakage numbers without a calibrated corpus.
 
-For an approved live evaluation, map each answerable case's `expectedCitationSlugs` to authorized, indexed public fixture posts, configure the real provider and Qdrant, then run with `$env:AI_LIVE_TESTS='1'`. The live report calculates Recall@5, citation correctness, confidence-as-answerable accuracy and retrieval latency percentiles from the actual retriever. It intentionally leaves hallucination, permission leakage and rerank-only latency as `null` until independent answer review/protected-fixture checks are supplied.
+For an approved live evaluation, index the public fixtures, configure the real
+provider and Qdrant, then run with `$env:AI_LIVE_TESTS='1'`. The live report
+calculates Recall@5, citation correctness, confidence-as-answerable accuracy
+and retrieval latency percentiles from the actual retriever. It intentionally
+leaves hallucination, permission leakage and rerank-only latency as `null`
+until independent answer review/protected-fixture checks are supplied.
 
 ## Review standard
 

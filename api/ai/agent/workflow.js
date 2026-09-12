@@ -47,7 +47,8 @@ function createAgentWorkflow({ contextBuilder, retriever, skills, gateway, memor
       await onEvent({ type: 'status', status: 'retrieving' });
       await onEvent({ type: 'tool_start', tool: 'search_articles' });
       try {
-        retrieval = await retriever.retrieve(message, user, { articleId: context.article?.id, shareToken: context.shareToken, selectedText: context.selectedText, heading: context.heading });
+        const retrievalQuestion = context.selectedText ? `${context.heading || ''}\n${context.selectedText}\n${message}`.trim() : message;
+        retrieval = await retriever.retrieve(retrievalQuestion, user, { articleId: context.article?.id, shareToken: context.shareToken, selectedText: context.selectedText, heading: context.heading, anchor: context.anchor });
       } finally { await onEvent({ type: 'tool_end', tool: 'search_articles' }); }
       if (retrieval.confidence.level === 'LOW') directContent = noEvidenceResponse();
     }

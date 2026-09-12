@@ -32,7 +32,10 @@ const configSchema = z.object({
     globalDailyRequests: z.number().int().positive(), globalDailyTokens: z.number().int().positive(), toolTimeoutMs: z.number().int().positive(),
   }),
   cache: z.object({ maxEntries: z.number().int().positive(), ttlMs: z.number().int().positive() }),
-  confidence: z.object({ highThreshold: z.number().min(0).max(1), mediumThreshold: z.number().min(0).max(1) }),
+  confidence: z.object({
+    highThreshold: z.number().min(0).max(1), mediumThreshold: z.number().min(0).max(1),
+    minScoreGap: z.number().min(0).max(1), highCoverage: z.number().min(0).max(1), mediumCoverage: z.number().min(0).max(1),
+  }),
 });
 
 function loadAiConfig(env = process.env) {
@@ -64,7 +67,10 @@ function loadAiConfig(env = process.env) {
       toolTimeoutMs: integer(env.AI_TOOL_TIMEOUT_MS, 2500, 100),
     },
     cache: { maxEntries: integer(env.AI_CACHE_MAX_ENTRIES, 500, 1), ttlMs: integer(env.AI_CACHE_TTL_MS, 5 * 60 * 1000, 1000) },
-    confidence: { highThreshold: decimal(env.AI_CONFIDENCE_HIGH, 0.55), mediumThreshold: decimal(env.AI_CONFIDENCE_MEDIUM, 0.25) },
+    confidence: {
+      highThreshold: decimal(env.AI_CONFIDENCE_HIGH, 0.55), mediumThreshold: decimal(env.AI_CONFIDENCE_MEDIUM, 0.25),
+      minScoreGap: decimal(env.AI_CONFIDENCE_MIN_GAP, 0.05), highCoverage: decimal(env.AI_CONFIDENCE_HIGH_COVERAGE, 0.5), mediumCoverage: decimal(env.AI_CONFIDENCE_MEDIUM_COVERAGE, 0.25),
+    },
   });
 }
 

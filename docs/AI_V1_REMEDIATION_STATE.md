@@ -40,9 +40,10 @@ Completed phase:
 - Local `.env` exists and is ignored by Git. A presence-only inspection on
   2026-09-12 confirmed the required Qwen/Qdrant variables exist; their values
   were neither read into logs nor stored here.
-- Docker CLI 29.7.2 and Docker Compose v5.5.1 are installed. Docker Desktop's
-  Linux daemon is not currently running (`dockerDesktopLinuxEngine` pipe is
-  unavailable), so Compose cannot start Qdrant yet.
+- Docker CLI 29.7.2 and Docker Compose v5.5.1 are installed. The pinned
+  `qdrant/qdrant:v1.19.0` container is healthy and bound only to
+  `127.0.0.1:6333`; its Compose healthcheck now uses Bash TCP probing because
+  this image does not include `curl` or `wget`.
 - Real MySQL audit: 4 posts, 0 `ai_index_chunks`, 0 `ai_index_jobs`, index
   version 0. All currently observed posts are public/published.
 
@@ -55,12 +56,12 @@ Completed phase:
   `tools` nor `tool_calls`; the workflow chooses Skills itself.
 - Rerank uses the wrong `/rerank` endpoint. Qwen chat, embedding, and rerank
   need distinct endpoint handling.
-- The live Qdrant, backfill, Qwen chat/embedding/rerank/tool-call, and true
-  RAG/citation gates are unverified.
+- Qdrant schema and hybrid-query integration are verified, but backfill and
+  Qwen chat/embedding/rerank/tool-call remain blocked by Provider HTTP 403.
 - RAG job deletion can leave Qdrant points after database cascade; scheduled
   publication and stale-job recovery need coverage.
-- Existing evaluation fixtures are contract-only; they lack real-blog ground
-  truth mappings.
+- Real answers, citations, browser flows and security fixtures remain
+  unverified until Qwen authorizes a live request.
 
 ## Decisions locked
 
@@ -89,9 +90,13 @@ Completed phase:
 | Phase 2 AI suite | PASS | 7 RAG + 12 Agent + 7 API + 25 security assertions; 12 Mock browser flows passed and 4 intentionally skipped under Mock configuration |
 | Phase 2 typecheck/API/build | PASS | `typecheck`, `api:check`, and production build; existing bundle-size advisory only |
 | Phase 3 deterministic RAG guards | PASS | `test:ai-rag` (7 tests) and `api:check`; live Qdrant schema and integration are deliberately not represented as passes |
-| Evaluation command | Mock contract only | 20 rows; real metrics are null |
-| Isolated Qdrant integration | BLOCKED_EXTERNAL | explicit Docker run fails: Docker CLI absent |
-| Live provider tests | BLOCKED_EXTERNAL | no local Qwen/DeepSeek configuration |
+| Phase 3 queue/retrieval suite | PASS | 10 RAG unit checks: tombstone cleanup, action coalescing/lease, selection neighbors, hash rehydration and LOW confidence |
+| Phase 3 isolated Qdrant integration | PASS | Real Qdrant 1.19 dense 1024/Cosine, BM25-IDF multilingual terms and RRF in an ephemeral collection |
+| Migration regression | PASS | `sixth-pass-migration.ts` validates action/lease/tombstone schema on a fresh temporary database |
+| Phase 3 AI suite | PASS | 10 RAG checks plus isolated Qdrant, 12 Agent, 7 API, 25 security, and 12 UI checks; 4 disabled-branch UI cases intentionally skipped by the Mock runner |
+| Evaluation command | Mock contract only | 22 ground-truth cases; real metrics remain null until a nonzero live index exists |
+| `ai:doctor` infrastructure | PARTIAL | configuration/migration/Qdrant PASS; embedding/rerank/chat FAIL with safe HTTP 403 evidence |
+| Live provider tests | BLOCKED_EXTERNAL | all three Qwen interfaces returned 403; no response body, URL or secret was recorded |
 | Existing full test history | Historical only | prior commit report; rerun after each remediation phase |
 
 ## Phase 1 implementation and verification
@@ -141,24 +146,41 @@ Completed phase:
   stale vector point from becoming external context.
 - The above behavior has deterministic unit coverage. Index lifecycle actions,
   live collection/schema checks, backfill diagnostics, and real evaluation
-  ground truth remain pending the local Qdrant runtime.
+  ground truth are now implemented and covered locally.
+- `ai_index_jobs` now records `upsert`/`delete` actions, leases, attempts and
+  availability. Delete requests snapshot point IDs in `ai_index_tombstones`
+  before the post cascade; expired leases recover, actions coalesce by article,
+  and scheduled publication queues an upsert without changing the post route's
+  success behavior.
+- The backfill CLI now reports scanned/indexed posts and chunks, failures and
+  Qdrant point count. `ai:doctor` emits only PASS/FAIL, numeric counts and a
+  request ID while checking migration, collection/schema/count, embedding,
+  rerank and chat.
+- The 22-case evaluation set now maps each answerable public retrieval case to
+  one of the actual four public article slugs. This is genuine ground truth,
+  but its live metrics remain absent until embedding succeeds.
+- A real Provider check found HTTP 403 for chat, embedding and rerank. This is
+  consistent with a Workspace/Region, custom API-key scope, allowlist or key
+  status mismatch; no secret, endpoint or response body was saved.
 
 ## External blockers
 
-1. **BLOCKED_EXTERNAL_QDRANT_ENGINE** until the already installed Docker
-   Desktop is started with its WSL 2 Linux engine and `docker version` reports
-   both Client and Server versions. Compose currently cannot connect to the
-   `dockerDesktopLinuxEngine` pipe.
-2. **QWEN_CONFIGURATION_PRESENT**: the required ignored local `.env`
-   variables were found by presence-only inspection. Live calls remain pending
-   Qdrant startup and the ensuing isolated provider checks; Codex must inspect
-   only configuration booleans, never the secret value.
+1. **BLOCKED_EXTERNAL_QWEN_AUTHORIZATION**: all required variables are present
+   in the ignored local `.env`, and Qdrant is healthy, but Qwen chat,
+   embedding and rerank all return HTTP 403. The next action requires the user
+   to correct the API Key's Region/Workspace/API Host or custom model/IP scope
+   in Model Studio. Codex must inspect only safe outcome codes, never key or
+   endpoint values.
+2. **BLOCKED_OPTIONAL_DEEPSEEK**: no local DeepSeek configuration has been
+   requested or tested. It does not block Qwen acceptance.
 
 ## Next exact action
 
-Open Docker Desktop and wait until its tray/menu status says **Engine running**.
-Then run `docker version` and `docker run --rm hello-world`. Once both succeed,
-the next exact project command is `docker compose up -d qdrant` in
-`E:\own_web`, followed by `docker compose ps`. The next code work is the
-remaining Phase 3 indexing lifecycle, doctor, real-ground-truth, and
-isolated-Qdrant integration work.
+In Model Studio, select the Key's Region, open Workspace Management and copy
+the target Workspace's **API Host**. Ensure the Key belongs to that exact
+Workspace/Region, is enabled, its custom scope permits Qwen chat,
+`text-embedding-v4` and `qwen3-rerank`, and its IPv4 allowlist includes this
+machine (or uses the workspace default). Update only the ignored local `.env`,
+then reply `Qwen 已重新配置`. The next exact validation command is
+`npm run ai:doctor`; only after it is all PASS may `npm run ai:index:backfill`
+run again.
