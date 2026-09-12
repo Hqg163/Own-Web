@@ -6,12 +6,14 @@ const { summarizeInput } = require('./article-summary');
 function extractToolText(result, maximum) { return JSON.stringify(result).slice(0, maximum); }
 
 function createAgentWorkflow({ contextBuilder, retriever, skills, gateway, memoryStore, config }) {
-  async function run({ user = null, message, pageContext, modelId, conversation = null, signal, onEvent = async () => {} }) {
+  async function run({ user = null, message, quickAction = null, pageContext, modelId, conversation = null, signal, onEvent = async () => {} }) {
+    await onEvent({ type: 'status', status: 'analyzing' });
     const context = await contextBuilder.build({ user, pageContext });
-    const decision = routeIntent(message, context);
+    const decision = routeIntent(message, context, quickAction);
     const toolResults = [];
     const invoke = async (name, input) => {
       if (toolResults.length >= config.limits.toolRounds) throw Object.assign(new Error('工具调用超过上限'), { code: 'TOOL_LIMIT' });
+      await onEvent({ type: 'status', status: 'tool' });
       await onEvent({ type: 'tool_start', tool: name });
       const result = await skills.invoke(name, input, context);
       toolResults.push({ name, result });
@@ -25,6 +27,7 @@ function createAgentWorkflow({ contextBuilder, retriever, skills, gateway, memor
       directContent = '你可以使用顶部导航访问首页、探索、个人中心和设置；登录后可从导航中的 AI 入口继续对话。';
     } else if (decision.intent === INTENTS.ARTICLE_SUMMARY) {
       if (!context.article) throw Object.assign(new Error('文章不可用'), { code: 'ARTICLE_REQUIRED' });
+      await onEvent({ type: 'status', status: 'reading' });
       await onEvent({ type: 'tool_start', tool: 'get_article' });
       const summaryInput = summarizeInput(context.article, config.limits.contextChars);
       toolResults.push({ name: 'get_article', result: { postId: context.article.id, mode: summaryInput.mode, sections: summaryInput.sections } });
@@ -37,6 +40,7 @@ function createAgentWorkflow({ contextBuilder, retriever, skills, gateway, memor
     } else if (decision.intent === INTENTS.SERIES_QUERY && context.article?.id) {
       directContent = '当前问题涉及专栏，但没有提供可授权的专栏标识。请从专栏页面发起，或说明具体专栏。';
     } else if (decision.intent !== INTENTS.DIRECT_CHAT) {
+      await onEvent({ type: 'status', status: 'retrieving' });
       await onEvent({ type: 'tool_start', tool: 'search_articles' });
       try {
         retrieval = await retriever.retrieve(message, user, { articleId: context.article?.id, shareToken: context.shareToken, selectedText: context.selectedText, heading: context.heading });

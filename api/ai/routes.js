@@ -5,15 +5,27 @@ const { createAiRateLimiter } = require('./rate-limit');
 
 const GUEST_COOKIE = 'own_web_ai_guest';
 const idSchema = z.string().uuid();
+const QUICK_ACTIONS = Object.freeze({
+  summary_current: '请总结当前已授权内容的核心要点。',
+  explain_concept: '请解释当前内容中的核心概念。',
+  related_content: '请推荐与当前文章相关的站内文章。',
+  selection_explain: '请解释当前已授权选文。',
+  selection_expand: '请展开说明当前已授权选文的含义、前提与影响。',
+  selection_example: '请基于当前已授权选文给出一个简明例子。',
+});
+const PRODUCT_STATUSES = new Set(['analyzing', 'retrieving', 'reading', 'tool', 'generating']);
 const chatSchema = z.object({
   conversationId: idSchema.optional(), message: z.string().trim().min(1).max(8000).optional(),
   pageContext: z.object({
     route: z.string().max(300).optional(), articleId: z.coerce.number().int().positive().optional(), selectedText: z.string().max(4000).optional(),
-    title: z.string().max(180).optional(), heading: z.string().max(500).optional(), anchor: z.string().max(255).optional(), shareToken: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
+    heading: z.string().max(500).optional(), anchor: z.string().max(255).optional(), shareToken: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
   }).strict().optional(),
   modelId: z.string().max(80).optional(),
+  quickAction: z.enum(Object.keys(QUICK_ACTIONS)).optional(),
   regenerate: z.object({ assistantMessageId: idSchema }).strict().optional(),
-}).strict().refine((value) => value.message || value.regenerate, '需要消息或受控重新生成参数');
+}).strict()
+  .refine((value) => value.message || value.regenerate || value.quickAction, '需要消息、快捷动作或受控重新生成参数')
+  .refine((value) => !(value.quickAction && (value.message || value.regenerate)), '快捷动作不能与消息或重新生成参数同时使用');
 
 function cookieValue(req, name) {
   return String(req.headers.cookie || '').split(';').map((item) => item.trim()).find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1) || null;
@@ -25,6 +37,32 @@ function guestCookie(res, value) {
   const attrs = ['HttpOnly', 'Path=/', 'SameSite=Lax'];
   if (process.env.NODE_ENV === 'production') attrs.push('Secure');
   res.append('Set-Cookie', `${GUEST_COOKIE}=${encodeURIComponent(value)}; ${attrs.join('; ')}`);
+}
+
+function assertQuickActionContext(action, pageContext) {
+  if (!action) return;
+  const articleRequired = ['summary_current', 'related_content', 'selection_explain', 'selection_expand', 'selection_example'].includes(action);
+  const selectionRequired = ['selection_explain', 'selection_expand', 'selection_example'].includes(action);
+  if (articleRequired && !pageContext?.articleId) throw Object.assign(new Error('该快捷动作需要当前文章上下文'), { code: 'QUICK_ACTION_CONTEXT_REQUIRED', status: 400 });
+  if (selectionRequired && !String(pageContext?.selectedText || '').trim()) throw Object.assign(new Error('该快捷动作需要当前选文'), { code: 'QUICK_ACTION_SELECTION_REQUIRED', status: 400 });
+}
+
+async function safeStatusSnapshot({ config, gateway, qdrant, query }) {
+  const featureEnabled = Boolean(config.enabled);
+  if (!featureEnabled) return { state: 'disabled', featureEnabled: false, chatReady: false, ragReady: false, indexReady: false, message: 'AI 功能尚未启用。' };
+  let models = [];
+  try { models = gateway.models?.() || []; } catch (_) { models = []; }
+  const chatReady = Array.isArray(models) && models.length > 0;
+  if (!chatReady) return { state: 'unconfigured', featureEnabled: true, chatReady: false, ragReady: false, indexReady: false, message: 'AI 服务尚未完成模型配置。' };
+  let ragReady = false;
+  try { ragReady = Boolean((await qdrant?.health?.())?.ready); } catch (_) { ragReady = false; }
+  let indexReady = false;
+  if (ragReady) {
+    try { const [rows] = await query('SELECT version FROM ai_index_state WHERE id=1 LIMIT 1'); indexReady = Number(rows?.[0]?.version || 0) > 0; } catch (_) { indexReady = false; }
+  }
+  if (!ragReady) return { state: 'degraded', featureEnabled: true, chatReady: true, ragReady: false, indexReady: false, message: 'AI 对话可用，站内检索暂不可用。' };
+  if (!indexReady) return { state: 'degraded', featureEnabled: true, chatReady: true, ragReady: true, indexReady: false, message: 'AI 对话可用，站内索引正在准备。' };
+  return { state: 'ready', featureEnabled: true, chatReady: true, ragReady: true, indexReady: true, message: 'AI 对话和站内检索已就绪。' };
 }
 
 function createGuestStore() {
@@ -44,7 +82,7 @@ function createGuestStore() {
 }
 
 function mountAiRoutes(app, db, {
-  getAuthToken, authSecret, config, gateway, workflow, conversationStore, memoryStore,
+  getAuthToken, authSecret, config, gateway, workflow, conversationStore, memoryStore, qdrant = null,
 }) {
   const query = db.promise().query.bind(db.promise());
   const limiter = createAiRateLimiter({ db, config });
@@ -97,6 +135,12 @@ function mountAiRoutes(app, db, {
     conversation.messages.push(entry); conversation.updatedAt = entry.createdAt; return entry;
   }
 
+  app.get('/api/ai/status', optionalAuth, async (_req, res) => {
+    const status = await safeStatusSnapshot({ config, gateway, qdrant, query });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(status);
+  });
+
   app.get('/api/ai/models', optionalAuth, aiAvailable, (req, res) => {
     res.json({ models: gateway.models(), defaultModel: config.defaultModel, signedIn: Boolean(req.user) });
   });
@@ -117,7 +161,7 @@ function mountAiRoutes(app, db, {
       const conversation = subject.userId ? await conversationStore.create(subject.userId, { title: body.title, modelId: model.id }) : guests.create(subject.sessionHash, model.id);
       if (!subject.userId && body.title) conversation.title = body.title.trim().slice(0, 180) || '新对话';
       res.status(201).json({ conversation, persistent: Boolean(subject.userId) });
-    } catch (caught) { if (caught instanceof z.ZodError) return error(res, 400, 'INVALID_REQUEST', '请求格式无效'); next(caught); }
+    } catch (caught) { if (caught instanceof z.ZodError || Array.isArray(caught?.issues)) return error(res, 400, 'INVALID_REQUEST', '请求格式无效'); next(caught); }
   });
   app.get('/api/ai/conversations/:id', optionalAuth, aiAvailable, async (req, res, next) => {
     try {
@@ -129,11 +173,22 @@ function mountAiRoutes(app, db, {
   });
   app.patch('/api/ai/conversations/:id', optionalAuth, aiAvailable, async (req, res, next) => {
     try {
-      const id = idSchema.parse(req.params.id); const body = z.object({ title: z.string().trim().min(1).max(180) }).strict().parse(req.body || {}); const subject = subjectFor(req, res);
-      if (subject.userId) { if (!await conversationStore.rename(subject.userId, id, body.title)) return error(res, 404, 'CONVERSATION_NOT_FOUND', '会话不存在或不可访问'); }
-      else { const conversation = guests.find(subject.sessionHash, id); if (!conversation) return error(res, 404, 'CONVERSATION_NOT_FOUND', '会话不存在或不可访问'); conversation.title = body.title; conversation.updatedAt = new Date().toISOString(); }
-      res.json({ title: body.title });
-    } catch (caught) { if (caught instanceof z.ZodError) return error(res, 400, 'INVALID_REQUEST', '请求格式无效'); next(caught); }
+      const id = idSchema.parse(req.params.id);
+      const body = z.object({ title: z.string().trim().min(1).max(180).optional(), selectedModel: z.string().min(1).max(80).optional() }).strict()
+        .refine((value) => value.title !== undefined || value.selectedModel !== undefined, '至少提供一个会话更新字段').parse(req.body || {});
+      if (body.selectedModel && !gateway.models().some((model) => model.id === body.selectedModel)) return error(res, 400, 'MODEL_UNAVAILABLE', '所选模型不可用');
+      const subject = subjectFor(req, res);
+      if (subject.userId) {
+        if (!await conversationStore.update(subject.userId, id, body)) return error(res, 404, 'CONVERSATION_NOT_FOUND', '会话不存在或不可访问');
+      } else {
+        const conversation = guests.find(subject.sessionHash, id);
+        if (!conversation) return error(res, 404, 'CONVERSATION_NOT_FOUND', '会话不存在或不可访问');
+        if (body.title !== undefined) conversation.title = body.title;
+        if (body.selectedModel !== undefined) conversation.selectedModel = body.selectedModel;
+        conversation.updatedAt = new Date().toISOString();
+      }
+      res.json({ ...(body.title !== undefined ? { title: body.title } : {}), ...(body.selectedModel !== undefined ? { selectedModel: body.selectedModel } : {}) });
+    } catch (caught) { if (caught instanceof z.ZodError || Array.isArray(caught?.issues)) return error(res, 400, 'INVALID_REQUEST', '请求格式无效'); next(caught); }
   });
   app.delete('/api/ai/conversations/:id', optionalAuth, aiAvailable, async (req, res, next) => {
     try {
@@ -174,13 +229,15 @@ function mountAiRoutes(app, db, {
     try {
       const body = chatSchema.parse(req.body || {});
       if (body.message && body.message.length > config.limits.inputChars) return error(res, 400, 'INPUT_TOO_LARGE', '消息长度超过上限');
+      assertQuickActionContext(body.quickAction, body.pageContext);
       const models = gateway.models(); const requestedModel = body.modelId || config.defaultModel;
       if (!models.some((model) => model.id === requestedModel)) return error(res, 400, 'MODEL_UNAVAILABLE', '所选模型不可用');
       subject = subjectFor(req, res);
       release = await limiter.begin(subject, req.ip);
       conversation = await getConversation(subject, body.conversationId, requestedModel, true);
       if (!conversation) return error(res, 404, 'CONVERSATION_NOT_FOUND', '会话不存在或不可访问');
-      let message = body.message || '';
+      if (!subject.userId) conversation.selectedModel = requestedModel;
+      let message = body.quickAction ? QUICK_ACTIONS[body.quickAction] : (body.message || '');
       const history = await historyFor(subject, conversation);
       if (body.regenerate) {
         const priorMessages = subject.userId ? conversation.messages : conversation.messages;
@@ -204,9 +261,10 @@ function mountAiRoutes(app, db, {
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8'); res.setHeader('Cache-Control', 'no-store, no-cache'); res.setHeader('Connection', 'keep-alive'); res.setHeader('X-Accel-Buffering', 'no'); res.flushHeaders?.();
       streamStarted = true; sse(res, 'start', { requestId, conversationId: conversation.id, messageId: assistantId, modelId: requestedModel });
       const result = await workflow.run({
-        user: req.user || null, message, pageContext: body.pageContext || {}, modelId: requestedModel, conversation: history, signal: controller.signal,
+        user: req.user || null, message, quickAction: body.quickAction || null, pageContext: body.pageContext || {}, modelId: requestedModel, conversation: history, signal: controller.signal,
         onEvent: async (event) => {
           if (event.type === 'delta') { streamedContent += event.delta; sse(res, 'delta', { text: event.delta }); }
+          if (event.type === 'status' && PRODUCT_STATUSES.has(event.status)) sse(res, 'status', { status: event.status });
           if (event.type === 'tool_start' || event.type === 'tool_end') { if (event.type === 'tool_start') streamedToolCalls += 1; sse(res, event.type, { tool: event.tool }); }
         },
       });
@@ -230,9 +288,10 @@ function mountAiRoutes(app, db, {
       log({ requestId, subject: subject.userId ? `user:${subject.userId}` : 'guest', model: requestedModel, intent: result.decision.intent, latencyMs, toolCalls: streamedToolCalls, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, status });
       res.end();
     } catch (caught) {
-      const code = caught.code || (caught instanceof z.ZodError ? 'INVALID_REQUEST' : 'AI_UNAVAILABLE');
-      const status = caught.status || (code === 'CONVERSATION_NOT_FOUND' ? 404 : code === 'FORBIDDEN' ? 403 : code === 'QDRANT_UNAVAILABLE' ? 503 : 500);
-      const message = code === 'QDRANT_UNAVAILABLE' ? '本站知识检索暂时不可用，暂不能回答站内资料问题。' : code === 'ABORTED' ? '生成已停止' : (caught.message || 'AI 服务暂时不可用');
+      const isValidationError = caught instanceof z.ZodError || Array.isArray(caught?.issues);
+      const code = caught.code || (isValidationError ? 'INVALID_REQUEST' : 'AI_UNAVAILABLE');
+      const status = caught.status || (code === 'INVALID_REQUEST' ? 400 : code === 'CONVERSATION_NOT_FOUND' ? 404 : code === 'FORBIDDEN' ? 403 : code === 'QDRANT_UNAVAILABLE' ? 503 : 500);
+      const message = code === 'INVALID_REQUEST' ? '请求格式无效' : code === 'QDRANT_UNAVAILABLE' ? '本站知识检索暂时不可用，暂不能回答站内资料问题。' : code === 'ABORTED' ? '生成已停止' : (caught.message || 'AI 服务暂时不可用');
       if (!streamStarted) return error(res, status, code, message);
       const latencyMs = Date.now() - startedAt;
       const estimatedInput = Math.ceil(inputMessage.length / 4); const estimatedOutput = Math.ceil(streamedContent.length / 4);

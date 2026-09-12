@@ -34,6 +34,22 @@ function createConversationStore({ db, config }) {
     return result.affectedRows > 0 ? value : null;
   }
 
+  async function update(userId, conversationId, { title, selectedModel }) {
+    const assignments = [];
+    const values = [];
+    if (title !== undefined) {
+      const value = String(title || '').trim().slice(0, 180);
+      if (!value) throw Object.assign(new Error('会话标题不能为空'), { code: 'INVALID_TITLE' });
+      assignments.push('title=?'); values.push(value);
+    }
+    if (selectedModel !== undefined) {
+      assignments.push('selected_model=?'); values.push(String(selectedModel));
+    }
+    if (!assignments.length) return null;
+    const [result] = await query(`UPDATE ai_conversations SET ${assignments.join(',')} WHERE id=? AND user_id=?`, [...values, conversationId, Number(userId)]);
+    return result.affectedRows > 0;
+  }
+
   async function remove(userId, conversationId) {
     const [result] = await query('DELETE FROM ai_conversations WHERE id=? AND user_id=?', [conversationId, Number(userId)]);
     return result.affectedRows > 0;
@@ -85,7 +101,7 @@ function createConversationStore({ db, config }) {
     return summary;
   }
 
-  return { create, list, get, rename, remove, append, updateMessage, context, updateSummary, compact };
+  return { create, list, get, rename, update, remove, append, updateMessage, context, updateSummary, compact };
 }
 
 module.exports = { createConversationStore };

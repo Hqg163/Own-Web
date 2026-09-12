@@ -304,7 +304,7 @@ mountPersonalSiteRoutes(app, db, {
 });
 mountAiRoutes(app, db, {
   getAuthToken, authSecret: process.env.AUTH_SECRET, config: aiConfig, gateway: aiGateway, workflow: aiWorkflow,
-  conversationStore: aiConversationStore, memoryStore: aiMemoryStore,
+  conversationStore: aiConversationStore, memoryStore: aiMemoryStore, qdrant: aiQdrant,
 });
 app.use('/api', authenticatedApiRequest);
 

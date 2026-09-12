@@ -12,6 +12,7 @@ const config: any = { enabled: true, defaultModel: 'qwen-fast', limits }
 function database() {
   const query = async (sql: string) => {
     if (sql.startsWith('SELECT id,email,session_version FROM users')) return [[{ id: 88, email: 'reader@example.test', session_version: 0 }]]
+    if (sql.startsWith('SELECT version FROM ai_index_state')) return [[{ version: 1 }]]
     if (sql.includes('FROM ai_usage WHERE')) return [[{ requests: 0, tokens: 0 }]]
     if (sql.startsWith('INSERT INTO ai_usage')) return [{ affectedRows: 1 }]
     return [[]]
@@ -34,6 +35,15 @@ function mount(overrides: any = {}) {
 }
 
 describe('AI HTTP boundary', () => {
+  it('exposes only a safe AI readiness contract even when AI is disabled', async () => {
+    const disabled = await request(mount({ config: { ...config, enabled: false } })).get('/api/ai/status').expect(200)
+    expect(disabled.body).toEqual({ state: 'disabled', featureEnabled: false, chatReady: false, ragReady: false, indexReady: false, message: 'AI 功能尚未启用。' })
+
+    const ready = await request(mount({ qdrant: { health: async () => ({ ready: true }) } })).get('/api/ai/status').expect(200)
+    expect(ready.body).toEqual({ state: 'ready', featureEnabled: true, chatReady: true, ragReady: true, indexReady: true, message: 'AI 对话和站内检索已就绪。' })
+    expect(JSON.stringify(ready.body)).not.toMatch(/key|secret|url|exception/i)
+  })
+
   it('streams ordered SSE events for a guest without persisting a raw guest identifier', async () => {
     const result = await request(mount()).post('/api/ai/chat').send({ message: '你好' }).expect(200)
     expect(result.headers['content-type']).toContain('text/event-stream')
@@ -49,6 +59,43 @@ describe('AI HTTP boundary', () => {
     const token = jwt.sign({ sub: '88', email: 'reader@example.test', sv: 0 }, secret)
     await request(app).get('/api/ai/conversations/11111111-1111-4111-8111-111111111111').set('Authorization', `Bearer ${token}`).expect(404)
     expect(get).toHaveBeenCalledWith(88, '11111111-1111-4111-8111-111111111111')
+  })
+
+  it('maps bounded quick actions server-side and streams only product status values', async () => {
+    let received: any = null
+    const app = mount({ workflow: { run: async ({ onEvent, ...input }: any) => {
+      received = input
+      await onEvent({ type: 'status', status: 'retrieving' })
+      await onEvent({ type: 'status', status: 'internal_trace' })
+      await onEvent({ type: 'delta', delta: '回复' })
+      return { response: { content: '回复', citations: [], degraded: false }, usage: { inputTokens: 2, outputTokens: 1 }, model: { provider: 'mock', model: 'mock' }, decision: { intent: 'RELATED_CONTENT' } }
+    } } })
+    const result = await request(app).post('/api/ai/chat').send({ quickAction: 'related_content', pageContext: { articleId: 9 } }).expect(200)
+    expect(received.quickAction).toBe('related_content')
+    expect(received.message).toBe('请推荐与当前文章相关的站内文章。')
+    expect(result.text).toContain('event: status')
+    expect(result.text).toContain('"retrieving"')
+    expect(result.text).not.toContain('internal_trace')
+
+    const invalid = await request(app).post('/api/ai/chat').send({ quickAction: 'delete_everything' }).expect(400)
+    expect(invalid.body.error.code).toBe('INVALID_REQUEST')
+    const missingSelection = await request(app).post('/api/ai/chat').send({ quickAction: 'selection_explain', pageContext: { articleId: 9 } }).expect(400)
+    expect(missingSelection.body.error.code).toBe('QUICK_ACTION_SELECTION_REQUIRED')
+  })
+
+  it('persists selected models only within the authenticated user or matching guest session', async () => {
+    const update = vi.fn(async () => true)
+    const token = jwt.sign({ sub: '88', email: 'reader@example.test', sv: 0 }, secret)
+    const app = mount({ conversationStore: { update, list: async () => [], create: async () => ({}), get: async () => null, context: async () => null, append: async () => null, updateMessage: async () => true, compact: async () => null, rename: async () => null, remove: async () => false } })
+    const id = '11111111-1111-4111-8111-111111111111'
+    await request(app).patch(`/api/ai/conversations/${id}`).set('Authorization', `Bearer ${token}`).send({ selectedModel: 'qwen-fast' }).expect(200)
+    expect(update).toHaveBeenCalledWith(88, id, { selectedModel: 'qwen-fast' })
+
+    const created = await request(app).post('/api/ai/conversations').send({ modelId: 'qwen-fast' }).expect(201)
+    const cookie = created.headers['set-cookie'][0]
+    await request(app).patch(`/api/ai/conversations/${created.body.conversation.id}`).set('Cookie', cookie).send({ selectedModel: 'qwen-fast' }).expect(200)
+    const guest = await request(app).get(`/api/ai/conversations/${created.body.conversation.id}`).set('Cookie', cookie).expect(200)
+    expect(guest.body.conversation.selectedModel).toBe('qwen-fast')
   })
 
   it('enforces daily quota and per-subject concurrency before generation starts', async () => {

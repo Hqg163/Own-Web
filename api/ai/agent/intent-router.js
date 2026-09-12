@@ -5,7 +5,11 @@ const INTENTS = Object.freeze({
   PROJECT_QUERY: 'PROJECT_QUERY', SERIES_QUERY: 'SERIES_QUERY',
 });
 
-function routeIntent(message, context) {
+function routeIntent(message, context, quickAction = null) {
+  if (quickAction === 'summary_current') return { intent: context.selectedText ? INTENTS.ARTICLE_SELECTION_QA : INTENTS.ARTICLE_SUMMARY, reason: 'quick-action-summary' };
+  if (quickAction === 'related_content') return { intent: INTENTS.RELATED_CONTENT, reason: 'quick-action-related' };
+  if (['selection_explain', 'selection_expand', 'selection_example'].includes(quickAction)) return { intent: INTENTS.ARTICLE_SELECTION_QA, reason: 'quick-action-selection' };
+  if (quickAction === 'explain_concept') return { intent: context.selectedText ? INTENTS.ARTICLE_SELECTION_QA : (context.article ? INTENTS.ARTICLE_QA : INTENTS.DIRECT_CHAT), reason: 'quick-action-explain' };
   const text = String(message || '').toLowerCase();
   if (context.selectedText) return { intent: INTENTS.ARTICLE_SELECTION_QA, reason: 'selection' };
   if (context.article && /(总结|摘要|概述|summari[sz]e|tl;?dr)/i.test(text)) return { intent: INTENTS.ARTICLE_SUMMARY, reason: 'article-summary' };

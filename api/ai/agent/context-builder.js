@@ -5,7 +5,6 @@ const pageContextSchema = z.object({
   route: z.string().max(300).optional(),
   articleId: z.coerce.number().int().positive().optional(),
   selectedText: z.string().max(4000).optional(),
-  title: z.string().max(180).optional(),
   heading: z.string().max(500).optional(),
   anchor: z.string().max(255).optional(),
   shareToken: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
