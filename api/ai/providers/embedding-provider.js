@@ -15,8 +15,9 @@ function createEmbeddingProvider(config) {
   async function embed(texts) {
     const input = Array.isArray(texts) ? texts : [texts];
     if (config.providerMode === 'mock') return input.map((text) => deterministicEmbedding(text, config.embedding.dimensions));
-    if (!config.qwen.apiKey || !config.qwen.baseUrl) throw Object.assign(new Error('Embedding Provider 未配置'), { code: 'EMBEDDING_UNAVAILABLE' });
-    const response = await fetch(`${config.qwen.baseUrl.replace(/\/$/, '')}/embeddings`, {
+    const baseUrl = config.qwen.embeddingBaseUrl || config.qwen.baseUrl;
+    if (!config.qwen.apiKey || !baseUrl) throw Object.assign(new Error('Embedding Provider 未配置'), { code: 'EMBEDDING_UNAVAILABLE' });
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/embeddings`, {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${config.qwen.apiKey}` },
       body: JSON.stringify({ model: config.embedding.model, input }),
     });

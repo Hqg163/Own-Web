@@ -4,7 +4,7 @@ const { createMockChatProvider, createOpenAICompatibleProvider } = require('../p
 function createModelGateway({ config, registry = createModelRegistry(config), providers: injectedProviders = null }) {
   const mock = createMockChatProvider();
   const defaults = {
-    qwen: config.providerMode === 'mock' ? mock : createOpenAICompatibleProvider(config.qwen),
+    qwen: config.providerMode === 'mock' ? mock : createOpenAICompatibleProvider({ ...config.qwen, baseUrl: config.qwen.chatBaseUrl || config.qwen.baseUrl }),
     deepseek: config.providerMode === 'mock' ? mock : createOpenAICompatibleProvider(config.deepseek),
   };
   const providers = { ...defaults, ...(injectedProviders || {}) };
@@ -14,6 +14,9 @@ function createModelGateway({ config, registry = createModelRegistry(config), pr
     if (!primary) throw Object.assign(new Error('没有可用模型'), { code: 'MODEL_UNAVAILABLE' });
     const run = async (model) => {
       const provider = providers[model.provider];
+      if (!provider || typeof provider[method] !== 'function') throw Object.assign(new Error('模型能力不可用'), { code: 'MODEL_UNAVAILABLE' });
+      if (Array.isArray(request.tools) && request.tools.length && model.supportsTools === false) throw Object.assign(new Error('模型不支持工具调用'), { code: 'MODEL_TOOLS_UNAVAILABLE' });
+      if (Array.isArray(request.tools) && request.tools.length && provider.capabilities?.tools === false) throw Object.assign(new Error('模型不支持工具调用'), { code: 'MODEL_TOOLS_UNAVAILABLE' });
       const result = await provider[method]({ ...request, model: model.model, maxTokens: config.limits.outputTokens }, options);
       return { ...result, model, fallbackFrom: null };
     };

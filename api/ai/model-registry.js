@@ -4,12 +4,12 @@ function createModelRegistry(config) {
     {
       id: 'qwen-fast', label: '快速 · Qwen 3.8 Flash', provider: 'qwen', model: config.qwen.model,
       supportsTools: true, supportsStructuredOutput: true, supportsReasoning: false, supportsVision: false,
-      contextWindow: 32768, enabled: mock || Boolean(config.qwen.apiKey && config.qwen.baseUrl), fallbackId: null,
+      contextWindow: 1000000, enabled: mock || Boolean(config.qwen.apiKey && config.qwen.chatBaseUrl), fallbackId: null,
     },
     {
-      id: 'deepseek-quality', label: '高质量 · DeepSeek V4 Flash', provider: 'deepseek', model: config.deepseek.model,
-      supportsTools: false, supportsStructuredOutput: true, supportsReasoning: false, supportsVision: false,
-      contextWindow: 32768, enabled: mock || Boolean(config.deepseek.apiKey && config.deepseek.baseUrl), fallbackId: 'qwen-fast',
+      id: 'deepseek-quality', label: '高质量 · DeepSeek Flash', provider: 'deepseek', model: config.deepseek.model,
+      supportsTools: true, supportsStructuredOutput: true, supportsReasoning: false, supportsVision: false,
+      contextWindow: 1000000, enabled: mock || Boolean(config.deepseek.apiKey && config.deepseek.baseUrl), fallbackId: 'qwen-fast',
     },
   ];
   return models;

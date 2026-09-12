@@ -12,8 +12,9 @@ function createRerankerProvider(config) {
       .map((candidate) => ({ ...candidate, rerankScore: lexicalScore(query, candidate.content) + Number(candidate.score || 0) * 0.01 }))
       .sort((left, right) => right.rerankScore - left.rerankScore)
       .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
-    if (!config.qwen.apiKey || !config.qwen.baseUrl) throw Object.assign(new Error('Reranker Provider 未配置'), { code: 'RERANK_UNAVAILABLE' });
-    const response = await fetch(`${config.qwen.baseUrl.replace(/\/$/, '')}/rerank`, {
+    const baseUrl = config.qwen.rerankBaseUrl || config.qwen.baseUrl;
+    if (!config.qwen.apiKey || !baseUrl) throw Object.assign(new Error('Reranker Provider 未配置'), { code: 'RERANK_UNAVAILABLE' });
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/reranks`, {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${config.qwen.apiKey}` },
       body: JSON.stringify({ model: config.rerank.model, query, documents: candidates.map((candidate) => candidate.content), top_n: candidates.length }),
     });

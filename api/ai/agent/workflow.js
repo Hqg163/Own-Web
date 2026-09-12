@@ -3,7 +3,29 @@ const { createSystemPrompt } = require('./system-prompt');
 const { compose, noEvidenceResponse } = require('./response-composer');
 const { summarizeInput } = require('./article-summary');
 
-function extractToolText(result, maximum) { return JSON.stringify(result).slice(0, maximum); }
+function toolError(error) {
+  const code = ['TOOL_NOT_ALLOWED', 'TOOL_TIMEOUT', 'FORBIDDEN', 'NOT_FOUND', 'ARTICLE_REQUIRED'].includes(error?.code) ? error.code : 'TOOL_INVALID';
+  return { error: { code, message: code === 'TOOL_TIMEOUT' ? '工具暂时超时' : '工具调用未执行' } };
+}
+
+function parseToolArguments(raw) {
+  try {
+    const value = JSON.parse(String(raw || '{}'));
+    if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error('invalid');
+    return value;
+  } catch (_) { throw Object.assign(new Error('工具参数无效'), { code: 'TOOL_INVALID' }); }
+}
+
+function assistantToolMessage(generated, calls) {
+  return {
+    role: 'assistant', content: generated.content || null,
+    tool_calls: calls.map((call) => ({ id: call.id, type: 'function', function: { name: call.function.name, arguments: call.function.arguments } })),
+  };
+}
+
+function canModelUseTools(intent) {
+  return [INTENTS.SITE_QA, INTENTS.ARTICLE_QA, INTENTS.ARTICLE_SELECTION_QA, INTENTS.RELATED_CONTENT, INTENTS.PROJECT_QUERY, INTENTS.SERIES_QUERY].includes(intent);
+}
 
 function createAgentWorkflow({ contextBuilder, retriever, skills, gateway, memoryStore, config }) {
   async function run({ user = null, message, quickAction = null, pageContext, modelId, conversation = null, signal, onEvent = async () => {} }) {
@@ -11,15 +33,6 @@ function createAgentWorkflow({ contextBuilder, retriever, skills, gateway, memor
     const context = await contextBuilder.build({ user, pageContext });
     const decision = routeIntent(message, context, quickAction);
     const toolResults = [];
-    const invoke = async (name, input) => {
-      if (toolResults.length >= config.limits.toolRounds) throw Object.assign(new Error('工具调用超过上限'), { code: 'TOOL_LIMIT' });
-      await onEvent({ type: 'status', status: 'tool' });
-      await onEvent({ type: 'tool_start', tool: name });
-      const result = await skills.invoke(name, input, context);
-      toolResults.push({ name, result });
-      await onEvent({ type: 'tool_end', tool: name });
-      return result;
-    };
 
     let retrieval = null;
     let directContent = null;
@@ -28,18 +41,9 @@ function createAgentWorkflow({ contextBuilder, retriever, skills, gateway, memor
     } else if (decision.intent === INTENTS.ARTICLE_SUMMARY) {
       if (!context.article) throw Object.assign(new Error('文章不可用'), { code: 'ARTICLE_REQUIRED' });
       await onEvent({ type: 'status', status: 'reading' });
-      await onEvent({ type: 'tool_start', tool: 'get_article' });
       const summaryInput = summarizeInput(context.article, config.limits.contextChars);
-      toolResults.push({ name: 'get_article', result: { postId: context.article.id, mode: summaryInput.mode, sections: summaryInput.sections } });
-      await onEvent({ type: 'tool_end', tool: 'get_article' });
       directContent = `以下是《${context.article.title}》的站内摘要请求。请基于文章正文归纳重点，不要补充文章外的事实。\n\n${summaryInput.content}`;
-    } else if (decision.intent === INTENTS.RELATED_CONTENT) {
-      await invoke('get_related_articles', { postId: context.article?.id, limit: 5 });
-    } else if (decision.intent === INTENTS.PROJECT_QUERY) {
-      await invoke('search_projects', { query: message, limit: 5 });
-    } else if (decision.intent === INTENTS.SERIES_QUERY && context.article?.id) {
-      directContent = '当前问题涉及专栏，但没有提供可授权的专栏标识。请从专栏页面发起，或说明具体专栏。';
-    } else if (decision.intent !== INTENTS.DIRECT_CHAT) {
+    } else if ([INTENTS.SITE_QA, INTENTS.ARTICLE_QA, INTENTS.ARTICLE_SELECTION_QA].includes(decision.intent)) {
       await onEvent({ type: 'status', status: 'retrieving' });
       await onEvent({ type: 'tool_start', tool: 'search_articles' });
       try {
@@ -54,29 +58,58 @@ function createAgentWorkflow({ contextBuilder, retriever, skills, gateway, memor
       if (setting.memoryEnabled) preferences = await memoryStore.list(user.id);
     }
     const evidence = retrieval?.candidates?.map((candidate, index) => `[S${index + 1}] ${candidate.title} / ${candidate.headingPath}\n${candidate.content}`).join('\n\n') || '';
-    const toolText = toolResults.map((tool) => `${tool.name}: ${extractToolText(tool.result, config.limits.toolResultChars)}`).join('\n');
     const userMessage = directContent || message;
     if (directContent && (decision.intent === INTENTS.SITE_NAVIGATION || retrieval?.confidence?.level === 'LOW')) {
       return { context, decision, response: compose({ content: directContent, retrieval }), model: null, usage: { inputTokens: 0, outputTokens: 0 }, toolResults };
     }
-    const history = conversation?.recent || [];
     const messages = [
       { role: 'system', content: createSystemPrompt() },
       ...(conversation?.summary ? [{ role: 'system', content: `已压缩的本次会话背景：${String(conversation.summary).slice(0, config.limits.contextChars)}` }] : []),
       ...(preferences.length ? [{ role: 'system', content: `用户明确保存的偏好：${preferences.map((item) => `${item.key}: ${item.value}`).join('；').slice(0, config.limits.contextChars)}` }] : []),
-      ...history.slice(-config.limits.recentMessages),
+      ...(conversation?.recent || []).slice(-config.limits.recentMessages),
       ...(context.selectedText ? [{ role: 'system', content: `当前已授权选文：\n${context.selectedText}` }] : []),
       ...(evidence ? [{ role: 'system', content: `已授权站内证据（只能依据这些站内事实回答）：\n${evidence.slice(0, config.limits.contextChars)}` }] : []),
-      ...(toolText ? [{ role: 'system', content: `只读工具结果：\n${toolText}` }] : []),
       { role: 'user', content: userMessage },
     ];
-    const mockResponse = retrieval ? `根据已授权的站内资料，我找到以下相关信息：${retrieval.candidates.map((item, index) => `[S${index + 1}] ${item.excerpt || item.content.slice(0, 160)}`).join('\n')}` : (toolResults.length ? `根据已授权的站内数据：${toolText}` : `这是一个 Mock 模式的直接回复：${message}`);
-    await onEvent({ type: 'status', status: 'generating' });
-    const generated = await gateway.stream({ modelId, messages, userMessage, mockResponse }, { signal, onDelta: async (delta) => onEvent({ type: 'delta', delta }) });
-    return { context, decision, response: compose({ content: generated.content, retrieval, fallbackFrom: generated.fallbackFrom }), model: generated.model, usage: generated.usage, toolResults };
+    const enabledTools = canModelUseTools(decision.intent) ? (skills.tools?.() || []) : [];
+    const maxToolRounds = Math.max(1, Number(config.limits.toolRounds || 3));
+    const mockResponse = retrieval ? `根据已授权的站内资料，我找到以下相关信息：${retrieval.candidates.map((item, index) => `[S${index + 1}] ${item.excerpt || item.content.slice(0, 160)}`).join('\n')}` : `这是一个 Mock 模式的直接回复：${message}`;
+    let generated = null;
+    let fallbackFrom = null;
+
+    for (let round = 0; round <= maxToolRounds; round += 1) {
+      const tools = round < maxToolRounds && toolResults.length < maxToolRounds ? enabledTools : [];
+      await onEvent({ type: 'status', status: 'generating' });
+      generated = await gateway.stream({ modelId, messages, userMessage, mockResponse, tools, toolChoice: tools.length ? 'auto' : undefined }, {
+        signal,
+        onDelta: async (delta) => onEvent({ type: 'delta', delta }),
+        onToolCallDelta: async () => {},
+      });
+      fallbackFrom = fallbackFrom || generated.fallbackFrom || null;
+      const calls = Array.isArray(generated.toolCalls) ? generated.toolCalls : [];
+      if (!calls.length || !tools.length) break;
+      const accepted = calls.slice(0, Math.max(0, maxToolRounds - toolResults.length));
+      if (!accepted.length) break;
+      messages.push(assistantToolMessage(generated, accepted));
+      for (const call of accepted) {
+        let result;
+        await onEvent({ type: 'status', status: 'tool' });
+        await onEvent({ type: 'tool_start', tool: call.function.name });
+        try { result = await skills.invoke(call.function.name, parseToolArguments(call.function.arguments), context); }
+        catch (error) { result = toolError(error); }
+        finally { await onEvent({ type: 'tool_end', tool: call.function.name }); }
+        toolResults.push({ name: call.function.name, result });
+        messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result).slice(0, config.limits.toolResultChars) });
+      }
+    }
+    return {
+      context, decision,
+      response: compose({ content: generated?.content || '我暂时无法完成回答。', retrieval, fallbackFrom }),
+      model: generated?.model || null, usage: generated?.usage || { inputTokens: 0, outputTokens: 0 }, toolResults,
+    };
   }
 
   return { run };
 }
 
-module.exports = { createAgentWorkflow };
+module.exports = { createAgentWorkflow, parseToolArguments, assistantToolMessage, canModelUseTools };

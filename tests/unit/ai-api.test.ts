@@ -109,4 +109,26 @@ describe('AI HTTP boundary', () => {
     const quota = createAiRateLimiter({ db: { promise: () => ({ query: async (sql: string) => sql.includes('user_id=?') ? [[{ requests: 1, tokens: 0 }]] : [[{ requests: 0, tokens: 0 }]] }) }, config: { limits: { ...limits, userDaily: 1 } } })
     await expect(quota.begin({ userId: 9 }, '127.0.0.2')).rejects.toMatchObject({ code: 'QUOTA_EXCEEDED' })
   })
+
+  it('reserves database quota atomically before generation and settles that reservation by request id', async () => {
+    const queries: Array<{ sql: string, args?: unknown[] }> = []
+    const connection: any = {
+      beginTransaction: vi.fn(async () => {}), commit: vi.fn(async () => {}), rollback: vi.fn(async () => {}), release: vi.fn(),
+      query: vi.fn(async (sql: string, args?: unknown[]) => {
+        queries.push({ sql, args })
+        if (sql.includes('GET_LOCK')) return [[{ acquired: 1 }]]
+        if (sql.includes('SELECT COUNT')) return [[{ requests: 0, tokens: 0 }]]
+        return [{ affectedRows: 1 }]
+      }),
+    }
+    const limiter = createAiRateLimiter({ db: { promise: () => ({ getConnection: async () => connection, query: connection.query }) }, config: { limits } })
+    const release = await limiter.begin({ userId: 21 }, '127.0.0.1', '11111111-1111-4111-8111-111111111111')
+    await limiter.record({ requestId: '11111111-1111-4111-8111-111111111111', subject: { userId: 21 }, inputTokens: 4, outputTokens: 8, latencyMs: 3, status: 'complete' })
+    await release()
+    expect(connection.beginTransaction).toHaveBeenCalledOnce()
+    expect(queries.some(({ sql, args }) => sql.startsWith('INSERT INTO ai_usage') && args?.includes('reserved'))).toBe(true)
+    expect(queries.some(({ sql }) => sql.startsWith('UPDATE ai_usage SET'))).toBe(true)
+    expect(queries.some(({ sql }) => sql.includes('RELEASE_LOCK'))).toBe(true)
+    expect(queries.some(({ sql }) => sql.startsWith('DELETE FROM ai_usage'))).toBe(true)
+  })
 })

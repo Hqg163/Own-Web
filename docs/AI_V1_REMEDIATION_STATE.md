@@ -21,14 +21,15 @@ is an external blocker, not completion.
 
 ## Current phase
 
-Phase 2 -- live Provider and genuine Function Calling remediation. Goal created
+Phase 3 -- RAG, indexing lifecycle, and diagnostics remediation. Goal created
 on 2026-09-12.
 
 Completed phase:
 
 - Phase 0 baseline freeze and requirement matrix: `8b28891 audit(ai): document v1 remediation gaps`
-- Phase 1 shared status contract and AI experience: pending this checkpoint's
-  selective commit (all local checks below passed).
+- Phase 1 shared status contract and AI experience: `37d6b87` and `c07bcb9`.
+- Phase 2 live Provider/Function Calling implementation: pending this
+  checkpoint's selective commit (Mock-only validation below passed).
 
 ## Starting repository state
 
@@ -82,6 +83,8 @@ Completed phase:
 | Phase 1 disabled browser flow | PASS | Desktop unavailable launcher/shell run separately with AI Mock runner disabled |
 | Phase 1 typecheck/API/build | PASS | `typecheck`, `api:check`, and production build; existing bundle-size advisory only |
 | Phase 1 visual review | PASS | Actual local 1440px desktop and 390px narrow layouts, light/dark, floating panel/bottom sheet, unavailable states and focus behavior checked |
+| Phase 2 AI suite | PASS | 7 RAG + 12 Agent + 7 API + 25 security assertions; 12 Mock browser flows passed and 4 intentionally skipped under Mock configuration |
+| Phase 2 typecheck/API/build | PASS | `typecheck`, `api:check`, and production build; existing bundle-size advisory only |
 | Evaluation command | Mock contract only | 20 rows; real metrics are null |
 | Isolated Qdrant integration | BLOCKED_EXTERNAL | explicit Docker run fails: Docker CLI absent |
 | Live provider tests | BLOCKED_EXTERNAL | no local Qwen/DeepSeek configuration |
@@ -102,6 +105,25 @@ Completed phase:
 - Visual verification used temporary local preview only; the preview process was
   stopped afterward. No user data or secret was sent.
 
+## Phase 2 implementation and verification
+
+- Qwen now derives compatible-mode Chat/Embedding and compatible-api Rerank
+  endpoints separately, retaining `QWEN_BASE_URL` as a backwards-compatible
+  base. Rerank now calls `/reranks`.
+- The registry now identifies Qwen 3.8 Flash and optional DeepSeek Flash as
+  1M-context capable. DeepSeek stays unavailable without its local key/base
+  configuration and can fall back to Qwen exactly once.
+- OpenAI-compatible Providers preserve both non-streaming and indexed-stream
+  `tool_calls`, `tools`, `tool_choice`, and `role: tool` message reinjection.
+- The Agent now leaves macro routing to the Router but lets the selected model
+  choose from only the registered, strictly validated, read-only Skills. The
+  tool loop has a hard three-round limit and returns only product statuses.
+- Usage requests reserve quota by the request UUID inside a serialized database
+  transaction before generation; final usage settles that reservation. Logs
+  include a safe fallback marker but no prompt, endpoint, or secret.
+- Mock contract tests prove the sequence `model tool call -> Zod/Skill -> tool
+  result -> second model call`; no real provider request was made.
+
 ## External blockers
 
 1. **BLOCKED_EXTERNAL_QDRANT** until the user installs WSL 2 and Docker
@@ -113,7 +135,8 @@ Completed phase:
 
 ## Next exact action
 
-Commit this Phase 1 allowlist without `.codex/HANDOFF.md`; then Agent C audits
-and implements the Phase 2 Provider/Gateway/Function Calling and quota changes
-using deterministic tests only. Do not run a live request until Docker/Qdrant
-and local Qwen configuration have been independently confirmed.
+Commit this Phase 2 allowlist without `.codex/HANDOFF.md`; then Agent D audits
+and implements the Phase 3 Qdrant schema, job lifecycle, hybrid retrieval,
+evaluation ground truth, and `ai:doctor` using isolated deterministic tests.
+Do not run a live request until Docker/Qdrant and local Qwen configuration have
+been independently confirmed.

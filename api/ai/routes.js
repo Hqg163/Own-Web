@@ -233,7 +233,7 @@ function mountAiRoutes(app, db, {
       const models = gateway.models(); const requestedModel = body.modelId || config.defaultModel;
       if (!models.some((model) => model.id === requestedModel)) return error(res, 400, 'MODEL_UNAVAILABLE', '所选模型不可用');
       subject = subjectFor(req, res);
-      release = await limiter.begin(subject, req.ip);
+      release = await limiter.begin(subject, req.ip, requestId);
       conversation = await getConversation(subject, body.conversationId, requestedModel, true);
       if (!conversation) return error(res, 404, 'CONVERSATION_NOT_FOUND', '会话不存在或不可访问');
       if (!subject.userId) conversation.selectedModel = requestedModel;
@@ -285,7 +285,7 @@ function mountAiRoutes(app, db, {
       await limiter.record({ requestId, subject, provider: result.model?.provider || null, model: result.model?.model || requestedModel, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, latencyMs, status, intent: result.decision.intent, toolCalls: streamedToolCalls });
       sse(res, 'usage', { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, latencyMs, degraded: result.response.degraded });
       sse(res, 'done', { messageId: assistantId, status, fallbackFrom: result.response.fallbackFrom || null });
-      log({ requestId, subject: subject.userId ? `user:${subject.userId}` : 'guest', model: requestedModel, intent: result.decision.intent, latencyMs, toolCalls: streamedToolCalls, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, status });
+      log({ requestId, subject: subject.userId ? `user:${subject.userId}` : 'guest', model: requestedModel, fallbackFrom: result.response.fallbackFrom || null, intent: result.decision.intent, latencyMs, toolCalls: streamedToolCalls, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, status });
       res.end();
     } catch (caught) {
       const isValidationError = caught instanceof z.ZodError || Array.isArray(caught?.issues);

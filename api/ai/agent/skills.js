@@ -2,10 +2,15 @@ const { z } = require('zod');
 const { canAccessPost } = require('../../lib/post-access');
 
 const maxText = (value, maximum) => String(value || '').slice(0, maximum);
-const withTimeout = async (promise, timeoutMs = 2500) => Promise.race([
-  promise,
-  new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('工具超时'), { code: 'TOOL_TIMEOUT' })), timeoutMs)),
-]);
+function withTimeout(promise, timeoutMs = 2500) {
+  let timer = null;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error('工具超时'), { code: 'TOOL_TIMEOUT' })), timeoutMs); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+const tool = (name, description, parameters) => ({ type: 'function', function: { name, description, parameters } });
 
 function createSkillRegistry({ db, config }) {
   const query = db.promise().query.bind(db.promise());
@@ -19,7 +24,8 @@ function createSkillRegistry({ db, config }) {
 
   const definitions = {
     search_articles: {
-      schema: z.object({ query: z.string().min(1).max(300), limit: z.number().int().min(1).max(5).default(5) }),
+      schema: z.object({ query: z.string().min(1).max(300), limit: z.number().int().min(1).max(5).default(5) }).strict(),
+      tool: tool('search_articles', '搜索当前用户有权读取的站内文章。', { type: 'object', additionalProperties: false, properties: { query: { type: 'string', minLength: 1, maxLength: 300 }, limit: { type: 'integer', minimum: 1, maximum: 5 } }, required: ['query'] }),
       async run(input, context) {
         const term = `%${input.query.trim().slice(0, 300)}%`;
         const [rows] = await query('SELECT * FROM posts WHERE title LIKE ? OR excerpt LIKE ? OR content_markdown LIKE ? ORDER BY updated_at DESC,id DESC LIMIT 20', [term, term, term]);
@@ -29,7 +35,8 @@ function createSkillRegistry({ db, config }) {
       },
     },
     get_article: {
-      schema: z.object({ postId: z.number().int().positive().optional() }),
+      schema: z.object({ postId: z.number().int().positive().optional() }).strict(),
+      tool: tool('get_article', '读取当前用户有权访问的一篇文章。省略 postId 时仅可读取当前文章。', { type: 'object', additionalProperties: false, properties: { postId: { type: 'integer', minimum: 1 } } }),
       async run(input, context) {
         const id = input.postId || context.article?.id;
         if (!id) throw Object.assign(new Error('未指定文章'), { code: 'ARTICLE_REQUIRED' });
@@ -40,7 +47,8 @@ function createSkillRegistry({ db, config }) {
       },
     },
     get_related_articles: {
-      schema: z.object({ postId: z.number().int().positive().optional(), limit: z.number().int().min(1).max(5).default(5) }),
+      schema: z.object({ postId: z.number().int().positive().optional(), limit: z.number().int().min(1).max(5).default(5) }).strict(),
+      tool: tool('get_related_articles', '查找一篇获准文章的相关站内文章。省略 postId 时仅可使用当前文章。', { type: 'object', additionalProperties: false, properties: { postId: { type: 'integer', minimum: 1 }, limit: { type: 'integer', minimum: 1, maximum: 5 } } }),
       async run(input, context) {
         const id = input.postId || context.article?.id;
         if (!id) throw Object.assign(new Error('未指定文章'), { code: 'ARTICLE_REQUIRED' });
@@ -52,7 +60,8 @@ function createSkillRegistry({ db, config }) {
       },
     },
     search_projects: {
-      schema: z.object({ query: z.string().min(1).max(300), limit: z.number().int().min(1).max(5).default(5) }),
+      schema: z.object({ query: z.string().min(1).max(300), limit: z.number().int().min(1).max(5).default(5) }).strict(),
+      tool: tool('search_projects', '搜索当前用户有权查看的项目。', { type: 'object', additionalProperties: false, properties: { query: { type: 'string', minLength: 1, maxLength: 300 }, limit: { type: 'integer', minimum: 1, maximum: 5 } }, required: ['query'] }),
       async run(input, context) {
         const term = `%${input.query.trim().slice(0, 300)}%`;
         const ownerCondition = context.user?.id ? '(p.owner_id=? OR u.profile_visibility=\'public\')' : "u.profile_visibility='public'";
@@ -62,7 +71,8 @@ function createSkillRegistry({ db, config }) {
       },
     },
     get_series: {
-      schema: z.object({ seriesId: z.number().int().positive().optional(), slug: z.string().max(180).optional() }).refine((value) => value.seriesId || value.slug, '需要系列标识'),
+      schema: z.object({ seriesId: z.number().int().positive().optional(), slug: z.string().max(180).optional() }).strict().refine((value) => value.seriesId || value.slug, '需要系列标识'),
+      tool: tool('get_series', '读取当前用户有权查看的专栏及其文章。', { type: 'object', additionalProperties: false, properties: { seriesId: { type: 'integer', minimum: 1 }, slug: { type: 'string', maxLength: 180 } } }),
       async run(input, context) {
         const [seriesRows] = input.seriesId
           ? await query('SELECT * FROM series WHERE id=?', [input.seriesId])
@@ -84,12 +94,12 @@ function createSkillRegistry({ db, config }) {
     const definition = definitions[name];
     if (!definition) throw Object.assign(new Error('不支持的工具'), { code: 'TOOL_NOT_ALLOWED' });
     const input = definition.schema.parse(rawInput || {});
-    const result = await withTimeout(definition.run(input, context));
+    const result = await withTimeout(definition.run(input, context), config.limits.toolTimeoutMs || 2500);
     const serialized = JSON.stringify(result);
     return serialized.length > maxResultChars ? { truncated: true, preview: serialized.slice(0, maxResultChars) } : result;
   }
 
-  return { definitions, invoke };
+  return { definitions, tools: () => Object.values(definitions).map((definition) => definition.tool), invoke };
 }
 
 module.exports = { createSkillRegistry, withTimeout };

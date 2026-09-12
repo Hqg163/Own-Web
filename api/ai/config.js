@@ -18,7 +18,7 @@ const configSchema = z.object({
   enabled: z.boolean(),
   providerMode: z.enum(['live', 'mock']),
   defaultModel: z.string().min(1),
-  qwen: z.object({ apiKey: z.string(), baseUrl: z.string(), model: z.string() }),
+  qwen: z.object({ apiKey: z.string(), baseUrl: z.string(), chatBaseUrl: z.string(), embeddingBaseUrl: z.string(), rerankBaseUrl: z.string(), model: z.string() }),
   deepseek: z.object({ apiKey: z.string(), baseUrl: z.string(), model: z.string() }),
   embedding: z.object({ model: z.string(), dimensions: z.number().int().positive() }),
   rerank: z.object({ model: z.string(), enabled: z.boolean() }),
@@ -29,18 +29,26 @@ const configSchema = z.object({
     contextChars: z.number().int().positive(), toolResultChars: z.number().int().positive(),
     toolRounds: z.number().int().positive(), guestDaily: z.number().int().positive(), userDaily: z.number().int().positive(),
     ipWindow: z.number().int().positive(), ipWindowMs: z.number().int().positive(), concurrentPerSubject: z.number().int().positive(),
-    globalDailyRequests: z.number().int().positive(), globalDailyTokens: z.number().int().positive(),
+    globalDailyRequests: z.number().int().positive(), globalDailyTokens: z.number().int().positive(), toolTimeoutMs: z.number().int().positive(),
   }),
   cache: z.object({ maxEntries: z.number().int().positive(), ttlMs: z.number().int().positive() }),
   confidence: z.object({ highThreshold: z.number().min(0).max(1), mediumThreshold: z.number().min(0).max(1) }),
 });
 
 function loadAiConfig(env = process.env) {
+  const qwenBaseUrl = String(env.QWEN_BASE_URL || '');
+  const compatibleRerankBase = qwenBaseUrl.replace(/\/compatible-mode\/v1\/?$/, '/compatible-api/v1');
   return configSchema.parse({
     enabled: boolean(env.AI_ENABLED, false),
     providerMode: String(env.AI_PROVIDER_MODE || 'mock').toLowerCase() === 'mock' ? 'mock' : 'live',
     defaultModel: String(env.AI_DEFAULT_MODEL || 'qwen-fast'),
-    qwen: { apiKey: String(env.DASHSCOPE_API_KEY || ''), baseUrl: String(env.QWEN_BASE_URL || ''), model: String(env.QWEN_CHAT_MODEL || 'qwen3.8-flash') },
+    qwen: {
+      apiKey: String(env.DASHSCOPE_API_KEY || ''), baseUrl: qwenBaseUrl,
+      chatBaseUrl: String(env.QWEN_CHAT_BASE_URL || qwenBaseUrl),
+      embeddingBaseUrl: String(env.QWEN_EMBEDDING_BASE_URL || qwenBaseUrl),
+      rerankBaseUrl: String(env.QWEN_RERANK_BASE_URL || compatibleRerankBase),
+      model: String(env.QWEN_CHAT_MODEL || 'qwen3.8-flash'),
+    },
     deepseek: { apiKey: String(env.DEEPSEEK_API_KEY || ''), baseUrl: String(env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'), model: String(env.DEEPSEEK_CHAT_MODEL || 'deepseek-v4-flash') },
     embedding: { model: String(env.AI_EMBEDDING_MODEL || 'text-embedding-v4'), dimensions: integer(env.AI_EMBEDDING_DIM, 1024, 1) },
     rerank: { model: String(env.AI_RERANK_MODEL || 'qwen3-rerank'), enabled: boolean(env.AI_ENABLE_RERANK, true) },
@@ -53,6 +61,7 @@ function loadAiConfig(env = process.env) {
       userDaily: integer(env.AI_USER_DAILY_LIMIT, 50, 1), ipWindow: integer(env.AI_IP_WINDOW_LIMIT, 20, 1),
       ipWindowMs: integer(env.AI_IP_WINDOW_MS, 60 * 60 * 1000, 1000), concurrentPerSubject: integer(env.AI_MAX_CONCURRENT_PER_USER, 2, 1),
       globalDailyRequests: integer(env.AI_GLOBAL_DAILY_REQUEST_LIMIT, 1000, 1), globalDailyTokens: integer(env.AI_GLOBAL_DAILY_TOKEN_LIMIT, 500000, 1),
+      toolTimeoutMs: integer(env.AI_TOOL_TIMEOUT_MS, 2500, 100),
     },
     cache: { maxEntries: integer(env.AI_CACHE_MAX_ENTRIES, 500, 1), ttlMs: integer(env.AI_CACHE_TTL_MS, 5 * 60 * 1000, 1000) },
     confidence: { highThreshold: decimal(env.AI_CONFIDENCE_HIGH, 0.55), mediumThreshold: decimal(env.AI_CONFIDENCE_MEDIUM, 0.25) },
