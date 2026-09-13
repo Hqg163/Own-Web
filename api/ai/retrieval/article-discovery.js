@@ -1,6 +1,7 @@
 const { buildRetrievalScope } = require('./scope');
 const { canAccessPost } = require('../../lib/post-access');
 const { createArticleDocument } = require('./article-document');
+const { normalizeSearchQuery } = require('../agent/article-catalog');
 
 function mergePoints(responses) {
   const byId = new Map();
@@ -9,6 +10,48 @@ function mergePoints(responses) {
     if (!byId.has(key) || Number(point.score || 0) > Number(byId.get(key).score || 0)) byId.set(key, point);
   }
   return [...byId.values()];
+}
+
+function scoreOf(item) { return Number(item?.rerankScore ?? item?.score ?? 0); }
+
+function termsIn(value, terms) {
+  const haystack = String(value || '').toLocaleLowerCase();
+  return terms.filter((term) => haystack.includes(term));
+}
+
+// Article discovery is intentionally less permissive than chunk RAG.  It is
+// used to recommend or locate a post, so a broad tail of vector neighbours is
+// worse than returning fewer, clearly related articles.
+function relevanceSignals(item, question) {
+  const terms = normalizeSearchQuery(question);
+  const titleExcerptTerms = termsIn(`${item.title || ''}\n${item.excerpt || ''}`, terms);
+  const metadataTerms = termsIn([...(item.category || []), ...(item.tags || [])].join('\n'), terms);
+  return {
+    semanticScore: scoreOf(item),
+    titleExcerptTerms,
+    metadataTerms,
+    lexicalSupport: titleExcerptTerms.length > 0,
+    metadataSupport: metadataTerms.length > 0,
+  };
+}
+
+function filterRelevantArticles(items, question, options = {}) {
+  const ranked = [...(items || [])]
+    .map((item) => ({ ...item, relevance: relevanceSignals(item, question) }))
+    .sort((left, right) => scoreOf(right) - scoreOf(left));
+  if (!ranked.length) return [];
+  const topScore = Math.max(0, scoreOf(ranked[0]));
+  const relativeScore = Math.min(1, Math.max(0, Number(options.relativeScore ?? 0.55)));
+  const floor = topScore * relativeScore;
+  return ranked.filter((item, index) => {
+    const signals = item.relevance;
+    const withinRelativeScore = scoreOf(item) >= floor;
+    // Keep the best semantic candidate even if the user used vocabulary that
+    // does not occur verbatim.  Every other recommendation must have either
+    // lexical/metadata support and remain near the top score.
+    if (index === 0) return scoreOf(item) > 0 || signals.lexicalSupport || signals.metadataSupport;
+    return withinRelativeScore && (signals.lexicalSupport || signals.metadataSupport);
+  });
 }
 
 function createArticleDiscovery({ db, config, qdrant, embeddingProvider, rerankerProvider, retrievalCache = null }) {
@@ -54,14 +97,18 @@ function createArticleDiscovery({ db, config, qdrant, embeddingProvider, reranke
   }
 
   async function discover(question, user, context = {}, { limit = 5, excludePostId = null } = {}) {
+    const timings = {};
     if (!qdrant.client) throw Object.assign(new Error('文章发现暂时不可用'), { code: 'QDRANT_UNAVAILABLE' });
     const scope = await buildRetrievalScope(query, user, { ...context, sourceTypes: ['article'] });
     const version = await indexVersion();
     const cacheKey = `article:${String(question).trim().toLowerCase()}|${scope.hash}|${version}|${excludePostId || ''}`;
     const cached = retrievalCache?.get(cacheKey);
     if (cached) return cached;
+    const embeddingStartedAt = Date.now();
     const [vector] = await embeddingProvider.embed([question]);
+    timings.embedding = Date.now() - embeddingStartedAt;
     let responses;
+    const qdrantStartedAt = Date.now();
     try {
       responses = await Promise.all(scope.filters.map((filter) => qdrant.client.query(qdrant.collection, {
         prefetch: [
@@ -70,12 +117,28 @@ function createArticleDiscovery({ db, config, qdrant, embeddingProvider, reranke
         ], query: { rrf: { k: 60 } }, limit: 20, with_payload: true,
       })));
     } catch (error) { throw Object.assign(new Error('文章发现暂时不可用'), { code: 'QDRANT_UNAVAILABLE', cause: error }); }
+    timings.qdrant = Date.now() - qdrantStartedAt;
     const hydrated = (await hydrate(mergePoints(responses), user, context)).filter((item) => Number(item.articleId) !== Number(excludePostId || 0));
     let ranked = hydrated;
     let degraded = false;
-    try { ranked = await rerankerProvider.rerank(question, hydrated); } catch (_) { degraded = true; }
-    const items = ranked.sort((left, right) => Number(right.rerankScore ?? right.score ?? 0) - Number(left.rerankScore ?? left.score ?? 0)).slice(0, Math.min(10, Math.max(1, limit)));
-    const result = { scope, items, degraded, citations: items.map((item, index) => ({ id: `D${index + 1}`, ...item })) };
+    const skipRerankMaxCandidates = Math.max(0, Number(config.discovery?.skipRerankMaxCandidates || 0));
+    const rerankSkipped = skipRerankMaxCandidates > 0 && hydrated.length > 0 && hydrated.length <= skipRerankMaxCandidates;
+    if (!rerankSkipped) {
+      const rerankStartedAt = Date.now();
+      try { ranked = await rerankerProvider.rerank(question, hydrated); } catch (_) { degraded = true; }
+      timings.rerank = Date.now() - rerankStartedAt;
+    } else {
+      // Preserve an explicit comparable field for response ordering and trace;
+      // this is an opt-in latency optimization, not a silent quality fallback.
+      ranked = hydrated.map((item) => ({ ...item, rerankScore: Number(item.score || 0) }));
+      timings.rerank = 0;
+    }
+    const relevant = filterRelevantArticles(ranked, question, config.discovery);
+    const items = relevant.slice(0, Math.min(10, Math.max(1, limit)));
+    const result = {
+      scope, items, degraded, rerankSkipped, timings,
+      citations: items.map((item, index) => ({ id: `D${index + 1}`, ...item })),
+    };
     retrievalCache?.set(cacheKey, result);
     return result;
   }
@@ -88,4 +151,4 @@ function createArticleDiscovery({ db, config, qdrant, embeddingProvider, reranke
   return { discover, related };
 }
 
-module.exports = { createArticleDiscovery, mergePoints };
+module.exports = { createArticleDiscovery, mergePoints, relevanceSignals, filterRelevantArticles };

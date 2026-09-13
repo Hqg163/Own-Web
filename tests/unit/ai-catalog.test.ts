@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { articleSearchScore, createArticleCatalog, normalizeSearchQuery } from '../../api/ai/agent/article-catalog.js'
+import { articleSearchScore, createArticleCatalog, formatCatalogEvidence, normalizeSearchQuery } from '../../api/ai/agent/article-catalog.js'
 import { createSkillRegistry } from '../../api/ai/agent/skills.js'
 
 const posts = [
@@ -21,9 +21,21 @@ describe('AI article catalog', () => {
     const catalog = createArticleCatalog({ db: fakeDb() as any })
     const guest = await catalog.list({ limit: 20, sort: 'published_desc' }, { user: null, shareToken: null })
     expect(guest.total).toBe(1)
-    expect(guest.items).toMatchObject([{ id: 1, title: 'YOLOv8 与 DeepSORT', categories: [{ slug: 'ai' }], tags: [{ slug: 'object-detection' }] }])
+    expect(guest.items).toMatchObject([{ id: 1, title: 'YOLOv8 与 DeepSORT', categories: [{ slug: 'ai' }], tags: [{ slug: 'object-detection' }], overview: '目标检测与多目标跟踪' }])
     const owner = await catalog.list({ limit: 20, sort: 'updated_desc' }, { user: { id: 7 }, shareToken: null })
     expect(owner.total).toBe(2)
+  })
+
+  it('formats bounded catalog evidence with authorized metadata without splitting an article entry', () => {
+    const evidence = formatCatalogEvidence([
+      { title: '目标检测', slug: 'vision', categories: [{ name: '视觉' }], tags: [{ name: 'YOLOv8' }], series: { name: 'CV' }, publishedAt: '2026-01-01', updatedAt: '2026-01-02', overview: '检测和追踪实践。' },
+      { title: '第二篇', slug: 'second', categories: [], tags: [], series: null, overview: '另一个概览。' },
+    ], 100)
+    expect(evidence.content).toContain('分类：视觉')
+    expect(evidence.content).toContain('标签：YOLOv8')
+    expect(evidence.content).toContain('概览：检测和追踪实践。')
+    expect(evidence.included).toBe(1)
+    expect(evidence.truncated).toBe(true)
   })
 
   it('normalizes natural-language search and weights metadata before body-only matches', () => {

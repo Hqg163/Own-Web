@@ -23,16 +23,21 @@ async function createPublicArticle(page: import('@playwright/test').Page, projec
 test.describe('AI guest experience', () => {
   test.skip(process.env.AI_E2E_ENABLED !== '1', 'AI UI is enabled only by the focused Mock-provider runner')
 
-  test('streams a Mock reply and restores launcher focus after Escape', async ({ page }) => {
+  test('progressively paints a Mock reply and restores launcher focus after Escape', async ({ page }) => {
     await page.goto('/ai')
     const composer = page.getByRole('textbox', { name: '输入给 AI 的消息' })
     await expect(composer).toBeVisible()
     const accessibility = await new AxeBuilder({ page }).analyze()
     expect(accessibility.violations).toEqual([])
 
-    await composer.fill('你好，请简单介绍你能做什么。')
+    const streamingPrompt = '请给出一条清晰、克制且实用的专注写作建议，让流式回复能够在完成前逐步显示。'.repeat(10)
+    await composer.fill(streamingPrompt)
     await composer.press('Enter')
-    await expect(page.getByText('这是一个 Mock 模式的直接回复：你好，请简单介绍你能做什么。')).toBeVisible()
+    const assistant = page.locator('.ai-message--assistant').last()
+    await expect(assistant).toContainText('这')
+    const partialLength = await assistant.innerText().then((text) => text.length)
+    await expect.poll(async () => (await assistant.innerText()).length).toBeGreaterThan(partialLength)
+    await expect(assistant.locator('.ai-message__state')).toHaveCount(0)
 
     const launcher = page.getByRole('button', { name: '打开 AI 助手' })
     await launcher.click()

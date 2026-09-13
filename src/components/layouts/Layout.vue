@@ -1,10 +1,10 @@
 <!-- src/layouts/Layout.vue -->
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'app-shell--workspace': isAiWorkspace }">
     <NavigationBar />
     <router-view class="page" />
     <AiPanel />
-    <footer class="site-footer">
+    <footer v-if="!isAiWorkspace" class="site-footer">
       <div class="container footer-inner">
         <p class="footer-copy">© {{ year }} Own-Web</p>
         <nav class="footer-links" aria-label="页脚导航">
@@ -21,15 +21,20 @@
 </template>
 
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import NavigationBar from '../NavigationBar.vue'
 import AiPanel from '../ai/AiPanel.vue'
 const year = new Date().getFullYear()
+const route = useRoute()
+const isAiWorkspace = computed(() => route.name === 'Ai')
 </script>
 
 <style scoped>
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.app-shell--workspace { height: 100dvh; overflow: hidden; }
 .page { flex: 1; min-width: 0; }
+.app-shell--workspace > .page { min-height: 0; }
 .site-footer { margin-top: var(--space-8); border-top: 1px solid var(--border); background: var(--surface); }
 .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: 72px; padding: var(--space-4) 0; }
 .footer-copy { margin: 0; color: var(--muted); font-size: .86rem; }

@@ -6,7 +6,9 @@ import http from './http'
 export type AiCitation = { id: string; postId?: number; chunkId?: string; title: string; slug?: string; heading?: string; headingAnchor?: string; excerpt?: string; score?: number }
 export type AiMessage = { id: string; role: 'user' | 'assistant'; content: string; status?: 'complete' | 'streaming' | 'aborted' | 'error'; citations?: AiCitation[]; model?: string; error?: string; feedback?: number | null }
 export type AiModel = { id: string; label: string }
-export type AiPageContext = { route?: string; articleId?: number; selectedText?: string; heading?: string; anchor?: string; shareToken?: string }
+// `displayTitle` is client-only presentation state. pageContext() deliberately
+// excludes it from outbound requests so the server remains authoritative for post data.
+export type AiPageContext = { route?: string; articleId?: number; selectedText?: string; heading?: string; anchor?: string; shareToken?: string; displayTitle?: string }
 export type AiConversation = { id: string; title: string; selectedModel?: string; summary?: string | null; messages?: AiMessage[]; persistent?: boolean }
 export type AiQuickAction = 'summary_current' | 'explain_concept' | 'related_content' | 'selection_explain' | 'selection_expand' | 'selection_example'
 export type AiReadiness = { state: 'disabled' | 'unconfigured' | 'degraded' | 'ready'; featureEnabled: boolean; chatReady: boolean; ragReady: boolean; indexReady: boolean; message: string }
@@ -36,6 +38,12 @@ function pageContext(context: AiPageContext | null | undefined): AiPageContext |
   if (!context) return undefined
   const { route, articleId, selectedText, heading, anchor, shareToken } = context
   return { ...(route ? { route } : {}), ...(articleId ? { articleId } : {}), ...(selectedText ? { selectedText } : {}), ...(heading ? { heading } : {}), ...(anchor ? { anchor } : {}), ...(shareToken ? { shareToken } : {}) }
+}
+function localPageContext(context: AiPageContext | null | undefined): AiPageContext | null {
+  const requestContext = pageContext(context)
+  if (!requestContext) return null
+  const title = String(context?.displayTitle || (requestContext.articleId && typeof document !== 'undefined' ? document.title.replace(/\s*[·|]\s*Own-Web\s*$/i, '').trim() : '') || '')
+  return { ...requestContext, ...(title && title !== 'Own-Web' ? { displayTitle: title } : {}) }
 }
 function statusLabel(status: string) {
   return ({ analyzing: '正在分析问题…', retrieving: '正在搜索本站…', reading: '正在读取文章…', tool: '正在调用站内工具…', generating: '正在生成回答…' } as Record<string, string>)[status] || ''
@@ -128,11 +136,11 @@ export function useAi() {
 
   function open(trigger?: HTMLElement | null, context?: AiPageContext | null) {
     returnFocus = trigger || (document.activeElement instanceof HTMLElement ? document.activeElement : null)
-    state.open = true; state.error = ''; if (context) state.pageContext = pageContext(context) || null
+    state.open = true; state.error = ''; if (context) state.pageContext = localPageContext(context)
     if (state.availability === 'unknown') void refreshAvailability()
   }
   function close() { if (isStreaming.value) return; state.open = false; window.setTimeout(() => returnFocus?.focus({ preventScroll: true }), 0) }
-  function setContext(context: AiPageContext | null) { state.pageContext = pageContext(context) || null }
+  function setContext(context: AiPageContext | null) { state.pageContext = localPageContext(context) }
   function stop() { controller.value?.abort() }
 
   async function send(message: string, options: { regenerateMessageId?: string; quickAction?: AiQuickAction } = {}) {
@@ -144,6 +152,27 @@ export function useAi() {
     const assistant: AiMessage = { id: `local-assistant-${Date.now()}`, role: 'assistant', content: '', status: 'streaming', citations: [] }
     state.messages.push(assistant)
     controller.value = new AbortController()
+    let pendingDelta = ''
+    let deltaFrame: number | null = null
+    let deltaTimeout: number | null = null
+    const flushDelta = () => {
+      if (deltaFrame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(deltaFrame)
+      if (deltaTimeout !== null) window.clearTimeout(deltaTimeout)
+      deltaFrame = null
+      deltaTimeout = null
+      if (!pendingDelta) return
+      assistant.content += pendingDelta
+      pendingDelta = ''
+    }
+    const queueDelta = (text: string) => {
+      pendingDelta += text
+      if (deltaFrame !== null || deltaTimeout !== null) return
+      if (typeof requestAnimationFrame === 'function') {
+        deltaFrame = requestAnimationFrame(() => { deltaFrame = null; flushDelta() })
+      } else {
+        deltaTimeout = window.setTimeout(() => { deltaTimeout = null; flushDelta() }, 16)
+      }
+    }
     try {
       const response = await fetch(`${baseUrl}/api/ai/chat`, {
         method: 'POST', credentials: 'include', signal: controller.value.signal,
@@ -160,7 +189,7 @@ export function useAi() {
           const event = parseEventBlock(block); if (!event) continue
           if (event.type === 'start') { state.conversationId = String(event.data.conversationId || state.conversationId); assistant.id = String(event.data.messageId || assistant.id) }
           if (event.type === 'status') state.status = String(event.data.status || '')
-          if (event.type === 'delta') assistant.content += String(event.data.text || '')
+          if (event.type === 'delta') queueDelta(String(event.data.text || ''))
           if (event.type === 'citation') assistant.citations?.push(event.data as AiCitation)
           if (event.type === 'tool_start') state.status = event.data.tool === 'search_articles' ? 'retrieving' : 'tool'
           if (event.type === 'usage') state.status = event.data.degraded ? '已使用降级路径完成回答。' : ''
@@ -168,14 +197,16 @@ export function useAi() {
           if (event.type === 'done') assistant.status = event.data.status === 'aborted' ? 'aborted' : event.data.status === 'error' ? 'error' : 'complete'
         }
       }
+      flushDelta()
       if (assistant.status === 'streaming') assistant.status = 'complete'
       if (assistant.status === 'complete' && !state.status.includes('降级')) state.status = ''
       await loadConversations()
     } catch (error: any) {
+      flushDelta()
       assistant.status = error?.name === 'AbortError' ? 'aborted' : 'error'
       if (assistant.status === 'aborted') { state.status = '已停止生成。'; if (!assistant.content) assistant.content = '已停止生成。' }
       else { const detail = aiError(error, 'AI 请求失败。'); assistant.error = detail; state.error = detail }
-    } finally { controller.value = null }
+    } finally { flushDelta(); controller.value = null }
   }
 
   async function feedback(message: AiMessage, rating: number) {

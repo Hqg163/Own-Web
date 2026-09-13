@@ -32,7 +32,27 @@ function cookieValue(req, name) {
 }
 function hmac(value, secret) { return crypto.createHmac('sha256', secret).update(value).digest('hex'); }
 function error(res, status, code, message, fields) { return res.status(status).json({ error: { code, message, ...(fields ? { fields } : {}) } }); }
-function sse(res, type, payload) { res.write(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`); }
+function sse(res, type, payload) {
+  if (res.writableEnded || res.destroyed) return;
+  res.write(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
+  res.flush?.();
+}
+function sseComment(res, value = 'heartbeat') {
+  if (res.writableEnded || res.destroyed) return;
+  res.write(`: ${value}\n\n`);
+  res.flush?.();
+}
+function startSse(res, heartbeatMs = 15000) {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store, no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.socket?.setNoDelay?.(true);
+  res.flushHeaders?.();
+  const heartbeat = setInterval(() => sseComment(res), heartbeatMs);
+  heartbeat.unref?.();
+  return () => clearInterval(heartbeat);
+}
 function guestCookie(res, value) {
   const attrs = ['HttpOnly', 'Path=/', 'SameSite=Lax'];
   if (process.env.NODE_ENV === 'production') attrs.push('Secure');
@@ -225,7 +245,8 @@ function mountAiRoutes(app, db, {
   });
 
   app.post('/api/ai/chat', optionalAuth, aiAvailable, async (req, res, next) => {
-    let release = null; let assistantId = null; let subject = null; let conversation = null; let requestId = crypto.randomUUID(); let startedAt = Date.now(); let streamStarted = false; let streamedContent = ''; let streamedToolCalls = 0; let inputMessage = '';
+    let release = null; let assistantId = null; let subject = null; let conversation = null; let requestId = crypto.randomUUID(); let startedAt = Date.now(); let streamStarted = false; let streamedContent = ''; let streamedToolCalls = 0; let inputMessage = ''; let closeSse = () => {};
+    const streamTiming = { requestStart: startedAt, firstStatusMs: null, firstProviderDeltaMs: null, firstExpressDeltaMs: null, deltaCount: 0, largestDeltaChars: 0, providerDoneMs: null, requestDoneMs: null };
     try {
       const body = chatSchema.parse(req.body || {});
       if (body.message && body.message.length > config.limits.inputChars) return error(res, 400, 'INPUT_TOO_LARGE', '消息长度超过上限');
@@ -258,28 +279,38 @@ function mountAiRoutes(app, db, {
       const controller = new AbortController();
       req.once('aborted', () => controller.abort());
       res.once('close', () => { if (!res.writableEnded) controller.abort(); });
-      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8'); res.setHeader('Cache-Control', 'no-store, no-cache'); res.setHeader('Connection', 'keep-alive'); res.setHeader('X-Accel-Buffering', 'no'); res.flushHeaders?.();
+      closeSse = startSse(res, config.stream?.heartbeatMs || 15000);
       streamStarted = true; sse(res, 'start', { requestId, conversationId: conversation.id, messageId: assistantId, modelId: requestedModel });
       const result = await workflow.run({
         user: req.user || null, message, quickAction: body.quickAction || null, pageContext: body.pageContext || {}, modelId: requestedModel, conversation: history, signal: controller.signal,
         onEvent: async (event) => {
-          if (event.type === 'delta') { streamedContent += event.delta; sse(res, 'delta', { text: event.delta }); }
-          if (event.type === 'status' && PRODUCT_STATUSES.has(event.status)) sse(res, 'status', { status: event.status });
+          if (event.type === 'delta') {
+            const elapsed = Date.now() - startedAt;
+            if (event.provider && streamTiming.firstProviderDeltaMs === null) streamTiming.firstProviderDeltaMs = elapsed;
+            if (streamTiming.firstExpressDeltaMs === null) streamTiming.firstExpressDeltaMs = elapsed;
+            streamTiming.deltaCount += 1; streamTiming.largestDeltaChars = Math.max(streamTiming.largestDeltaChars, String(event.delta || '').length);
+            streamedContent += event.delta; sse(res, 'delta', { text: event.delta });
+          }
+          if (event.type === 'status' && PRODUCT_STATUSES.has(event.status)) { if (streamTiming.firstStatusMs === null) streamTiming.firstStatusMs = Date.now() - startedAt; sse(res, 'status', { status: event.status }); }
           if (event.type === 'tool_start' || event.type === 'tool_end') { if (event.type === 'tool_start') streamedToolCalls += 1; sse(res, event.type, { tool: event.tool }); }
         },
       });
       const completedContent = String(result.response.content || '');
+      streamTiming.providerDoneMs = Date.now() - startedAt;
       // Some safe workflow exits (navigation and LOW-confidence refusal) do
       // not invoke a streaming provider. Still send their completed product
       // response through the single client delta channel.
       if (!streamedContent && completedContent) {
         streamedContent = completedContent;
+        if (streamTiming.firstExpressDeltaMs === null) streamTiming.firstExpressDeltaMs = Date.now() - startedAt;
+        streamTiming.deltaCount += 1; streamTiming.largestDeltaChars = Math.max(streamTiming.largestDeltaChars, completedContent.length);
         sse(res, 'delta', { text: completedContent });
       } else {
         streamedContent = completedContent || streamedContent;
       }
       for (const citation of result.response.citations) sse(res, 'citation', citation);
       const latencyMs = Date.now() - startedAt;
+      streamTiming.requestDoneMs = latencyMs;
       const status = controller.signal.aborted ? 'aborted' : 'complete';
       if (subject.userId) { await conversationStore.updateMessage(subject.userId, conversation.id, assistantId, { content: streamedContent, status, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, latencyMs }); await conversationStore.compact(subject.userId, conversation.id); }
       else { const item = conversation.messages.find((entry) => entry.id === assistantId); if (item) Object.assign(item, { content: streamedContent, status, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, latencyMs }); }
@@ -294,7 +325,7 @@ function mountAiRoutes(app, db, {
       await limiter.record({ requestId, subject, provider: result.model?.provider || null, model: result.model?.model || requestedModel, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, latencyMs, status, intent: result.decision.intent, toolCalls: streamedToolCalls });
       sse(res, 'usage', { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, latencyMs, degraded: result.response.degraded });
       sse(res, 'done', { messageId: assistantId, status, fallbackFrom: result.response.fallbackFrom || null });
-      log({ requestId, subject: subject.userId ? `user:${subject.userId}` : 'guest', model: requestedModel, fallbackFrom: result.response.fallbackFrom || null, intent: result.decision.intent, latencyMs, toolCalls: streamedToolCalls, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, status, ...(config.developerTrace ? { trace: result.trace } : {}) });
+      log({ requestId, subject: subject.userId ? `user:${subject.userId}` : 'guest', model: requestedModel, fallbackFrom: result.response.fallbackFrom || null, intent: result.decision.intent, latencyMs, toolCalls: streamedToolCalls, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, status, ...(config.developerTrace ? { trace: { ...(result.trace || {}), stream: streamTiming } } : {}) });
       res.end();
     } catch (caught) {
       const isValidationError = caught instanceof z.ZodError || Array.isArray(caught?.issues);
@@ -309,8 +340,8 @@ function mountAiRoutes(app, db, {
       if (subject) await limiter.record({ requestId, subject, inputTokens: estimatedInput, outputTokens: estimatedOutput, latencyMs, status: code === 'ABORTED' ? 'aborted' : 'error', toolCalls: streamedToolCalls }).catch(() => {});
       sse(res, 'error', { code, message }); sse(res, 'done', { messageId: assistantId, status: code === 'ABORTED' ? 'aborted' : 'error' }); res.end();
       log({ requestId, subject: subject?.userId ? `user:${subject.userId}` : 'guest', latencyMs, status: code });
-    } finally { release?.(); }
+    } finally { closeSse(); release?.(); }
   });
 }
 
-module.exports = { mountAiRoutes, createGuestStore, chatSchema };
+module.exports = { mountAiRoutes, createGuestStore, chatSchema, startSse, sse };

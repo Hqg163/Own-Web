@@ -21,8 +21,10 @@ function createMockChatProvider() {
   async function stream(request, { onDelta, onToolCallDelta, signal } = {}) {
     const generated = await generate(request);
     for (const call of generated.toolCalls) await onToolCallDelta?.({ index: call.index, id: call.id, name: call.function.name, argumentsDelta: call.function.arguments });
-    for (const piece of generated.content.match(/.{1,24}/gu) || []) {
+    const delayMs = Math.max(0, Math.min(1000, Number(request.mockStreamDelayMs ?? process.env.AI_MOCK_STREAM_DELAY_MS ?? 24) || 0));
+    for (const piece of generated.content.match(/.{1,8}/gu) || []) {
       if (signal?.aborted) throw Object.assign(new Error('请求已取消'), { code: 'ABORTED' });
+      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
       await onDelta?.(piece);
     }
     return generated;
@@ -44,6 +46,7 @@ function createOpenAICompatibleProvider({ baseUrl, apiKey }) {
   };
   const payloadFor = (input, stream) => ({
     model: input.model, messages: input.messages, temperature: input.temperature ?? 0.2, max_tokens: input.maxTokens, stream,
+    ...(input.responseFormat === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
     ...(Array.isArray(input.tools) && input.tools.length ? { tools: input.tools, tool_choice: input.toolChoice || 'auto' } : {}),
   });
 

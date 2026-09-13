@@ -128,6 +128,7 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
   }
 
   async function retrieve(question, user, context = {}) {
+    const timings = {};
     if (!qdrant.client) throw Object.assign(new Error('本站知识检索暂时不可用'), { code: 'QDRANT_UNAVAILABLE' });
     const scope = await buildRetrievalScope(query, user, context);
     const version = await indexVersion();
@@ -135,8 +136,11 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
     const cacheKey = `${retrievalQueries.join('\u0000').toLowerCase()}|${scope.hash}|${version}`;
     const cached = retrievalCache?.get(cacheKey);
     if (cached) return cached;
+    const embeddingStartedAt = Date.now();
     const vectors = await embeddingProvider.embed(retrievalQueries);
+    timings.embedding = Date.now() - embeddingStartedAt;
     let responses;
+    const qdrantStartedAt = Date.now();
     try {
       responses = await Promise.all(retrievalQueries.flatMap((retrievalQuery, queryIndex) => (scope.filters || [scope.filter]).map((filter) => qdrant.client.query(qdrant.collection, {
         prefetch: [
@@ -145,6 +149,7 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
         ], query: { rrf: { k: 60 } }, limit: 20, with_payload: true,
       }))));
     } catch (error) { throw Object.assign(new Error('本站知识检索暂时不可用'), { code: 'QDRANT_UNAVAILABLE', cause: error }); }
+    timings.qdrant = Date.now() - qdrantStartedAt;
     const pointsById = new Map();
     for (const response of responses) {
       for (const point of response?.points || response || []) {
@@ -155,7 +160,9 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
     const hydrated = await hydrate([...pointsById.values()], user, context);
     let reranked = hydrated;
     let degraded = false;
+    const rerankStartedAt = Date.now();
     try { reranked = await rerankerProvider.rerank(question, hydrated); } catch (_) { degraded = true; }
+    timings.rerank = Date.now() - rerankStartedAt;
     const byId = new Map(reranked.map((candidate) => [String(candidate.chunkId), candidate]));
     for (const neighbor of await selectionNeighbors(user, context)) {
       const existing = byId.get(String(neighbor.chunkId));
@@ -170,7 +177,7 @@ function createRetriever({ db, config, qdrant, embeddingProvider, rerankerProvid
       : { ...evaluated, level: 'LOW', reason: 'no_lexical_support', lexicalSupport: false, kind: degraded ? 'rrf' : 'rerank' };
     const evidence = lexicalSupport ? candidates : [];
     const result = {
-      scope, queries: retrievalQueries, candidates: evidence, confidence, degraded,
+      scope, queries: retrievalQueries, candidates: evidence, confidence, degraded, timings,
       citations: evidence.map((candidate, index) => ({ id: `S${index + 1}`, ...candidate, excerpt: candidate.content.slice(0, 420) })),
     };
     retrievalCache?.set(cacheKey, result);

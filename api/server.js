@@ -35,6 +35,7 @@ const { createConversationStore } = require('./ai/agent/conversation-store');
 const { createMemoryStore } = require('./ai/agent/memory-store');
 const { createArticleCatalog } = require('./ai/agent/article-catalog');
 const { createRetrievalPlanner } = require('./ai/agent/retrieval-planner');
+const { createHybridIntentRouter } = require('./ai/agent/intent-router');
 const { createModelGateway } = require('./ai/agent/model-gateway');
 const { createAgentWorkflow } = require('./ai/agent/workflow');
 const { mountAiRoutes } = require('./ai/routes');
@@ -291,11 +292,12 @@ const aiGateway = createModelGateway({ config: aiConfig });
 const aiMemoryStore = createMemoryStore({ db });
 const aiCatalog = createArticleCatalog({ db });
 const aiRetrievalPlanner = createRetrievalPlanner();
+const aiIntentRouter = createHybridIntentRouter({ gateway: aiGateway, config: aiConfig });
 const aiConversationStore = createConversationStore({ db, config: aiConfig });
 const aiWorkflow = createAgentWorkflow({
   contextBuilder: createContextBuilder({ db, config: aiConfig }),
   retriever: createRetriever({ db, config: aiConfig, qdrant: aiQdrant, embeddingProvider: aiEmbeddingProvider, rerankerProvider: aiRerankerProvider, retrievalCache: aiRetrievalCache }),
-  articleDiscovery: aiArticleDiscovery, skills: createSkillRegistry({ db, config: aiConfig, articleDiscovery: aiArticleDiscovery }), gateway: aiGateway, memoryStore: aiMemoryStore, catalog: aiCatalog, retrievalPlanner: aiRetrievalPlanner, config: aiConfig,
+  articleDiscovery: aiArticleDiscovery, skills: createSkillRegistry({ db, config: aiConfig, articleDiscovery: aiArticleDiscovery }), gateway: aiGateway, memoryStore: aiMemoryStore, catalog: aiCatalog, retrievalPlanner: aiRetrievalPlanner, router: aiIntentRouter, config: aiConfig,
 });
 
 // 博客路由在旧的全局鉴权前注册：公开读取接口自行做可选会话识别，

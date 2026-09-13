@@ -1,6 +1,7 @@
 const { canAccessPost } = require('../../lib/post-access');
 
 const MAX_CATALOG_SCAN = 5000;
+const MAX_ARTICLE_OVERVIEW_CHARS = 360;
 const SORTS = Object.freeze({
   published_desc: 'p.published_at DESC,p.id DESC',
   published_asc: 'p.published_at ASC,p.id ASC',
@@ -42,12 +43,45 @@ function presentArticle(row, metadata) {
   const categories = metadata.categories.get(Number(row.id)) || [];
   const tags = metadata.tags.get(Number(row.id)) || [];
   const series = row.series_id ? { id: Number(row.series_id), name: row.series_name || '', slug: row.series_slug || '' } : null;
+  const overview = String(row.excerpt || row.content_markdown || '').replace(/\s+/g, ' ').trim().slice(0, MAX_ARTICLE_OVERVIEW_CHARS);
   return {
     id: Number(row.id), title: String(row.title || ''), slug: String(row.slug || ''),
     excerpt: String(row.excerpt || row.content_markdown || '').slice(0, 600),
+    // This is deliberately bounded and is the only article-body-derived
+    // field catalog consumers should receive.  Full Markdown remains local
+    // to authorization-aware ranking, never a catalog prompt payload.
+    overview,
     publishedAt: row.published_at || null, updatedAt: row.updated_at || null,
     categories, tags, series, contentMarkdown: String(row.content_markdown || ''),
   };
+}
+
+function catalogEvidenceLine(article, index) {
+  const details = [
+    article.categories?.length ? `分类：${article.categories.map((item) => item.name || item.slug).filter(Boolean).join('、')}` : '',
+    article.tags?.length ? `标签：${article.tags.map((item) => item.name || item.slug).filter(Boolean).join('、')}` : '',
+    article.series?.name ? `系列：${article.series.name}` : '',
+    article.publishedAt ? `发布：${String(article.publishedAt)}` : '',
+    article.updatedAt ? `更新：${String(article.updatedAt)}` : '',
+    article.overview ? `概览：${article.overview}` : '',
+  ].filter(Boolean);
+  return `[C${index + 1}] ${article.title}\nslug: ${article.slug}${details.length ? `\n${details.join('\n')}` : ''}`;
+}
+
+function formatCatalogEvidence(items, maximum = 12000) {
+  const cap = Math.max(0, Number(maximum) || 0);
+  const lines = [];
+  let size = 0;
+  for (const [index, article] of (items || []).entries()) {
+    const line = catalogEvidenceLine(article, index);
+    // Keep every entry atomic: slicing a prompt in the middle of an article
+    // silently drops metadata and makes a directory look complete when it is
+    // not.  The workflow reports the supplied/total count instead.
+    if (lines.length && size + line.length + 2 > cap) break;
+    if (!lines.length && line.length > cap) { lines.push(line.slice(0, cap)); size = cap; }
+    else { lines.push(line); size += line.length + 2; }
+  }
+  return { content: lines.join('\n\n'), included: lines.length, truncated: lines.length < (items || []).length };
 }
 
 function createArticleCatalog({ db }) {
@@ -123,4 +157,4 @@ function createArticleCatalog({ db }) {
   return { list, search, normalizeSearchQuery };
 }
 
-module.exports = { createArticleCatalog, normalizeSearchQuery, articleSearchScore, SORTS };
+module.exports = { createArticleCatalog, normalizeSearchQuery, articleSearchScore, formatCatalogEvidence, catalogEvidenceLine, SORTS };

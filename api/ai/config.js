@@ -23,6 +23,9 @@ const configSchema = z.object({
   deepseek: z.object({ apiKey: z.string(), baseUrl: z.string(), model: z.string() }),
   embedding: z.object({ model: z.string(), dimensions: z.number().int().positive() }),
   rerank: z.object({ model: z.string(), enabled: z.boolean() }),
+  discovery: z.object({ relativeScore: z.number().min(0).max(1), skipRerankMaxCandidates: z.number().int().min(0) }),
+  router: z.object({ structuredEnabled: z.boolean(), modelId: z.string().min(1) }),
+  stream: z.object({ heartbeatMs: z.number().int().positive() }),
   qdrant: z.object({ url: z.string(), apiKey: z.string(), collection: z.string() }),
   limits: z.object({
     inputChars: z.number().int().positive(), selectedTextChars: z.number().int().positive(),
@@ -57,6 +60,14 @@ function loadAiConfig(env = process.env) {
     deepseek: { apiKey: String(env.DEEPSEEK_API_KEY || ''), baseUrl: String(env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'), model: String(env.DEEPSEEK_CHAT_MODEL || 'deepseek-v4-flash') },
     embedding: { model: String(env.AI_EMBEDDING_MODEL || 'text-embedding-v4'), dimensions: integer(env.AI_EMBEDDING_DIM, 1024, 1) },
     rerank: { model: String(env.AI_RERANK_MODEL || 'qwen3-rerank'), enabled: boolean(env.AI_ENABLE_RERANK, true) },
+    // Disabled by default until the deployment's evaluation set confirms that
+    // a small-candidate shortcut does not reduce recommendation quality.
+    discovery: {
+      relativeScore: decimal(env.AI_DISCOVERY_RELATIVE_SCORE, 0.55),
+      skipRerankMaxCandidates: integer(env.AI_DISCOVERY_SKIP_RERANK_MAX_CANDIDATES, 0, 0),
+    },
+    router: { structuredEnabled: boolean(env.AI_ENABLE_STRUCTURED_ROUTER, true), modelId: String(env.AI_STRUCTURED_ROUTER_MODEL || 'qwen-fast') },
+    stream: { heartbeatMs: integer(env.AI_SSE_HEARTBEAT_MS, 15000, 1000) },
     qdrant: { url: String(env.QDRANT_URL || ''), apiKey: String(env.QDRANT_API_KEY || ''), collection: String(env.AI_QDRANT_COLLECTION || 'own_web_ai_content_v1') },
     limits: {
       inputChars: integer(env.AI_MAX_INPUT_CHARS, 8000, 1), selectedTextChars: integer(env.AI_MAX_SELECTED_TEXT_CHARS, 4000, 1),

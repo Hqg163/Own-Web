@@ -6,7 +6,7 @@ import { deterministicEmbedding } from '../../api/ai/providers/embedding-provide
 import { createIndexer, createIndexQueue, normalizeAction } from '../../api/ai/retrieval/indexer.js'
 import { createRetriever, hasLexicalSupport, selectSupportedCandidates } from '../../api/ai/retrieval/retriever.js'
 import { createArticleDocument } from '../../api/ai/retrieval/article-document.js'
-import { createArticleDiscovery } from '../../api/ai/retrieval/article-discovery.js'
+import { createArticleDiscovery, filterRelevantArticles } from '../../api/ai/retrieval/article-discovery.js'
 import { createRetrievalQueries } from '../../api/ai/retrieval/query-rewriter.js'
 
 describe('AI RAG document preparation', () => {
@@ -224,6 +224,38 @@ describe('AI RAG document preparation', () => {
     expect(body.prefetch[0].filter.must.at(-1)).toEqual({ key: 'source_type', match: { value: 'article' } })
     expect(result.citations[0]).toMatchObject({ title: 'DeepSORT 实践', slug: 'deepsort' })
     expect((await discovery.discover('DeepSORT', null, {}, { limit: 5, excludePostId: 6 })).items).toEqual([])
+  })
+
+  it('filters broad article-discovery neighbours by relative semantic score and lexical or metadata support', () => {
+    const items = filterRelevantArticles([
+      { articleId: 1, title: '目标检测实践', excerpt: 'YOLOv8', category: ['vision'], tags: ['detection'], rerankScore: 0.9 },
+      { articleId: 2, title: '日常随笔', excerpt: '天气不错', category: ['life'], tags: ['notes'], rerankScore: 0.82 },
+      { articleId: 3, title: '跟踪系统', excerpt: '多目标跟踪', category: ['vision'], tags: ['目标检测'], rerankScore: 0.63 },
+      { articleId: 4, title: '弱相关', excerpt: '', category: [], tags: [], rerankScore: 0.3 },
+    ], '推荐目标检测文章', { relativeScore: 0.55 })
+    expect(items.map((item: any) => item.articleId)).toEqual([1, 3])
+    expect(items[1].relevance.metadataSupport).toBe(true)
+  })
+
+  it('can skip article reranking only when the deployment explicitly enables the small-candidate shortcut', async () => {
+    const post = { id: 16, author_id: 2, title: 'DeepSORT 实践', slug: 'deepsort-small', excerpt: '目标检测跟踪', status: 'published', visibility: 'public', content_markdown: '# DeepSORT\n\nKalman Filter', categories: [], tags: [], series_name: null }
+    const document = createArticleDocument(post)
+    const query = async (sql: string) => {
+      if (sql.startsWith('SELECT version FROM ai_index_state')) return [[{ version: 7 }]]
+      if (sql.includes('FROM ai_article_index a')) return [[{ ...post, point_id: document.pointId, content_hash: document.contentHash, discovery_content: document.content }]]
+      if (sql.includes('FROM post_categories') || sql.includes('FROM post_tags')) return [[]]
+      throw new Error(`Unexpected article discovery query: ${sql}`)
+    }
+    let reranked = false
+    const discovery = createArticleDiscovery({
+      db: { promise: () => ({ query }) }, config: { cache: {}, discovery: { skipRerankMaxCandidates: 1, relativeScore: 0.55 } },
+      qdrant: { collection: 'fixture', client: { query: async () => ({ points: [{ id: document.pointId, score: 0.8 }] }) } },
+      embeddingProvider: { embed: async () => [deterministicEmbedding('DeepSORT', 1024)] }, rerankerProvider: { rerank: async () => { reranked = true; return [] } }, retrievalCache: { get: () => undefined, set: () => undefined },
+    })
+    const result = await discovery.discover('DeepSORT', null, {}, { limit: 5 })
+    expect(reranked).toBe(false)
+    expect(result).toMatchObject({ rerankSkipped: true, degraded: false })
+    expect(result.items).toHaveLength(1)
   })
 
   it('coalesces a post action and claims it with a lease before the worker runs it', async () => {

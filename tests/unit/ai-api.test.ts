@@ -47,6 +47,8 @@ describe('AI HTTP boundary', () => {
   it('streams ordered SSE events for a guest without persisting a raw guest identifier', async () => {
     const result = await request(mount()).post('/api/ai/chat').send({ message: '你好' }).expect(200)
     expect(result.headers['content-type']).toContain('text/event-stream')
+    expect(result.headers['cache-control']).toContain('no-transform')
+    expect(result.headers['x-accel-buffering']).toBe('no')
     expect(result.headers['set-cookie'][0]).toContain('HttpOnly')
     expect(result.text.indexOf('event: start')).toBeLessThan(result.text.indexOf('event: delta'))
     expect(result.text.indexOf('event: delta')).toBeLessThan(result.text.indexOf('event: usage'))

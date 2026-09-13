@@ -15,6 +15,7 @@
     "ai:index:post": "npm --prefix api run ai:index:post --",
     "ai:index:retry": "npm --prefix api run ai:index:retry",
     "ai:doctor": "npm --prefix api run ai:doctor",
+    "ai:stream:doctor": "npm --prefix api run ai:stream:doctor",
     "ai:eval": "npm --prefix api run ai:eval",
     "ai:live:acceptance": "npm --prefix api run ai:live:acceptance",
     "ai:live:security": "npm --prefix api run ai:live:security",
