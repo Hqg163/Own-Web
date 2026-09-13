@@ -4,7 +4,10 @@ const { createMockChatProvider, createOpenAICompatibleProvider } = require('../p
 function createModelGateway({ config, registry = createModelRegistry(config), providers: injectedProviders = null }) {
   const mock = createMockChatProvider();
   const defaults = {
-    qwen: config.providerMode === 'mock' ? mock : createOpenAICompatibleProvider({ ...config.qwen, baseUrl: config.qwen.chatBaseUrl || config.qwen.baseUrl }),
+    // Qwen 3.8 Flash enables deep reasoning by default. The assistant does
+    // not expose hidden reasoning, so opt into direct-answer mode to improve
+    // visible first-token latency without weakening source/citation checks.
+    qwen: config.providerMode === 'mock' ? mock : createOpenAICompatibleProvider({ ...config.qwen, baseUrl: config.qwen.chatBaseUrl || config.qwen.baseUrl, extraBody: { enable_thinking: false, preserve_thinking: false } }),
     deepseek: config.providerMode === 'mock' ? mock : createOpenAICompatibleProvider(config.deepseek),
   };
   const providers = { ...defaults, ...(injectedProviders || {}) };

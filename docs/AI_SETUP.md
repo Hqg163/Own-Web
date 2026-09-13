@@ -48,7 +48,7 @@ QWEN_RERANK_BASE_URL=https://<WorkspaceId>.<region>.maas.aliyuncs.com/compatible
 DEEPSEEK_API_KEY=replace-with-deepseek-key
 ```
 
-The registry enables `qwen-fast` only with Qwen credentials and `deepseek-quality` only with DeepSeek credentials. Qwen is the fallback for a single failed DeepSeek request. Set `CORS_ORIGIN` to the exact browser origin(s) in use; `localhost` and `127.0.0.1` are distinct origins.
+The registry enables `qwen-fast` only with Qwen credentials and `deepseek-quality` only with DeepSeek credentials. Qwen is the fallback for a single failed DeepSeek request. `qwen-fast` explicitly uses Qwen's direct-answer mode (`enable_thinking=false`): Own-Web never renders or stores hidden reasoning, and the setting materially improves visible streaming latency. Set `CORS_ORIGIN` to the exact browser origin(s) in use; `localhost` and `127.0.0.1` are distinct origins.
 
 Run live calibration only with an explicit environment opt-in:
 
@@ -90,6 +90,11 @@ and [API-key workspace/permission rules](https://help.aliyun.com/en/model-studio
 - Run `npm run ai:doctor` for a secret-safe PASS/FAIL check of migration,
   collection/schema/count, embedding, rerank and chat. It emits only counts
   and a request ID, never endpoint values or response bodies.
+- Run `AI_LIVE_TESTS=1 npm run ai:stream:doctor` after a Qwen configuration
+  change. It uses a 260-character direct prompt (no RAG or tools) and reports
+  only transport headers, event counts, first product status, first client
+  delta and completion timing. A passing run requires at least three deltas
+  before `done`; it never emits prompt text, generated text or credentials.
 - Check Qdrant collection creation/indexing by running `npm run ai:index:backfill` and reviewing `ai_index_jobs` failures; application article edits are never rolled back because indexing failed.
 - Rebuild after a content migration, lost Qdrant volume or embedding model change: stop writes if required, back up MySQL, recreate the collection, run backfill, then sample authorized article queries.
 - Tune `AI_GUEST_DAILY_LIMIT`, `AI_USER_DAILY_LIMIT`, `AI_MAX_CONCURRENT_PER_USER`, `AI_GLOBAL_DAILY_REQUEST_LIMIT`, and `AI_GLOBAL_DAILY_TOKEN_LIMIT` before production. Defaults are deliberately conservative (5 guest, 50 user requests/day, two concurrent requests per subject).

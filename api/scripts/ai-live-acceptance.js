@@ -17,6 +17,7 @@ const { createSkillRegistry } = require('../ai/agent/skills');
 const { createMemoryStore } = require('../ai/agent/memory-store');
 const { createModelGateway } = require('../ai/agent/model-gateway');
 const { createAgentWorkflow } = require('../ai/agent/workflow');
+const { createHybridIntentRouter } = require('../ai/agent/intent-router');
 const { noEvidenceResponse } = require('../ai/agent/response-composer');
 
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
@@ -40,11 +41,13 @@ async function main() {
   const cache = new TtlLruCache(config.cache);
   const articleDiscovery = createArticleDiscovery({ db, config, qdrant, embeddingProvider: embedding, rerankerProvider: reranker, retrievalCache: cache });
   const catalogService = createArticleCatalog({ db });
+  const gateway = createModelGateway({ config });
   const workflow = createAgentWorkflow({
     contextBuilder: createContextBuilder({ db, config }),
     retriever: createRetriever({ db, config, qdrant, embeddingProvider: embedding, rerankerProvider: reranker, retrievalCache: cache }),
     articleDiscovery, catalog: catalogService, retrievalPlanner: createRetrievalPlanner(),
-    skills: createSkillRegistry({ db, config, articleDiscovery }), gateway: createModelGateway({ config }), memoryStore: createMemoryStore({ db }), config,
+    skills: createSkillRegistry({ db, config, articleDiscovery }), gateway, memoryStore: createMemoryStore({ db }),
+    router: createHybridIntentRouter({ gateway, config }), config,
   });
   const run = async (message) => {
     const events = [];
@@ -59,8 +62,18 @@ async function main() {
     const toolNames = tool.result.toolResults.map((item) => item.name);
     if (!toolNames.includes('search_articles') || tool.events.filter((event) => event === 'generating').length < 2) fail('TOOL_ROUNDTRIP_FAILED');
 
-    const rag = await run('本站文章中，Vue 3 的多个同步写入为什么不会造成十次渲染？');
-    if (!rag.result.model || !rag.result.response.citations.length || rag.result.decision.intent !== 'SITE_QA') fail('RAG_CITATION_FAILED');
+    const rag = await run('本站文章中，为什么 Vue 3 的多个同步写入不会立刻造成十次渲染？');
+    if (!rag.result.model || !rag.result.response.citations.length || rag.result.decision.intent !== 'SITE_QA') {
+      // Keep diagnostics safe: acceptance logs only execution state and counts,
+      // never generated content, prompt context, or source text.
+      console.error(JSON.stringify({
+        check: 'rag_citation', modelReturned: Boolean(rag.result.model),
+        citationCount: rag.result.response.citations.length,
+        intent: rag.result.decision.intent,
+        confidence: rag.result.response.confidence?.level || null,
+      }));
+      fail('RAG_CITATION_FAILED');
+    }
 
     const low = await run('站内文章有没有给出量子计算芯片的价格？');
     if (low.result.model || low.result.response.citations.length || low.result.response.content !== noEvidenceResponse()) fail('LOW_CONFIDENCE_REFUSAL_FAILED');

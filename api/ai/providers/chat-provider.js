@@ -33,7 +33,7 @@ function createMockChatProvider() {
   return { capabilities: { stream: true, generate: true, tools: true }, generate, stream };
 }
 
-function createOpenAICompatibleProvider({ baseUrl, apiKey }) {
+function createOpenAICompatibleProvider({ baseUrl, apiKey, extraBody = {} }) {
   const endpoint = `${String(baseUrl || '').replace(/\/$/, '')}/chat/completions`;
   const request = async (body, signal) => {
     if (!baseUrl || !apiKey) throw Object.assign(new Error('模型 Provider 未配置'), { code: 'MODEL_UNAVAILABLE' });
@@ -46,6 +46,7 @@ function createOpenAICompatibleProvider({ baseUrl, apiKey }) {
   };
   const payloadFor = (input, stream) => ({
     model: input.model, messages: input.messages, temperature: input.temperature ?? 0.2, max_tokens: input.maxTokens, stream,
+    ...extraBody,
     ...(input.responseFormat === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
     ...(Array.isArray(input.tools) && input.tools.length ? { tools: input.tools, tool_choice: input.toolChoice || 'auto' } : {}),
   });

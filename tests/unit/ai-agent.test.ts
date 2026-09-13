@@ -27,6 +27,7 @@ describe('AI single-agent workflow', () => {
     expect(routeIntent('任意浏览器文本', { article: { id: 1 }, selectedText: '' }, 'related_content').intent).toBe(INTENTS.RELATED_CONTENT)
     expect(routeIntent('任意浏览器文本', { article: { id: 1 }, selectedText: '已授权选文' }, 'selection_example').intent).toBe(INTENTS.ARTICLE_SELECTION_QA)
     expect(routeIntent('请帮我发布这篇文章', { article: null, selectedText: '' }).intent).toBe(INTENTS.WRITE_ACTION_REQUEST)
+    expect(routeIntent('本站文章中，为什么 Vue 3 的多个同步写入不会立刻造成十次渲染？', { article: null, selectedText: '' })).toMatchObject({ intent: INTENTS.SITE_QA, needsSemanticRetrieval: true })
     expect(routeIntent('你能直接删除博客吗？', { article: null, selectedText: '' }).intent).toBe(INTENTS.CAPABILITY_QUERY)
   })
 
@@ -206,7 +207,23 @@ describe('AI single-agent workflow', () => {
       const result = await provider.stream({ model: 'qwen', messages: [], tools: [{ type: 'function', function: { name: 'search_articles', parameters: { type: 'object' } } }] })
       expect(bodies[0].tools[0].function.name).toBe('search_articles')
       expect(bodies[0].tool_choice).toBe('auto')
+      expect(bodies[0]).not.toHaveProperty('enable_thinking')
       expect(result.toolCalls).toEqual([{ id: 'call_7', index: 0, type: 'function', function: { name: 'search_articles', arguments: '{"query":"Own-Web"}' } }])
+    } finally { globalThis.fetch = originalFetch }
+  })
+
+  it('uses direct-answer mode for the Qwen fast provider without changing other compatible providers', async () => {
+    const originalFetch = globalThis.fetch
+    const bodies: any[] = []
+    globalThis.fetch = vi.fn(async (_url: string, options: any) => {
+      bodies.push(JSON.parse(options.body))
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }], usage: {} }), { status: 200 })
+    }) as any
+    try {
+      const config = loadAiConfig({ AI_ENABLED: 'true', AI_PROVIDER_MODE: 'live', DASHSCOPE_API_KEY: 'test-only', QWEN_BASE_URL: 'https://qwen.example/v1' } as NodeJS.ProcessEnv)
+      const gateway = createModelGateway({ config })
+      await gateway.generate({ modelId: 'qwen-fast', messages: [] })
+      expect(bodies[0]).toMatchObject({ enable_thinking: false, preserve_thinking: false })
     } finally { globalThis.fetch = originalFetch }
   })
 

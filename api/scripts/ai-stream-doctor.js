@@ -70,13 +70,17 @@ async function main() {
     const startedAt = Date.now();
     const response = await fetch(`http://127.0.0.1:${port}/api/ai/chat`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: '请用至少二百六十个汉字，连贯地介绍 Own-Web 中站内检索回答应如何引用来源、如何避免猜测，以及用户怎样继续追问。' }),
+      // A direct prompt deliberately avoids site terms, RAG, and tools. This
+      // makes the timing check a transport/provider streaming measurement
+      // instead of conflating first-token time with retrieval or tool rounds.
+      body: JSON.stringify({ message: '请用至少二百六十个汉字，连贯地说明写作时如何引用可靠资料、如何避免把不确定的信息说成事实，以及读者怎样提出更清晰的后续问题。' }),
     });
-    let buffer = ''; let firstClientDeltaMs = null; let doneMs = null; let deltaCount = 0; let largestDeltaChars = 0; let doneBeforeDelta = false;
+    let buffer = ''; let firstStatusMs = null; let firstClientDeltaMs = null; let doneMs = null; let deltaCount = 0; let largestDeltaChars = 0; let doneBeforeDelta = false;
     const reader = response.body?.getReader();
     if (!reader) throw new Error('STREAM_BODY_MISSING');
     const decoder = new TextDecoder();
     const consume = (type, payload) => {
+      if (type === 'status' && firstStatusMs === null) firstStatusMs = Date.now() - startedAt;
       if (type === 'delta') {
         if (firstClientDeltaMs === null) firstClientDeltaMs = Date.now() - startedAt;
         deltaCount += 1; largestDeltaChars = Math.max(largestDeltaChars, String(payload.text || '').length);
@@ -93,7 +97,7 @@ async function main() {
     const progressive = deltaCount >= 3 && firstClientDeltaMs !== null && doneMs !== null && !doneBeforeDelta;
     const checks = [
       { name: 'sse_transport_headers', status: headersPass ? 'PASS' : 'FAIL', count: headersPass ? 1 : 0 },
-      { name: 'express_client_progressive_stream', status: progressive ? 'PASS' : 'FAIL', count: deltaCount, firstClientDeltaMs, requestDoneMs: doneMs, largestDeltaChars },
+      { name: 'express_client_progressive_stream', status: progressive ? 'PASS' : 'FAIL', count: deltaCount, firstStatusMs, firstClientDeltaMs, requestDoneMs: doneMs, largestDeltaChars },
     ];
     emit(checks.every((item) => item.status === 'PASS') ? 'PASS' : 'FAIL', checks);
   } catch (_) {

@@ -29,8 +29,13 @@ function decision(intent, reason, patch = {}) {
 }
 
 function isWriteAction(text) {
-  return /(发布|创建|新建|编辑|修改|删除|上传|保存|写入|publish|create|edit|delete|upload|save|write)/i.test(text)
-    && /(文章|博客|帖子|内容|项目|专栏|系列|编辑器|post|article|blog|project|series|editor)/i.test(text);
+  // Treat a request as a write action only when an operation and a mutable
+  // Own-Web target form one command.  Two independent keyword matches would
+  // incorrectly turn questions such as “文章中多个同步写入” into a publish
+  // request, bypassing authorized retrieval.
+  const action = '(?:发布|创建|新建|编辑|修改|删除|上传|保存|写入|publish|create|edit|delete|upload|save|write)';
+  const target = '(?:文章|博客|帖子|内容|项目|专栏|系列|编辑器|post|article|blog|project|series|editor)';
+  return new RegExp(`(?:${action})\\s*(?:这|一|新|该)?(?:篇|个|条)?\\s*${target}|${target}\\s*(?:请|帮我|要|需要|想)?\\s*${action}`, 'i').test(String(text || ''));
 }
 
 function isCapabilityQuestion(text) {
