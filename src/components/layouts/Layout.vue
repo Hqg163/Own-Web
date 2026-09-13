@@ -3,7 +3,7 @@
   <div class="app-shell" :class="{ 'app-shell--workspace': isAiWorkspace }">
     <NavigationBar />
     <router-view class="page" />
-    <AiPanel />
+    <AiPanel v-if="!isAiWorkspace" />
     <footer v-if="!isAiWorkspace" class="site-footer">
       <div class="container footer-inner">
         <p class="footer-copy">© {{ year }} Own-Web</p>

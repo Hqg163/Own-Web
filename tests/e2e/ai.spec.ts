@@ -39,6 +39,8 @@ test.describe('AI guest experience', () => {
     await expect.poll(async () => (await assistant.innerText()).length).toBeGreaterThan(partialLength)
     await expect(assistant.locator('.ai-message__state')).toHaveCount(0)
 
+    await expect(page.getByTestId('ai-launcher')).toBeHidden()
+    await page.goto('/')
     const launcher = page.getByRole('button', { name: '打开 AI 助手' })
     await launcher.click()
     await expect(page.getByRole('dialog', { name: '站内助手' })).toBeVisible()
