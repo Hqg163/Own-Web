@@ -55,6 +55,23 @@ describe('AI HTTP boundary', () => {
     expect(result.text).toContain('event: done')
   })
 
+  it('uses the persistent atomic turn append boundary for an authenticated chat', async () => {
+    const id = '11111111-1111-4111-8111-111111111111'
+    const appendTurn = vi.fn(async () => ({ userMessageId: 'u', assistantMessageId: 'a' }))
+    const conversation = { id, title: '新对话', selectedModel: 'qwen-fast', messages: [] }
+    const app = mount({ conversationStore: {
+      list: async () => [], create: async () => conversation, get: async () => conversation, context: async () => ({ conversation, summary: '', recent: [] }),
+      append: async () => null, appendTurn, updateMessage: async () => true, compact: async () => null, rename: async () => null, remove: async () => false,
+    } })
+    const token = jwt.sign({ sub: '88', email: 'reader@example.test', sv: 0 }, secret)
+    await request(app).post('/api/ai/chat').set('Authorization', `Bearer ${token}`).send({ conversationId: id, message: '同秒写入也必须稳定排序' }).expect(200)
+    expect(appendTurn).toHaveBeenCalledOnce()
+    expect(appendTurn.mock.calls[0][0]).toBe(88)
+    expect(appendTurn.mock.calls[0][1]).toBe(id)
+    expect(appendTurn.mock.calls[0][2]).toMatchObject({ role: 'user', content: '同秒写入也必须稳定排序' })
+    expect(appendTurn.mock.calls[0][3]).toMatchObject({ role: 'assistant', status: 'streaming' })
+  })
+
   it('sends a completed safe workflow response as a delta when no model stream exists', async () => {
     const app = mount({ workflow: { run: async () => ({
       response: { content: '没有足够可信的站内资料，因此不会猜测。', citations: [], degraded: false },

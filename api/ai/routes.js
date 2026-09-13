@@ -151,8 +151,27 @@ function mountAiRoutes(app, db, {
   }
 
   function appendGuest(conversation, message) {
-    const entry = { id: crypto.randomUUID(), createdAt: new Date().toISOString(), status: 'complete', ...message };
+    const sequence = Math.max(1, Number(conversation.nextMessageSeq || 1));
+    const entry = { id: crypto.randomUUID(), createdAt: new Date().toISOString(), status: 'complete', sequence, ...message };
     conversation.messages.push(entry); conversation.updatedAt = entry.createdAt; return entry;
+  }
+
+  async function appendConversationTurn(subject, conversation, userMessage, assistantMessage) {
+    if (!subject.userId) {
+      const user = appendGuest(conversation, userMessage);
+      conversation.nextMessageSeq = user.sequence + 1;
+      const assistant = appendGuest(conversation, assistantMessage);
+      conversation.nextMessageSeq = assistant.sequence + 1;
+      return { userMessageId: user.id, assistantMessageId: assistant.id };
+    }
+    if (typeof conversationStore.appendTurn === 'function') {
+      return conversationStore.appendTurn(subject.userId, conversation.id, userMessage, assistantMessage);
+    }
+    // Compatibility for focused HTTP fakes. The production store always
+    // exposes appendTurn and performs the pair atomically.
+    const userMessageId = await conversationStore.append(subject.userId, conversation.id, userMessage);
+    const assistantMessageId = await conversationStore.append(subject.userId, conversation.id, assistantMessage);
+    return { userMessageId, assistantMessageId };
   }
 
   app.get('/api/ai/status', optionalAuth, async (_req, res) => {
@@ -268,13 +287,18 @@ function mountAiRoutes(app, db, {
         message = previousUser.content;
       }
       inputMessage = message;
-      if (!body.regenerate) {
-        if (subject.userId) await conversationStore.append(subject.userId, conversation.id, { role: 'user', content: message, model: requestedModel });
-        else appendGuest(conversation, { role: 'user', content: message, model: requestedModel });
-      }
       assistantId = crypto.randomUUID();
-      if (subject.userId) await conversationStore.append(subject.userId, conversation.id, { id: assistantId, role: 'assistant', content: '', model: requestedModel, status: 'streaming' });
-      else appendGuest(conversation, { id: assistantId, role: 'assistant', content: '', model: requestedModel, status: 'streaming' });
+      if (!body.regenerate) {
+        await appendConversationTurn(subject, conversation,
+          { role: 'user', content: message, model: requestedModel },
+          { id: assistantId, role: 'assistant', content: '', model: requestedModel, status: 'streaming' }
+        );
+      } else if (subject.userId) {
+        await conversationStore.append(subject.userId, conversation.id, { id: assistantId, role: 'assistant', content: '', model: requestedModel, status: 'streaming' });
+      } else {
+        const assistant = appendGuest(conversation, { id: assistantId, role: 'assistant', content: '', model: requestedModel, status: 'streaming' });
+        conversation.nextMessageSeq = assistant.sequence + 1;
+      }
 
       const controller = new AbortController();
       req.once('aborted', () => controller.abort());

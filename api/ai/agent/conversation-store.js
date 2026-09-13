@@ -2,8 +2,28 @@ const crypto = require('crypto');
 const { buildStructuredSummary } = require('./conversation-summary');
 
 function createConversationStore({ db, config }) {
-  const query = db.promise().query.bind(db.promise());
+  const pool = db.promise();
+  const query = pool.query.bind(pool);
   const id = () => crypto.randomUUID();
+
+  async function withTransaction(work) {
+    // Unit boundary callers use a deliberately small query-only fake. The
+    // production mysql2 promise pool provides getConnection(), where the row
+    // lock below protects concurrent chat requests for one conversation.
+    if (typeof pool.getConnection !== 'function') return work(pool);
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const result = await work(connection);
+      await connection.commit();
+      return result;
+    } catch (caught) {
+      await connection.rollback().catch(() => {});
+      throw caught;
+    } finally {
+      connection.release();
+    }
+  }
 
   async function create(userId, { title = '新对话', modelId = 'qwen-fast' } = {}) {
     const conversation = { id: id(), userId: Number(userId), title: String(title).trim().slice(0, 180) || '新对话', modelId };
@@ -22,8 +42,8 @@ function createConversationStore({ db, config }) {
     if (!conversation) return null;
     let messages = [];
     if (includeMessages) {
-      const [rows] = await query('SELECT id,role,content,model_provider,model_name,status,input_tokens,output_tokens,latency_ms,created_at FROM ai_messages WHERE conversation_id=? ORDER BY created_at ASC,id ASC LIMIT 200', [conversationId]);
-      messages = rows.map((row) => ({ id: row.id, role: row.role, content: row.content, provider: row.model_provider, model: row.model_name, status: row.status, inputTokens: row.input_tokens, outputTokens: row.output_tokens, latencyMs: row.latency_ms, createdAt: row.created_at }));
+      const [rows] = await query('SELECT id,role,content,model_provider,model_name,status,input_tokens,output_tokens,latency_ms,message_seq,created_at FROM ai_messages WHERE conversation_id=? ORDER BY message_seq ASC LIMIT 200', [conversationId]);
+      messages = rows.map((row) => ({ id: row.id, role: row.role, content: row.content, provider: row.model_provider, model: row.model_name, status: row.status, inputTokens: row.input_tokens, outputTokens: row.output_tokens, latencyMs: row.latency_ms, sequence: Number(row.message_seq), createdAt: row.created_at }));
     }
     return { id: conversation.id, title: conversation.title, selectedModel: conversation.selected_model, summary: conversation.summary || null, messages, createdAt: conversation.created_at, updatedAt: conversation.updated_at, lastMessageAt: conversation.last_message_at };
   }
@@ -57,15 +77,39 @@ function createConversationStore({ db, config }) {
   }
 
   async function append(userId, conversationId, message) {
-    const conversation = await get(userId, conversationId, { includeMessages: false });
-    if (!conversation) throw Object.assign(new Error('会话不可用'), { code: 'CONVERSATION_NOT_FOUND' });
-    const messageId = message.id || id();
-    await query('INSERT INTO ai_messages (id,conversation_id,role,content,model_provider,model_name,status,input_tokens,output_tokens,latency_ms) VALUES (?,?,?,?,?,?,?,?,?,?)', [
-      messageId, conversationId, message.role, String(message.content || ''), message.provider || null, message.model || null,
-      message.status || 'complete', message.inputTokens ?? null, message.outputTokens ?? null, message.latencyMs ?? null,
-    ]);
-    await query('UPDATE ai_conversations SET last_message_at=NOW(),selected_model=? WHERE id=? AND user_id=?', [message.model || conversation.selectedModel, conversationId, Number(userId)]);
+    const [messageId] = await appendMessages(userId, conversationId, [message]);
     return messageId;
+  }
+
+  async function appendMessages(userId, conversationId, messages) {
+    if (!Array.isArray(messages) || !messages.length) return [];
+    return withTransaction(async (executor) => {
+      const [rows] = await executor.query(
+        'SELECT selected_model,next_message_seq FROM ai_conversations WHERE id=? AND user_id=? FOR UPDATE',
+        [conversationId, Number(userId)]
+      );
+      const conversation = rows[0];
+      if (!conversation) throw Object.assign(new Error('会话不可用'), { code: 'CONVERSATION_NOT_FOUND' });
+      let sequence = Math.max(1, Number(conversation.next_message_seq || 1));
+      const messageIds = [];
+      for (const message of messages) {
+        const messageId = message.id || id();
+        await executor.query('INSERT INTO ai_messages (id,conversation_id,role,content,model_provider,model_name,status,input_tokens,output_tokens,latency_ms,message_seq) VALUES (?,?,?,?,?,?,?,?,?,?,?)', [
+          messageId, conversationId, message.role, String(message.content || ''), message.provider || null, message.model || null,
+          message.status || 'complete', message.inputTokens ?? null, message.outputTokens ?? null, message.latencyMs ?? null, sequence,
+        ]);
+        messageIds.push(messageId);
+        sequence += 1;
+      }
+      const selectedModel = messages[messages.length - 1].model || conversation.selected_model;
+      await executor.query('UPDATE ai_conversations SET next_message_seq=?,last_message_at=NOW(),selected_model=? WHERE id=? AND user_id=?', [sequence, selectedModel, conversationId, Number(userId)]);
+      return messageIds;
+    });
+  }
+
+  async function appendTurn(userId, conversationId, userMessage, assistantMessage) {
+    const [userMessageId, assistantMessageId] = await appendMessages(userId, conversationId, [userMessage, assistantMessage]);
+    return { userMessageId, assistantMessageId };
   }
 
   async function updateMessage(userId, conversationId, messageId, patch) {
@@ -99,7 +143,7 @@ function createConversationStore({ db, config }) {
     return summary;
   }
 
-  return { create, list, get, rename, update, remove, append, updateMessage, context, updateSummary, compact };
+  return { create, list, get, rename, update, remove, append, appendTurn, updateMessage, context, updateSummary, compact };
 }
 
 module.exports = { createConversationStore };

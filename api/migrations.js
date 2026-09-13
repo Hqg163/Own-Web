@@ -407,6 +407,39 @@ async function runMigrations(db) {
     )`);
     await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260912_ai_article_discovery_v15']);
   }
+
+  const [aiMessageOrderDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260913_ai_message_order_v17']);
+  if (!aiMessageOrderDone.length) {
+    // `created_at` is intentionally a compact second-resolution timestamp in
+    // the original v1 schema. It cannot establish a turn order for messages
+    // inserted during the same second, and UUIDs are not chronological. Add a
+    // per-conversation sequence that the store allocates while holding the
+    // conversation row lock instead of trying to infer precision from time.
+    await addColumn(db, 'ai_conversations', 'next_message_seq', 'BIGINT UNSIGNED NOT NULL DEFAULT 1');
+    await addColumn(db, 'ai_messages', 'message_seq', 'BIGINT UNSIGNED NULL');
+    await query(`UPDATE ai_messages AS target
+      JOIN (
+        SELECT ranked.id, ranked.message_seq
+        FROM (
+          SELECT id, ROW_NUMBER() OVER (PARTITION BY conversation_id ORDER BY created_at ASC, id ASC) AS message_seq
+          FROM ai_messages
+        ) AS ranked
+      ) AS sequences ON sequences.id = target.id
+      SET target.message_seq = sequences.message_seq
+      WHERE target.message_seq IS NULL`);
+    await query('ALTER TABLE ai_messages MODIFY COLUMN message_seq BIGINT UNSIGNED NOT NULL');
+    if (!await indexExists(db, 'ai_messages', 'uq_ai_messages_conversation_seq')) {
+      await query('CREATE UNIQUE INDEX uq_ai_messages_conversation_seq ON ai_messages (conversation_id, message_seq)');
+    }
+    await query(`UPDATE ai_conversations AS conversation
+      LEFT JOIN (
+        SELECT conversation_id, COALESCE(MAX(message_seq), 0) + 1 AS next_message_seq
+        FROM ai_messages
+        GROUP BY conversation_id
+      ) AS ordered_messages ON ordered_messages.conversation_id = conversation.id
+      SET conversation.next_message_seq = COALESCE(ordered_messages.next_message_seq, 1)`);
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260913_ai_message_order_v17']);
+  }
 }
 
 async function indexExists(db, table, indexName) {

@@ -9,6 +9,7 @@ const mysql = require('mysql2/promise')
 const mysqlRaw = require('mysql2')
 const dotenv = require('dotenv')
 const { runMigrations } = require(path.join(process.cwd(), 'api', 'migrations.js'))
+const { createConversationStore } = require(path.join(process.cwd(), 'api', 'ai', 'agent', 'conversation-store.js'))
 
 dotenv.config({ path: path.join(process.cwd(), '.env') })
 
@@ -68,6 +69,11 @@ function serverEnvironment() {
     CORS_ORIGIN: origin,
     SITE_OWNER_USER_ID: '',
     ADMIN_EMAILS: '',
+    // Migration smoke covers schema only. Keeping external AI providers off
+    // makes this isolated database test independent of live model quota and
+    // avoids a Qdrant/provider bootstrap affecting its startup deadline.
+    AI_ENABLED: 'false',
+    AI_PROVIDER_MODE: 'mock',
     TEST_AUTH_RATE_LIMIT_SCALE: '10',
   }
 }
@@ -203,7 +209,7 @@ async function assertMigrationSchema() {
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('ai_conversations', 'ai_messages', 'ai_index_chunks', 'ai_index_jobs', 'ai_index_tombstones', 'ai_usage')`,
     )
     const aiColumnNames = new Set(aiColumns.map((row: { TABLE_NAME: string; COLUMN_NAME: string }) => `${row.TABLE_NAME}.${row.COLUMN_NAME}`))
-    for (const name of ['ai_conversations.user_id', 'ai_messages.conversation_id', 'ai_index_chunks.post_id', 'ai_index_jobs.action', 'ai_index_jobs.lease_expires_at', 'ai_index_tombstones.chunk_id', 'ai_usage.request_id']) {
+    for (const name of ['ai_conversations.user_id', 'ai_conversations.next_message_seq', 'ai_messages.conversation_id', 'ai_messages.message_seq', 'ai_index_chunks.post_id', 'ai_index_jobs.action', 'ai_index_jobs.lease_expires_at', 'ai_index_tombstones.chunk_id', 'ai_usage.request_id']) {
       assert.ok(aiColumnNames.has(name), `missing AI migration column ${name}`)
     }
 
@@ -216,8 +222,53 @@ async function assertMigrationSchema() {
     assert.equal(aiSentinel.length, 1, 'AI migration sentinel was not recorded')
     const [aiLifecycleSentinel] = await connection.query('SELECT id FROM schema_migrations WHERE id = ?', ['20260912_ai_index_lifecycle_v1'])
     assert.equal(aiLifecycleSentinel.length, 1, 'AI index lifecycle migration sentinel was not recorded')
+    const [aiOrderSentinel] = await connection.query('SELECT id FROM schema_migrations WHERE id = ?', ['20260913_ai_message_order_v17'])
+    assert.equal(aiOrderSentinel.length, 1, 'AI message-order migration sentinel was not recorded')
+
+    const [messageOrderIndex] = await connection.query(
+      `SELECT NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ai_messages' AND INDEX_NAME = 'uq_ai_messages_conversation_seq'
+       ORDER BY SEQ_IN_INDEX`,
+    )
+    assert.equal(messageOrderIndex[0]?.NON_UNIQUE, 0, 'message order index must be unique')
+    assert.deepEqual(messageOrderIndex.map((row: { COLUMN_NAME: string }) => row.COLUMN_NAME), ['conversation_id', 'message_seq'])
   } finally {
     await connection.end()
+  }
+}
+
+async function assertSameSecondConversationOrder() {
+  const pool = mysqlRaw.createPool(scopedDbConfig)
+  const db = pool.promise()
+  try {
+    const [createdUser] = await db.query(
+      'INSERT INTO users (username,email,password) VALUES (?,?,?)',
+      ['migration-order-reader', `migration-order-${Date.now()}@example.test`, 'not-used-by-this-test'],
+    )
+    const store = createConversationStore({
+      db: pool,
+      config: { limits: { recentMessages: 8, contextChars: 12000 } },
+    })
+    const conversation = await store.create(createdUser.insertId, { modelId: 'qwen-fast' })
+    await store.appendTurn(createdUser.insertId, conversation.id,
+      { role: 'user', content: '第一问', model: 'qwen-fast' },
+      { role: 'assistant', content: '第一答', model: 'qwen-fast', status: 'complete' },
+    )
+    await store.appendTurn(createdUser.insertId, conversation.id,
+      { role: 'user', content: '第二问', model: 'qwen-fast' },
+      { role: 'assistant', content: '第二答', model: 'qwen-fast', status: 'complete' },
+    )
+    // Force an identical database timestamp to prove the read contract is
+    // independent of timestamp precision and UUID lexical order.
+    await db.query('UPDATE ai_messages SET created_at=? WHERE conversation_id=?', ['2026-09-13 12:00:00', conversation.id])
+    const reread = await store.get(createdUser.insertId, conversation.id)
+    assert.deepEqual(
+      reread.messages.map((message: { role: string, content: string }) => `${message.role}:${message.content}`),
+      ['user:第一问', 'assistant:第一答', 'user:第二问', 'assistant:第二答'],
+    )
+    assert.deepEqual(reread.messages.map((message: { sequence: number }) => message.sequence), [1, 2, 3, 4])
+  } finally {
+    await db.end()
   }
 }
 
@@ -252,6 +303,7 @@ async function main() {
       await connection.promise().end()
     }
     await assertMigrationSchema()
+    await assertSameSecondConversationOrder()
     console.log(`sixth-pass migration checks passed on ${databaseName}`)
   } finally {
     await stopServer(child)
