@@ -440,6 +440,15 @@ async function runMigrations(db) {
       SET conversation.next_message_seq = COALESCE(ordered_messages.next_message_seq, 1)`);
     await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260913_ai_message_order_v17']);
   }
+
+  const [aiConversationTitleDone] = await query('SELECT id FROM schema_migrations WHERE id = ?', ['20260913_ai_conversation_title_v17']);
+  if (!aiConversationTitleDone.length) {
+    // Existing conversations may have been renamed before title provenance
+    // existed. Treat all of them as manual to ensure an async title task can
+    // never overwrite a user-visible historical title.
+    await addColumn(db, 'ai_conversations', 'title_source', "ENUM('auto','manual') NOT NULL DEFAULT 'manual'");
+    await query('INSERT INTO schema_migrations (id) VALUES (?)', ['20260913_ai_conversation_title_v17']);
+  }
 }
 
 async function indexExists(db, table, indexName) {

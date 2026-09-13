@@ -25,19 +25,20 @@ function createConversationStore({ db, config }) {
     }
   }
 
-  async function create(userId, { title = '新对话', modelId = 'qwen-fast' } = {}) {
-    const conversation = { id: id(), userId: Number(userId), title: String(title).trim().slice(0, 180) || '新对话', modelId };
-    await query('INSERT INTO ai_conversations (id,user_id,title,selected_model) VALUES (?,?,?,?)', [conversation.id, conversation.userId, conversation.title, conversation.modelId]);
-    return { id: conversation.id, title: conversation.title, selectedModel: conversation.modelId };
+  async function create(userId, { title, modelId = 'qwen-fast' } = {}) {
+    const providedTitle = String(title || '').trim().slice(0, 180);
+    const conversation = { id: id(), userId: Number(userId), title: providedTitle || '新对话', modelId, titleSource: providedTitle && providedTitle !== '新对话' ? 'manual' : 'auto' };
+    await query('INSERT INTO ai_conversations (id,user_id,title,selected_model,title_source) VALUES (?,?,?,?,?)', [conversation.id, conversation.userId, conversation.title, conversation.modelId, conversation.titleSource]);
+    return { id: conversation.id, title: conversation.title, titleSource: conversation.titleSource, selectedModel: conversation.modelId };
   }
 
   async function list(userId) {
-    const [rows] = await query('SELECT id,title,selected_model,summary,created_at,updated_at,last_message_at FROM ai_conversations WHERE user_id=? ORDER BY last_message_at DESC,id DESC LIMIT 100', [Number(userId)]);
-    return rows.map((row) => ({ id: row.id, title: row.title, selectedModel: row.selected_model, summary: row.summary || null, createdAt: row.created_at, updatedAt: row.updated_at, lastMessageAt: row.last_message_at }));
+    const [rows] = await query('SELECT id,title,title_source,selected_model,summary,created_at,updated_at,last_message_at FROM ai_conversations WHERE user_id=? ORDER BY last_message_at DESC,id DESC LIMIT 100', [Number(userId)]);
+    return rows.map((row) => ({ id: row.id, title: row.title, titleSource: row.title_source, selectedModel: row.selected_model, summary: row.summary || null, createdAt: row.created_at, updatedAt: row.updated_at, lastMessageAt: row.last_message_at }));
   }
 
   async function get(userId, conversationId, { includeMessages = true } = {}) {
-    const [conversations] = await query('SELECT id,title,selected_model,summary,created_at,updated_at,last_message_at FROM ai_conversations WHERE id=? AND user_id=?', [conversationId, Number(userId)]);
+    const [conversations] = await query('SELECT id,title,title_source,selected_model,summary,created_at,updated_at,last_message_at FROM ai_conversations WHERE id=? AND user_id=?', [conversationId, Number(userId)]);
     const conversation = conversations[0];
     if (!conversation) return null;
     let messages = [];
@@ -45,13 +46,13 @@ function createConversationStore({ db, config }) {
       const [rows] = await query('SELECT id,role,content,model_provider,model_name,status,input_tokens,output_tokens,latency_ms,message_seq,created_at FROM ai_messages WHERE conversation_id=? ORDER BY message_seq ASC LIMIT 200', [conversationId]);
       messages = rows.map((row) => ({ id: row.id, role: row.role, content: row.content, provider: row.model_provider, model: row.model_name, status: row.status, inputTokens: row.input_tokens, outputTokens: row.output_tokens, latencyMs: row.latency_ms, sequence: Number(row.message_seq), createdAt: row.created_at }));
     }
-    return { id: conversation.id, title: conversation.title, selectedModel: conversation.selected_model, summary: conversation.summary || null, messages, createdAt: conversation.created_at, updatedAt: conversation.updated_at, lastMessageAt: conversation.last_message_at };
+    return { id: conversation.id, title: conversation.title, titleSource: conversation.title_source, selectedModel: conversation.selected_model, summary: conversation.summary || null, messages, createdAt: conversation.created_at, updatedAt: conversation.updated_at, lastMessageAt: conversation.last_message_at };
   }
 
   async function rename(userId, conversationId, title) {
     const value = String(title || '').trim().slice(0, 180);
     if (!value) throw Object.assign(new Error('会话标题不能为空'), { code: 'INVALID_TITLE' });
-    const [result] = await query('UPDATE ai_conversations SET title=? WHERE id=? AND user_id=?', [value, conversationId, Number(userId)]);
+    const [result] = await query("UPDATE ai_conversations SET title=?,title_source='manual' WHERE id=? AND user_id=?", [value, conversationId, Number(userId)]);
     return result.affectedRows > 0 ? value : null;
   }
 
@@ -61,13 +62,20 @@ function createConversationStore({ db, config }) {
     if (title !== undefined) {
       const value = String(title || '').trim().slice(0, 180);
       if (!value) throw Object.assign(new Error('会话标题不能为空'), { code: 'INVALID_TITLE' });
-      assignments.push('title=?'); values.push(value);
+      assignments.push("title=?", "title_source='manual'"); values.push(value);
     }
     if (selectedModel !== undefined) {
       assignments.push('selected_model=?'); values.push(String(selectedModel));
     }
     if (!assignments.length) return null;
     const [result] = await query(`UPDATE ai_conversations SET ${assignments.join(',')} WHERE id=? AND user_id=?`, [...values, conversationId, Number(userId)]);
+    return result.affectedRows > 0;
+  }
+
+  async function setAutomaticTitle(userId, conversationId, title) {
+    const value = String(title || '').trim().slice(0, 180);
+    if (!value) return false;
+    const [result] = await query("UPDATE ai_conversations SET title=? WHERE id=? AND user_id=? AND title_source='auto'", [value, conversationId, Number(userId)]);
     return result.affectedRows > 0;
   }
 
@@ -143,7 +151,7 @@ function createConversationStore({ db, config }) {
     return summary;
   }
 
-  return { create, list, get, rename, update, remove, append, appendTurn, updateMessage, context, updateSummary, compact };
+  return { create, list, get, rename, update, remove, setAutomaticTitle, append, appendTurn, updateMessage, context, updateSummary, compact };
 }
 
 module.exports = { createConversationStore };

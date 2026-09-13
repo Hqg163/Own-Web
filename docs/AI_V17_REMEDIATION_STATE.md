@@ -9,7 +9,7 @@ the verified v1.6 streaming, RAG, authorization, Skills, Memory, and Provider be
 ## Recovery snapshot
 
 - **State:** `IN_PROGRESS`
-- **Phase:** P1 — first-prompt automatic conversation titles
+- **Phase:** P2–P4 — compact workspace, launcher removal, and turn visual rhythm
 - **HEAD at start:** `955697c docs(ai): record v1.6 validation evidence`
 - **Branch:** `codex/community-blog-v1`
 - **Protected user worktree item:** staged `.codex/HANDOFF.md`; never modify, unstage, or commit it.
@@ -71,7 +71,33 @@ the verified v1.6 streaming, RAG, authorization, Skills, Memory, and Provider be
 - PASS — local schema presence check for migration, non-null columns, and the
   unique sequence index
 
+## Completed P1 — first-prompt conversation titles
+
+- Added migration `20260913_ai_conversation_title_v17`. Existing titles are
+  conservatively marked `manual`; newly created default conversations are
+  marked `auto`.
+- The first non-regenerate user prompt receives an immediate deterministic
+  title and a `title` value in its SSE `start` event. The sidebar and current
+  conversation header update in-place without a page reload.
+- Long prompts also start one bounded (`maxTokens: 36`), zero-temperature
+  `qwen-fast` title refinement in parallel. It is never awaited by the answer
+  stream. A failed Provider request keeps the immediate local title.
+- Any explicit rename changes `title_source` to `manual`; automatic updates
+  include that condition in SQL and cannot overwrite a manual choice.
+- Guest session conversations preserve the same provenance and title behavior
+  in memory.
+
+## Tests recorded for P1
+
+- PASS — focused Vitest title/API/store coverage (13 assertions), including
+  C# title normalization, bounded Qwen request shape, title SSE, and manual
+  title protection
+- PASS — `npm run api:check`
+- PASS — isolated MySQL migration/order/title smoke
+- PASS — local v1.7 migrations applied without emitting configured secrets
+- PASS — frontend typecheck process completed without diagnostics
+
 ## Next exact action
 
-Inspect title-update call sites and the model gateway's bounded generate path, then add the P1
-automatic title policy without delaying the primary answer stream.
+Read the live `/ai` layout and launcher integration, then remove the duplicate hero and launcher
+while preserving the mobile history drawer, composer, sources, dialog behavior, and accessibility.

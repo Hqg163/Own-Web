@@ -209,7 +209,7 @@ async function assertMigrationSchema() {
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('ai_conversations', 'ai_messages', 'ai_index_chunks', 'ai_index_jobs', 'ai_index_tombstones', 'ai_usage')`,
     )
     const aiColumnNames = new Set(aiColumns.map((row: { TABLE_NAME: string; COLUMN_NAME: string }) => `${row.TABLE_NAME}.${row.COLUMN_NAME}`))
-    for (const name of ['ai_conversations.user_id', 'ai_conversations.next_message_seq', 'ai_messages.conversation_id', 'ai_messages.message_seq', 'ai_index_chunks.post_id', 'ai_index_jobs.action', 'ai_index_jobs.lease_expires_at', 'ai_index_tombstones.chunk_id', 'ai_usage.request_id']) {
+    for (const name of ['ai_conversations.user_id', 'ai_conversations.next_message_seq', 'ai_conversations.title_source', 'ai_messages.conversation_id', 'ai_messages.message_seq', 'ai_index_chunks.post_id', 'ai_index_jobs.action', 'ai_index_jobs.lease_expires_at', 'ai_index_tombstones.chunk_id', 'ai_usage.request_id']) {
       assert.ok(aiColumnNames.has(name), `missing AI migration column ${name}`)
     }
 
@@ -224,6 +224,8 @@ async function assertMigrationSchema() {
     assert.equal(aiLifecycleSentinel.length, 1, 'AI index lifecycle migration sentinel was not recorded')
     const [aiOrderSentinel] = await connection.query('SELECT id FROM schema_migrations WHERE id = ?', ['20260913_ai_message_order_v17'])
     assert.equal(aiOrderSentinel.length, 1, 'AI message-order migration sentinel was not recorded')
+    const [aiTitleSentinel] = await connection.query('SELECT id FROM schema_migrations WHERE id = ?', ['20260913_ai_conversation_title_v17'])
+    assert.equal(aiTitleSentinel.length, 1, 'AI conversation-title migration sentinel was not recorded')
 
     const [messageOrderIndex] = await connection.query(
       `SELECT NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME FROM information_schema.STATISTICS

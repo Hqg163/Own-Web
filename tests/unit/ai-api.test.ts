@@ -72,6 +72,34 @@ describe('AI HTTP boundary', () => {
     expect(appendTurn.mock.calls[0][3]).toMatchObject({ role: 'assistant', status: 'streaming' })
   })
 
+  it('assigns and streams a concise automatic title for the first real user prompt', async () => {
+    const id = '11111111-1111-4111-8111-111111111111'
+    const setAutomaticTitle = vi.fn(async () => true)
+    const conversation = { id, title: '新对话', titleSource: 'auto', selectedModel: 'qwen-fast', messages: [] }
+    const app = mount({ conversationStore: {
+      list: async () => [], create: async () => conversation, get: async () => conversation, context: async () => ({ conversation, summary: '', recent: [] }),
+      append: async () => null, appendTurn: async () => ({}), setAutomaticTitle, updateMessage: async () => true, compact: async () => null, rename: async () => null, remove: async () => false,
+    } })
+    const token = jwt.sign({ sub: '88', email: 'reader@example.test', sv: 0 }, secret)
+    const result = await request(app).post('/api/ai/chat').set('Authorization', `Bearer ${token}`).send({ conversationId: id, message: 'C#主要是用于什么领域？' }).expect(200)
+    expect(setAutomaticTitle).toHaveBeenCalledWith(88, id, 'C# 主要应用领域')
+    expect(result.text).toContain('"title":"C# 主要应用领域"')
+  })
+
+  it('never overwrites a manually named conversation while sending its first prompt', async () => {
+    const id = '11111111-1111-4111-8111-111111111111'
+    const setAutomaticTitle = vi.fn(async () => true)
+    const conversation = { id, title: '我的手动标题', titleSource: 'manual', selectedModel: 'qwen-fast', messages: [] }
+    const app = mount({ conversationStore: {
+      list: async () => [], create: async () => conversation, get: async () => conversation, context: async () => ({ conversation, summary: '', recent: [] }),
+      append: async () => null, appendTurn: async () => ({}), setAutomaticTitle, updateMessage: async () => true, compact: async () => null, rename: async () => null, remove: async () => false,
+    } })
+    const token = jwt.sign({ sub: '88', email: 'reader@example.test', sv: 0 }, secret)
+    const result = await request(app).post('/api/ai/chat').set('Authorization', `Bearer ${token}`).send({ conversationId: id, message: '请根据这段很长的问题生成一个标题，但不能覆盖已有手动标题。' }).expect(200)
+    expect(setAutomaticTitle).not.toHaveBeenCalled()
+    expect(result.text).not.toContain('event: title')
+  })
+
   it('sends a completed safe workflow response as a delta when no model stream exists', async () => {
     const app = mount({ workflow: { run: async () => ({
       response: { content: '没有足够可信的站内资料，因此不会猜测。', citations: [], degraded: false },

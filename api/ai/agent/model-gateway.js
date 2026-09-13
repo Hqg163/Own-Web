@@ -20,7 +20,11 @@ function createModelGateway({ config, registry = createModelRegistry(config), pr
       if (!provider || typeof provider[method] !== 'function') throw Object.assign(new Error('模型能力不可用'), { code: 'MODEL_UNAVAILABLE' });
       if (Array.isArray(request.tools) && request.tools.length && model.supportsTools === false) throw Object.assign(new Error('模型不支持工具调用'), { code: 'MODEL_TOOLS_UNAVAILABLE' });
       if (Array.isArray(request.tools) && request.tools.length && provider.capabilities?.tools === false) throw Object.assign(new Error('模型不支持工具调用'), { code: 'MODEL_TOOLS_UNAVAILABLE' });
-      const result = await provider[method]({ ...request, model: model.model, maxTokens: config.limits.outputTokens }, options);
+      const requestedMaxTokens = Number(request.maxTokens);
+      const maxTokens = Number.isFinite(requestedMaxTokens) && requestedMaxTokens > 0
+        ? Math.min(config.limits.outputTokens, Math.floor(requestedMaxTokens))
+        : config.limits.outputTokens;
+      const result = await provider[method]({ ...request, model: model.model, maxTokens }, options);
       return { ...result, model, fallbackFrom: null };
     };
     try { return await run(primary); } catch (error) {

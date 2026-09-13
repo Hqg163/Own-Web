@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const { createAiRateLimiter } = require('./rate-limit');
+const { generateConversationTitle, localConversationTitle } = require('./agent/conversation-title');
 
 const GUEST_COOKIE = 'own_web_ai_guest';
 const idSchema = z.string().uuid();
@@ -92,7 +93,7 @@ function createGuestStore() {
     return sessions.get(sessionHash);
   };
   const create = (sessionHash, modelId) => {
-    const conversation = { id: crypto.randomUUID(), title: '新对话', selectedModel: modelId, summary: '', messages: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const conversation = { id: crypto.randomUUID(), title: '新对话', titleSource: 'auto', selectedModel: modelId, summary: '', messages: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     get(sessionHash).set(conversation.id, conversation); return conversation;
   };
   const list = (sessionHash) => [...get(sessionHash).values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((conversation) => ({ ...conversation, messages: undefined }));
@@ -174,6 +175,18 @@ function mountAiRoutes(app, db, {
     return { userMessageId, assistantMessageId };
   }
 
+  async function setAutomaticConversationTitle(subject, conversation, title) {
+    if (!title || conversation.titleSource !== 'auto') return false;
+    if (subject.userId) {
+      if (typeof conversationStore.setAutomaticTitle !== 'function') return false;
+      const changed = await conversationStore.setAutomaticTitle(subject.userId, conversation.id, title);
+      if (changed) conversation.title = title;
+      return changed;
+    }
+    conversation.title = title;
+    return true;
+  }
+
   app.get('/api/ai/status', optionalAuth, async (_req, res) => {
     const status = await safeStatusSnapshot({ config, gateway, qdrant, query });
     res.setHeader('Cache-Control', 'no-store');
@@ -198,7 +211,7 @@ function mountAiRoutes(app, db, {
       if (!model) return error(res, 400, 'MODEL_UNAVAILABLE', '所选模型不可用');
       const subject = subjectFor(req, res);
       const conversation = subject.userId ? await conversationStore.create(subject.userId, { title: body.title, modelId: model.id }) : guests.create(subject.sessionHash, model.id);
-      if (!subject.userId && body.title) conversation.title = body.title.trim().slice(0, 180) || '新对话';
+      if (!subject.userId && body.title) { conversation.title = body.title.trim().slice(0, 180) || '新对话'; conversation.titleSource = 'manual'; }
       res.status(201).json({ conversation, persistent: Boolean(subject.userId) });
     } catch (caught) { if (caught instanceof z.ZodError || Array.isArray(caught?.issues)) return error(res, 400, 'INVALID_REQUEST', '请求格式无效'); next(caught); }
   });
@@ -222,7 +235,7 @@ function mountAiRoutes(app, db, {
       } else {
         const conversation = guests.find(subject.sessionHash, id);
         if (!conversation) return error(res, 404, 'CONVERSATION_NOT_FOUND', '会话不存在或不可访问');
-        if (body.title !== undefined) conversation.title = body.title;
+        if (body.title !== undefined) { conversation.title = body.title; conversation.titleSource = 'manual'; }
         if (body.selectedModel !== undefined) conversation.selectedModel = body.selectedModel;
         conversation.updatedAt = new Date().toISOString();
       }
@@ -287,6 +300,16 @@ function mountAiRoutes(app, db, {
         message = previousUser.content;
       }
       inputMessage = message;
+      const isFirstUserPrompt = !body.regenerate && !conversation.messages?.some((item) => item.role === 'user') && conversation.titleSource === 'auto';
+      const fallbackTitle = isFirstUserPrompt ? localConversationTitle({ message, quickAction: body.quickAction }) : null;
+      if (fallbackTitle) await setAutomaticConversationTitle(subject, conversation, fallbackTitle);
+      // A title request is intentionally started but never awaited by the
+      // chat stream. The deterministic fallback above is already displayed;
+      // a successful low-temperature refinement may update storage/UI while
+      // the primary answer is still generating.
+      const titleRefinement = isFirstUserPrompt
+        ? generateConversationTitle({ gateway, message, quickAction: body.quickAction })
+        : null;
       assistantId = crypto.randomUUID();
       if (!body.regenerate) {
         await appendConversationTurn(subject, conversation,
@@ -304,7 +327,14 @@ function mountAiRoutes(app, db, {
       req.once('aborted', () => controller.abort());
       res.once('close', () => { if (!res.writableEnded) controller.abort(); });
       closeSse = startSse(res, config.stream?.heartbeatMs || 15000);
-      streamStarted = true; sse(res, 'start', { requestId, conversationId: conversation.id, messageId: assistantId, modelId: requestedModel });
+      streamStarted = true; sse(res, 'start', { requestId, conversationId: conversation.id, messageId: assistantId, modelId: requestedModel, ...(fallbackTitle ? { title: fallbackTitle } : {}) });
+      if (titleRefinement) {
+        void titleRefinement.then(async (title) => {
+          if (!title || title === fallbackTitle) return;
+          const changed = await setAutomaticConversationTitle(subject, conversation, title);
+          if (changed) sse(res, 'title', { conversationId: conversation.id, title });
+        }).catch(() => {});
+      }
       const result = await workflow.run({
         user: req.user || null, message, quickAction: body.quickAction || null, pageContext: body.pageContext || {}, modelId: requestedModel, conversation: history, signal: controller.signal,
         onEvent: async (event) => {

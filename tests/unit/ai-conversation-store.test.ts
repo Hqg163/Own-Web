@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createConversationStore } from '../../api/ai/agent/conversation-store.js'
+import { generateConversationTitle, localConversationTitle } from '../../api/ai/agent/conversation-title.js'
 
 type StoredMessage = {
   id: string
@@ -33,8 +34,8 @@ function orderedStoreFixture() {
     if (sql.startsWith('UPDATE ai_conversations SET next_message_seq')) {
       conversation.nextMessageSeq = Number(args[0]); conversation.selectedModel = String(args[1]); return [{ affectedRows: 1 }]
     }
-    if (sql.startsWith('SELECT id,title,selected_model') && sql.includes('FROM ai_conversations')) {
-      return [[{ id: conversation.id, title: conversation.title, selected_model: conversation.selectedModel, summary: null, created_at: sameSecond, updated_at: sameSecond, last_message_at: sameSecond }]]
+    if (sql.startsWith('SELECT id,title,title_source,selected_model') && sql.includes('FROM ai_conversations')) {
+      return [[{ id: conversation.id, title: conversation.title, title_source: 'auto', selected_model: conversation.selectedModel, summary: null, created_at: sameSecond, updated_at: sameSecond, last_message_at: sameSecond }]]
     }
     if (sql.startsWith('SELECT id,role,content') && sql.includes('FROM ai_messages')) {
       // The fixture deliberately stores every row in the same second. A real
@@ -70,5 +71,18 @@ describe('AI conversation persistence order', () => {
     expect(reread?.messages.map((message: any) => `${message.role}:${message.content}`)).toEqual([
       'user:第一问', 'assistant:第一答', 'user:第二问', 'assistant:第二答',
     ])
+  })
+})
+
+describe('AI conversation title policy', () => {
+  it('normalizes short prompts and asks the configured fast model for a bounded long-prompt refinement', async () => {
+    expect(localConversationTitle({ message: 'C#主要是用于什么领域？' })).toBe('C# 主要应用领域')
+    expect(localConversationTitle({ quickAction: 'summary_current' })).toBe('总结当前文章')
+    const generate = vi.fn(async () => ({ content: '“对比两种缓存策略”' }))
+    await expect(generateConversationTitle({
+      gateway: { generate },
+      message: '请帮我比较这两种缓存策略在高并发场景中的一致性、成本、失效风险以及适用边界。',
+    })).resolves.toBe('对比两种缓存策略')
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ modelId: 'qwen-fast', temperature: 0, maxTokens: 36 }), expect.any(Object))
   })
 })

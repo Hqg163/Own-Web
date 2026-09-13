@@ -9,12 +9,12 @@ export type AiModel = { id: string; label: string }
 // `displayTitle` is client-only presentation state. pageContext() deliberately
 // excludes it from outbound requests so the server remains authoritative for post data.
 export type AiPageContext = { route?: string; articleId?: number; selectedText?: string; heading?: string; anchor?: string; shareToken?: string; displayTitle?: string }
-export type AiConversation = { id: string; title: string; selectedModel?: string; summary?: string | null; messages?: AiMessage[]; persistent?: boolean }
+export type AiConversation = { id: string; title: string; titleSource?: 'auto' | 'manual'; selectedModel?: string; summary?: string | null; messages?: AiMessage[]; persistent?: boolean }
 export type AiQuickAction = 'summary_current' | 'explain_concept' | 'related_content' | 'selection_explain' | 'selection_expand' | 'selection_example'
 export type AiReadiness = { state: 'disabled' | 'unconfigured' | 'degraded' | 'ready'; featureEnabled: boolean; chatReady: boolean; ragReady: boolean; indexReady: boolean; message: string }
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
-const state = reactive({ open: false, availability: 'unknown' as 'unknown' | 'available' | 'disabled', error: '', readiness: null as AiReadiness | null, status: '', models: [] as AiModel[], defaultModel: 'qwen-fast', selectedModel: 'qwen-fast', conversationId: '', persistent: false, messages: [] as AiMessage[], pageContext: null as AiPageContext | null })
+const state = reactive({ open: false, availability: 'unknown' as 'unknown' | 'available' | 'disabled', error: '', readiness: null as AiReadiness | null, status: '', models: [] as AiModel[], defaultModel: 'qwen-fast', selectedModel: 'qwen-fast', conversationId: '', conversationTitle: '', persistent: false, messages: [] as AiMessage[], pageContext: null as AiPageContext | null })
 const conversations = ref<AiConversation[]>([])
 const loadingHistory = ref(false)
 const controller = ref<AbortController | null>(null)
@@ -93,7 +93,7 @@ export function useAi() {
       const response = await http.post('/api/ai/conversations', { modelId: state.selectedModel })
       const conversation = response.data?.conversation as AiConversation
       if (!conversation?.id) return null
-      state.conversationId = conversation.id; state.messages = []; state.persistent = Boolean(response.data?.persistent)
+      state.conversationId = conversation.id; state.conversationTitle = conversation.title || '新对话'; state.messages = []; state.persistent = Boolean(response.data?.persistent)
       await loadConversations(); return conversation
     } catch (error: any) { state.error = aiError(error, '无法创建新会话。'); return null }
   }
@@ -104,7 +104,7 @@ export function useAi() {
       const response = await http.get(`/api/ai/conversations/${encodeURIComponent(id)}`)
       const conversation = response.data?.conversation as AiConversation
       if (!conversation) return
-      state.conversationId = conversation.id; state.selectedModel = conversation.selectedModel || state.selectedModel
+      state.conversationId = conversation.id; state.conversationTitle = conversation.title || '新对话'; state.selectedModel = conversation.selectedModel || state.selectedModel
       state.messages = Array.isArray(conversation.messages) ? conversation.messages : []; state.persistent = Boolean(response.data?.persistent); state.error = ''
     } catch (error: any) { state.error = aiError(error, '无法打开会话。') }
   }
@@ -113,13 +113,13 @@ export function useAi() {
     try {
       await http.delete(`/api/ai/conversations/${encodeURIComponent(id)}`)
       conversations.value = conversations.value.filter((item) => item.id !== id)
-      if (state.conversationId === id) { state.conversationId = ''; state.messages = [] }
+      if (state.conversationId === id) { state.conversationId = ''; state.conversationTitle = ''; state.messages = [] }
     } catch (error: any) { state.error = aiError(error, '删除会话失败。') }
   }
 
   async function renameConversation(id: string, title: string) {
     const value = title.trim(); if (!value) return false
-    try { await http.patch(`/api/ai/conversations/${encodeURIComponent(id)}`, { title: value }); const item = conversations.value.find((entry) => entry.id === id); if (item) item.title = value; return true }
+    try { await http.patch(`/api/ai/conversations/${encodeURIComponent(id)}`, { title: value }); applyConversationTitle(id, value); return true }
     catch (error: any) { state.error = aiError(error, '重命名会话失败。'); return false }
   }
 
@@ -129,7 +129,7 @@ export function useAi() {
       const item = conversations.value.find((entry) => entry.id === id)
       if (item?.id === state.conversationId && response.data?.selectedModel) state.selectedModel = String(response.data.selectedModel)
       if (item && response.data?.selectedModel) item.selectedModel = String(response.data.selectedModel)
-      if (item && response.data?.title) item.title = String(response.data.title)
+      if (response.data?.title) applyConversationTitle(id, String(response.data.title))
       return true
     } catch (error: any) { state.error = aiError(error, '更新会话失败。'); return false }
   }
@@ -142,6 +142,15 @@ export function useAi() {
   function close() { if (isStreaming.value) return; state.open = false; window.setTimeout(() => returnFocus?.focus({ preventScroll: true }), 0) }
   function setContext(context: AiPageContext | null) { state.pageContext = localPageContext(context) }
   function stop() { controller.value?.abort() }
+
+  function applyConversationTitle(id: string, title: string) {
+    const value = String(title || '').trim()
+    if (!id || !value) return
+    if (state.conversationId === id) state.conversationTitle = value
+    const item = conversations.value.find((entry) => entry.id === id)
+    if (item) item.title = value
+    else conversations.value.unshift({ id, title: value, selectedModel: state.selectedModel })
+  }
 
   async function send(message: string, options: { regenerateMessageId?: string; quickAction?: AiQuickAction } = {}) {
     const value = message.trim()
@@ -194,7 +203,8 @@ export function useAi() {
         const blocks = buffer.split(/\r?\n\r?\n/); buffer = blocks.pop() || ''
         for (const block of blocks) {
           const event = parseEventBlock(block); if (!event) continue
-          if (event.type === 'start') { state.conversationId = String(event.data.conversationId || state.conversationId); assistant.id = String(event.data.messageId || assistant.id) }
+          if (event.type === 'start') { state.conversationId = String(event.data.conversationId || state.conversationId); assistant.id = String(event.data.messageId || assistant.id); if (event.data.title) applyConversationTitle(state.conversationId, String(event.data.title)) }
+          if (event.type === 'title') applyConversationTitle(String(event.data.conversationId || state.conversationId), String(event.data.title || ''))
           if (event.type === 'status') state.status = String(event.data.status || '')
           if (event.type === 'delta') queueDelta(String(event.data.text || ''))
           if (event.type === 'citation') assistant.citations?.push(event.data as AiCitation)
