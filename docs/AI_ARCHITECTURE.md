@@ -56,10 +56,26 @@ index version; answers are never semantically cached.
 
 The workflow is deterministic and deliberately not a multi-agent/tool-execution platform. Query understanding produces a strict Zod decision and executable source plan; semantic queries receive at most the original plus two bounded contextual rewrites. Registered skills are `list_articles`, `search_articles`, `get_article`, `get_related_articles`, `search_projects`, and `get_series`; each has a Zod schema, server-side access check, timeout and output bound. At most three tool rounds are allowed. There is no shell, SQL, URL, MCP or arbitrary-tool capability.
 
-The model registry exposes `qwen-fast` (Qwen 3.8 Flash) and `deepseek-quality` (DeepSeek V4 Flash). The normal test provider is deterministic Mock. Real providers use the OpenAI-compatible gateway only when configured. DeepSeek tool/thinking is disabled; a failed selected DeepSeek request may make one Qwen fallback, which becomes an explicit degraded product status.
+The model registry exposes `qwen-fast` (Qwen 3.8 Flash) and `deepseek-quality` (DeepSeek V4 Flash). The normal test provider is deterministic Mock. Real providers use the OpenAI-compatible gateway only when configured. `qwen-fast` sends `enable_thinking=false` and `preserve_thinking=false`: Own-Web neither renders nor persists hidden reasoning, while direct-answer mode improves visible first-token latency. DeepSeek tool/thinking is disabled; a failed selected DeepSeek request may make one Qwen fallback, which becomes an explicit degraded product status.
+
+The hybrid router remains deterministic for selected text, summaries, catalog,
+clear write requests and capability requests. It uses a schema-constrained
+Qwen decision only for ambiguous or compound site requests, then falls back to
+the deterministic decision if parsing fails. Write requests never enable a
+write tool: the assistant explains its read-only boundary and may offer a
+Markdown draft. The classifier requires an operation-target command, so
+technical wording such as “多个同步写入” continues to reach authorized RAG.
 
 ## Persistence and events
 
 Signed-in conversations, messages, sources, explicit Memory, settings, feedback, usage and index jobs live in the additive `ai_*` MySQL tables. Conversation compaction is a bounded structured summary (topic, user goal, confirmed references, preferences and open questions), never a raw transcript or hidden reasoning. Guest conversations and preferences live only in process memory for the browser-session cookie lifetime. The database records only a HMAC of the guest ID for quota accounting, never the raw value. No chain-of-thought, secret, Cookie or raw anonymous ID is persisted.
 
 `POST /api/ai/chat` is a `fetch` readable stream rather than EventSource. It emits `start`, product-only `status`, `delta`, `citation`, `tool_start`, `tool_end`, `usage`, `done`, and `error`. Safe non-streaming exits such as a LOW-confidence refusal are still sent through `delta`, so the client never sees an empty assistant bubble. An aborted browser request aborts the upstream signal, marks its assistant row aborted where applicable, and records actual or estimated usage.
+
+SSE sends no-cache/no-transform and `X-Accel-Buffering: no` headers, flushes
+headers, enables `socket.setNoDelay(true)`, and sends inert heartbeat comments.
+The client batches deltas on an animation frame, uses a sanitized lightweight
+stream preview, then applies full Markdown sanitization at completion. It
+follows the message scroller only while the reader remains near the bottom;
+otherwise it offers a return-to-latest control. `ai:stream:doctor` reports
+only redacted transport timing and event counts.

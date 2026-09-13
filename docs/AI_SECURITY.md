@@ -51,3 +51,11 @@ explicit-Memory persistence with a real Qwen ordinary-chat response, asserts
 conversation/Memory IDOR isolation, then deletes the account in `finally`.
 It emits only a generated request ID, check names and counts; it never logs a
 message body, credential, Cookie or account identifier.
+
+v1.6 additionally keeps stream diagnostics content-free: transport logs and
+the doctor report only event counts, timing and opaque request IDs. Qwen's
+hidden-reasoning mode is disabled for the fast product model, so no reasoning
+tokens can be rendered, persisted or added to a trace. The write-intent
+classifier requires an explicit operation-target command; normal article
+questions that mention technical “writes” remain subject to the usual
+authorization, retrieval and citation controls.

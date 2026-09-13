@@ -63,3 +63,17 @@ derived from this public corpus; it is separately verified by the opt-in
 synthetic protected-fixture security check. The independent live acceptance
 script records a real Qwen Function Calling trace (model call → Zod/skill →
 tool result → second model call) and must pass before release.
+
+## v1.6 recorded local verification
+
+The post-v1.6 opt-in run retained 23 executable cases and reported Recall@5
+`1.0000`, citation correctness `0.9815`, answerable accuracy `1.0000`, catalog
+completeness `1.0000`, article-selection precision `1.0000`, and routing
+accuracy `1.0000`; retrieval p50/p95 were `739ms`/`773ms`. The independent
+live acceptance passed real Function Calling, a cited RAG answer (three
+citations), LOW-confidence refusal, catalog completeness and article discovery.
+The real stream diagnostic passed with 82 deltas, first client delta at
+`2668ms`, and total completion at `8868ms`. In a browser on the current code,
+the same type of Qwen response showed 91 rendered characters while still
+streaming and later completed at 395 characters; a separate Stop check kept
+the 73 already rendered characters and marked the message aborted.

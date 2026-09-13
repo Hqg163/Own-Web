@@ -8,11 +8,9 @@ better authorized evidence/recommendations, and full regression validation.
 
 ## Current phase
 
-Phase 1–6 implementation is present. Phase 7 targeted checks, the complete
-four-project AI browser matrix, real Qwen acceptance, and real streaming
-transport diagnostics now pass. Full project regression, the wider manual
-viewport matrix, and final documentation review remain pending. Runtime
-remains a single Agent.
+All v1.6 implementation and validation phases are complete. Runtime remains a
+single Agent. Final documentation was updated after the real-browser and full
+regression evidence below.
 
 ## Recovery record
 
@@ -31,7 +29,12 @@ remains a single Agent.
 | Live transport evidence | `AI_LIVE_TESTS=1 npm run ai:stream:doctor` PASS: status 85ms, first client delta 2668ms, 82 deltas, request complete 8868ms; direct prompt excludes RAG/tools so it measures Provider/Express stream transport. Qwen fast now sends `enable_thinking=false` because hidden reasoning is not product output. |
 | Live acceptance | `AI_LIVE_TESTS=1 npm run ai:live:acceptance` PASS: real `search_articles` model tool call → validation/skill → tool result → second model call; RAG citation count 3; LOW refusal, complete catalog and article discovery all pass. |
 | Browser evidence | `AI_E2E_ENABLED=1 npx playwright test tests/e2e/ai.spec.ts` passed the three enabled selection/XSS/progressive-growth checks in desktop, desktop-dark, mobile and mobile-dark; each project intentionally skips one disabled-shell state because that runner forces the mock-enabled fixture. |
-| Next exact action | Commit the live-stream/router quality fix, then run the required full AI and project regression matrix and record every PASS/FAIL/SKIPPED result. |
+| Full regression | `npm run test:all` PASS (exit 0): typecheck, build, API check, 106 unit tests, AI suite, API/security, 133 E2E passes, 20 visual passes, Lighthouse and all four backend access suites. The full E2E command had 19 explicit skips; these are not counted as passes. |
+| Performance result | Lighthouse: Home `0.96`, Explore `0.89`, long/math articles `0.83`, comment-heavy `0.87`. Editor is `Needs Runtime Verification` because no editor-auth Cookie was supplied; it is explicitly not a passing performance observation. |
+| Manual viewport result | Real browser verified `/ai` at 1920×1080, 1664×912, 1440×900, 1366×768, 1024×768 and 390×844: no visible footer, no document vertical scroll, an `overflow:auto` message region, and a Composer within the viewport. |
+| Real browser stream result | Current-code isolated API/Vite browser run: 91 characters rendered while streaming, then 395 on completion; Stop retained 73 rendered characters and marked the response stopped. The isolated instance used a temporary local Origin allowlist only; repository configuration was not changed. |
+| Completion state | `COMPLETED` after the final documentation commit and clean diff check. User-owned `.codex/HANDOFF.md` remains staged and unmodified. |
+| Next exact action | Read final report and, if desired, configure an editor-auth Cookie to add the optional authenticated-editor Lighthouse measurement. |
 
 ## Required final gates
 
