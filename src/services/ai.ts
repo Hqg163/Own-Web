@@ -176,7 +176,10 @@ export function useAi() {
     try {
       const response = await fetch(`${baseUrl}/api/ai/chat`, {
         method: 'POST', credentials: 'include', signal: controller.value.signal,
-        headers: { 'content-type': 'application/json' },
+        // Tell every intermediary that this is a long-lived event stream.
+        // In particular, the development proxy must not treat it as an
+        // ordinary JSON response and wait for the upstream body to finish.
+        headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
         body: JSON.stringify({ conversationId: state.conversationId || undefined, ...(options.quickAction ? { quickAction: options.quickAction } : { message: value || undefined }), pageContext: pageContext(state.pageContext), modelId: state.selectedModel, ...(options.regenerateMessageId ? { regenerate: { assistantMessageId: options.regenerateMessageId } } : {}) }),
       })
       if (!response.ok || !response.body) { const payload = await response.json().catch(() => ({})); throw new Error(payload?.error?.message || 'AI 请求未能开始。') }

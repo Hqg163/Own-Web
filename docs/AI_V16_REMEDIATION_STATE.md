@@ -27,9 +27,10 @@ Agent.
 | Security boundary | Server owns post/conversation authorization. Tools stay Zod-validated and read-only; no secret, cookie, private raw content, raw guest ID, or reasoning trace is logged. |
 | Context / usage | No visible token-limit figure is exposed by the runtime. Check State before resuming after a compaction or quota warning. |
 | Last passing checks | `typecheck`, `api:check`, RAG unit 19/19, agent/catalog 22/22, API 8/8, security 32/32; selection and XSS browser cases pass |
-| Last failing check | `AI_E2E_ENABLED=1 npx playwright test tests/e2e/ai.spec.ts --project=desktop`: progressive-paint assertion sees final 397-character assistant content before its first observable partial DOM state |
+| Last failing check | Normal paced Mock E2E sees final 397-character content before its first observable partial DOM state. A diagnostic-only `AI_MOCK_STREAM_DELAY_MS=500` run receives no first delta in five seconds, confirming upstream/proxy aggregation rather than an assertion race. |
 | External status | Qwen/Qdrant doctor was PASS at baseline. The live stream doctor exceeded its 30-second command window twice and remains unverified; no secret was emitted. |
-| Next exact action | Instrument the Vite proxy and browser `ReadableStream` chunk boundaries for `/api/ai/chat`, fix the layer that aggregates SSE (do not weaken the progressive assertion), then rerun focused desktop/mobile/dark UI tests and live stream doctor. |
+| Current uncommitted work | Frontend sends `Accept: text/event-stream`; Vite `/api` proxy now marks AI chat as SSE and disables proxy timeouts. These changes did not resolve aggregation and must be retained for the next comparison. |
+| Next exact action | Start the test API and compare direct `127.0.0.1:3301/api/ai/chat` browser/Node chunks against `5173/api/ai/chat`; instrument the divergent layer, fix it without weakening the progressive assertion, then rerun desktop/mobile/dark UI tests and live stream doctor. |
 
 ## Required final gates
 
