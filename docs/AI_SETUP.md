@@ -24,7 +24,7 @@ docker compose up -d qdrant
 docker compose ps
 ```
 
-The health endpoint is `http://127.0.0.1:6333/healthz`. `npm run ai:index:backfill` initializes the configured collection with a 1024-dimensional cosine `dense` vector and IDF-modified `bm25` sparse vector, then indexes posts. Use `npm run ai:index:post -- <postId>` for one post and `npm run ai:index:retry` for failed jobs.
+The health endpoint is `http://127.0.0.1:6333/healthz`. `npm run ai:index:backfill` initializes the configured collection with a 1024-dimensional cosine `dense` vector and IDF-modified `bm25` sparse vector, then indexes both factual chunks and one article-discovery point per post. Use `npm run ai:index:post -- <postId>` for one post and `npm run ai:index:retry` for failed jobs. A normal v1.5 backfill reports `indexedChunks` plus the total Qdrant point count (chunks + articles).
 
 For production, use `docker-compose.production.yml`, set a strong `QDRANT_API_KEY`, and place the Own-Web API on its `ai-internal` private network with `QDRANT_URL=http://qdrant:6333`. That profile publishes no host port and sets Qdrant's API key. Do not expose port 6333 through a reverse proxy or public firewall rule. Back up the named `qdrant_data` volume together with MySQL; restore MySQL first and then run a backfill whenever index consistency is uncertain.
 
@@ -97,3 +97,6 @@ and [API-key workspace/permission rules](https://help.aliyun.com/en/model-studio
   `AI_CONFIDENCE_MIN_LEXICAL_TERMS` (default `1`) through live calibration.
   These reject weak or lexically unsupported cross-article evidence; they do
   not replace permission checks or human answer review.
+- Set `AI_DEVELOPER_TRACE=true` only for a protected development log sink. It
+  adds a redacted intent/plan/source-count/tool-name/timing trace; it never
+  includes prompt, answer text, selection, cookie, key or hidden reasoning.

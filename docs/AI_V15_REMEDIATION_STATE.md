@@ -8,8 +8,9 @@ Runtime Agent and all existing Own-Web authorization behavior.
 
 ## Current phase
 
-Phase 5 — Chat-first workspace UI complete; Phase 6 final security,
-documentation and full-regression acceptance is next.
+COMPLETED — all v1.5 implementation, live validation and regression gates have
+finished. The only remaining operational follow-up is ordinary production
+monitoring and calibration as the article corpus grows.
 
 ## Recovery record
 
@@ -18,10 +19,11 @@ documentation and full-regression acceptance is next.
 | Starting HEAD / remote | `1a7807f633ca6d2152d395921e2bdcdc7c2c0fa1`, identical locally and on `origin/codex/community-blog-v1` |
 | User-owned staged file | `.codex/HANDOFF.md`; do not edit, unstage or commit it |
 | Current live prerequisites | Docker Qdrant v1.19 healthy; Qwen/Qdrant v1.5 backfill completed with 4 posts, 32 chunks and 36 total points |
-| Completed work | Phases 0–4 plus a shared `panel`/`workspace` chat surface, full-height `/ai` reading workspace, responsive history drawer, centered message column, automatic capped composer, compact assistant presentation and preserved source/action/context behaviors |
-| Phase 5 verification | `typecheck` PASS, `build` PASS. AI Playwright suite: 12 PASS across desktop/mobile/light/dark; 4 intentionally skipped unavailable-shell cases. AI security/API/agent suite: 29 PASS. Existing build-size advisory only. |
-| Current architectural gaps | final documentation/security/full regression and visual/performance acceptance |
-| Next exact action | run v1.5-focused tests plus API/E2E/visual/performance/full suite, update operational/security documentation and record every pass, skip or external block honestly |
+| Completed work | Phases 0–5 plus v1.5 architecture/setup/security docs, final real Qwen/Qdrant checks and an orphan-pruned production-shaped index |
+| Phase 6 verification | `test:all` exit 0: 99 unit, AI focused suites, API/security, 133 E2E PASS / 19 configured skips, 20 visual PASS, Lighthouse PASS (Editor honestly `Needs Runtime Verification` without an auth cookie), plus API access smoke tests. Live `ai:live:acceptance`, `ai:live:security` and `ai:live:account` PASS. |
+| Final runtime proof | Docker Desktop engine restarted after an external daemon stop; `ai:index:backfill` scanned 4 posts / indexed 32 chunks / pruned 24 temporary orphan points / left 36 points. Final `ai:doctor`: configuration, 3 migrations, Qdrant 36, embedding, rerank and chat all PASS. |
+| Remaining calibrated follow-up | Article discovery Top-5 selection precision was 0.5000 on the four-post local corpus. Expected targets ranked first; re-evaluate after a larger corpus rather than masking broad candidates as perfect precision. |
+| Next exact action | Normal operation: run `npm run ai:doctor` after deployments and `npm run ai:index:backfill` after data restore or vector-volume loss. |
 
 ## Non-negotiable guardrails
 

@@ -10,6 +10,13 @@ Conversations, messages, feedback, Memory and settings for signed-in users alway
 
 The system instruction marks article text, retrieval chunks, selected text and tool results as untrusted data. It forbids instruction following from them, secret/system-prompt disclosure, fabricated citations, permission bypasses and hidden-reasoning disclosure. Only five static read-only tools can run, each with Zod validation, timeout and response limit; arbitrary SQL, shell, URL, MCP and model-selected tool calls do not exist. The workflow stops at three tool rounds.
 
+v1.5 adds one read-only `list_articles` tool and an authorized metadata catalog;
+it does not add broad database access. Article-level discovery points are
+separated from chunk fact evidence with `source_type` filters, then rehydrated,
+hash-checked and reauthorized exactly like chunks. A deleted post records both
+chunk and article point tombstones before its relational cascade so stale
+recommendations cannot survive asynchronous cleanup.
+
 The Vue chat surface renders Markdown through `marked` and DOMPurify with a restricted tag/attribute list. Citations are structured links produced by the server response composer, rather than trusting provider HTML. The AI UI regression sends hostile model-shaped HTML and verifies it cannot create an image or execute code.
 
 ## Abuse controls and telemetry
@@ -17,6 +24,11 @@ The Vue chat surface renders Markdown through `marked` and DOMPurify with a rest
 All AI routes remain behind the application Origin/no-store middleware and use the existing HttpOnly session validation when present. Chat validates request shape and size, model registry membership, daily guest/user allowance, per-IP window, per-subject concurrency and global daily request/token ceilings before model work. Browser cancellation propagates an AbortSignal upstream and records aborted rather than complete status.
 
 Logs contain only request ID, anonymous marker or user ID, selected model/intent, timing, chunk IDs/tool names, token usage and status. They must not contain message body, selection content, prompts, secrets or Cookies. Treat unexpected content in provider or Qdrant logs as an incident: revoke provider/Qdrant keys, preserve minimal redacted evidence, invalidate affected sessions where warranted, check `ai_usage`/index jobs, and rebuild the index after remediation.
+
+When `AI_DEVELOPER_TRACE=true`, the optional development-only trace is limited
+to intent, fixed source-plan names, numeric source counts, confidence kind,
+safe tool names and timing. It deliberately excludes all raw inputs, outputs,
+context, IDs with user meaning, private content and reasoning.
 
 ## Required regression checks
 
