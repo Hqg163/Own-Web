@@ -149,8 +149,12 @@ export function useAi() {
     state.error = ''; state.status = 'analyzing'
     const userMessage: AiMessage | null = options.regenerateMessageId || options.quickAction ? null : { id: `local-user-${Date.now()}`, role: 'user', content: value, status: 'complete' }
     if (userMessage) state.messages.push(userMessage)
-    const assistant: AiMessage = { id: `local-assistant-${Date.now()}`, role: 'assistant', content: '', status: 'streaming', citations: [] }
-    state.messages.push(assistant)
+    const assistantDraft: AiMessage = { id: `local-assistant-${Date.now()}`, role: 'assistant', content: '', status: 'streaming', citations: [] }
+    state.messages.push(assistantDraft)
+    // `state.messages` is a Vue reactive array. Mutating the raw object that
+    // was passed to push does not notify a template which already read the
+    // proxied array element, so always retain and mutate that reactive entry.
+    const assistant = state.messages[state.messages.length - 1]!
     controller.value = new AbortController()
     let pendingDelta = ''
     let deltaFrame: number | null = null
