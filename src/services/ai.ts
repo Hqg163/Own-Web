@@ -82,7 +82,18 @@ export function useAi() {
   async function loadConversations() {
     if (state.availability !== 'available') return
     loadingHistory.value = true
-    try { const response = await http.get('/api/ai/conversations'); conversations.value = Array.isArray(response.data?.items) ? response.data.items : [] }
+    try {
+      const response = await http.get('/api/ai/conversations')
+      const items: AiConversation[] = Array.isArray(response.data?.items) ? response.data.items : []
+      // A guest cookie can be established by the streaming response itself.
+      // Keep the just-started local conversation visible while that browser
+      // session settles instead of replacing its immediate title with an empty
+      // history response. A later successful list naturally replaces it.
+      if (!state.persistent && state.conversationId && !items.some((item) => item.id === state.conversationId)) {
+        items.unshift({ id: state.conversationId, title: state.conversationTitle || '新对话', selectedModel: state.selectedModel })
+      }
+      conversations.value = items
+    }
     catch (error: any) { state.error = aiError(error, '无法读取会话记录。') }
     finally { loadingHistory.value = false }
   }

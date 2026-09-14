@@ -11,7 +11,7 @@ const chromeLauncher = require('chrome-launcher');
 const { chromium } = require('@playwright/test');
 
 const APP_ORIGIN = process.env.PERFORMANCE_APP_ORIGIN || 'http://127.0.0.1:5174';
-const API_ORIGIN = process.env.PERFORMANCE_API_ORIGIN || 'http://127.0.0.1:3301';
+const API_ORIGIN = process.env.PERFORMANCE_API_ORIGIN || `http://127.0.0.1:${process.env.TEST_API_PORT || '3301'}`;
 const MUTATION_ORIGIN = process.env.PERFORMANCE_MUTATION_ORIGIN || 'http://127.0.0.1:5173';
 const TEST_DB_NAME = process.env.TEST_DB_NAME || 'own_web_test';
 const UPLOAD_ROOT = path.resolve(process.env.TEST_UPLOAD_ROOT || path.join('api', 'test-uploads'));

@@ -8,12 +8,13 @@ the verified v1.6 streaming, RAG, authorization, Skills, Memory, and Provider be
 
 ## Recovery snapshot
 
-- **State:** `IN_PROGRESS`
-- **Phase:** P2–P4 — compact workspace, launcher removal, and turn visual rhythm
+- **State:** `COMPLETED`
+- **Phase:** P7 — full regression and delivery recorded
 - **HEAD at start:** `955697c docs(ai): record v1.6 validation evidence`
 - **Branch:** `codex/community-blog-v1`
 - **Protected user worktree item:** staged `.codex/HANDOFF.md`; never modify, unstage, or commit it.
-- **External dependencies:** v1.6 recorded Qwen, Qdrant, embedding, and rerank as available. No external blocker has been encountered in v1.7 yet.
+- **External dependencies:** `npm run ai:doctor` passed on 2026-09-14 for configuration,
+  migrations, Qdrant (1,230 points), embedding, rerank, and chat. No external blocker occurred.
 
 ## Confirmed baseline
 
@@ -97,7 +98,77 @@ the verified v1.6 streaming, RAG, authorization, Skills, Memory, and Provider be
 - PASS — local v1.7 migrations applied without emitting configured secrets
 - PASS — frontend typecheck process completed without diagnostics
 
-## Next exact action
+## Completed P2–P4 — compact workspace and visual turn order
 
-Read the live `/ai` layout and launcher integration, then remove the duplicate hero and launcher
-while preserving the mobile history drawer, composer, sources, dialog behavior, and accessibility.
+- Removed the duplicated `Own-Web AI / 站内助手` hero. The workspace now
+  begins immediately beneath the site navigation with a compact conversation
+  sidebar and a single compact chat header.
+- Moved `新对话` into the sidebar, reduced desktop history width to 224px,
+  and added an accessible desktop collapse control. Mobile keeps a dedicated
+  history drawer and the chat itself retains the viewport.
+- The shared layout no longer mounts `AiPanel` on route `Ai`; ordinary routes
+  still mount it normally, so the full workspace has no duplicate bottom-right
+  launcher.
+- Kept assistant text card-free in the workspace, tightened turn gaps, and
+  preserved the existing composer, source grouping, stop, copy, regenerate,
+  focus-trap, and follow-latest implementation.
+- Fixed an uncovered guest-history branch: the visitor note previously owned
+  the same `v-if / v-else` chain as the list, making all guest session history
+  invisible. It is now independent, and the currently active guest
+  conversation remains visible while a proxy-set cookie/session settles.
+
+## Browser evidence (local isolated Mock acceptance)
+
+- PASS — 1664×912 light: compact header, 224px sidebar, no hero/footer/launcher,
+  visible composer and correctly grouped user → assistant turn.
+- PASS — 1920×1080 light and 1440×900 light: chat remains the visual primary
+  surface and the composer stays in the workspace.
+- PASS — 390×844 light/dark: mobile history is a drawer, composer remains
+  reachable, and the header has no wasted hero area.
+- PASS — 1664×912 dark: token-based contrast, user bubble, assistant body,
+  sidebar, and composer remain legible.
+- PASS — actual streaming first paint and title update: first prompt
+  `C#主要是用于什么领域？` changed both chat header and sidebar to
+  `C# 主要应用领域` before the mock answer completed.
+- PASS — three follow-up turns appeared in DOM order as
+  `user → assistant → user → assistant → user → assistant`; reloading the
+  browser retained the session conversation in this acceptance environment.
+- PASS — `/ai` has zero `data-testid="ai-launcher"` elements; `/` retains the
+  panel launcher under its existing regression coverage.
+
+## Tests recorded for P2–P4
+
+- PASS — `npm run typecheck`
+- PASS — `npm run build`
+- PASS — `npm run test:ai-api` (11 tests)
+- PASS — `npm run test:ai-agent` (25 tests)
+- PASS — `npm run api:check`
+- PASS — isolated MySQL migration/order/title smoke
+- PASS — `git diff --check`
+
+## Completed P5–P7 — full regression and delivery
+
+- PASS — final `npm run test:all` (exit code 0) in fresh disposable database
+  `own_web_v17_final3` using isolated ports 3303/5175. The port selection avoids
+  the user's active local development server and does not change runtime defaults.
+- PASS — `typecheck`, `build`, `api:check`, 111 unit tests, `test:ai-rag`
+  (19 unit assertions plus Qdrant hybrid integration), `test:ai-agent` (25),
+  `test:ai-api` (11), `test:ai-security` (36), database/API migration checks,
+  and the existing security and access-control smoke suites.
+- PASS — focused Mock browser acceptance: 12 AI interactions across desktop/mobile and light/dark;
+  the 4 disabled-service cases were intentionally skipped by the Mock-enabled runner.
+- PASS — full existing E2E: 133 passed, 19 explicitly skipped because the suite deliberately
+  runs AI-disabled and privilege-dependent branches separately; no failures.
+- PASS — visual suite: 20/20 fixed visual baselines across five viewports and both themes.
+- PASS — performance/Lighthouse suite. Its editor check is explicitly reported as runtime
+  verification needed when no real editor cookie is supplied; it is not fabricated as a pass.
+- PASS — final `npm run ai:doctor`: configuration, three AI migrations, Qdrant, embedding,
+  rerank, and live chat all passed without exposing credentials.
+
+## Delivery checkpoint
+
+- Commits: `7b2fe9a` (ordering), `29f8959` (titles), `e6545fb` (workspace), followed by
+  the final P7 regression/isolation commit.
+- `.codex/HANDOFF.md` remains staged user work and was neither modified nor included in any v1.7 commit.
+- The only intentionally unverified performance item is the pre-existing editor-cookie scenario;
+  the suite labels it **Needs Runtime Verification** rather than claiming a pass.

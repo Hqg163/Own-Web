@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
 async function createPublicArticle(page: import('@playwright/test').Page, project: string) {
-  const origin = 'http://127.0.0.1:5173'
+  const origin = process.env.E2E_ORIGIN || 'http://127.0.0.1:5173'
   const suffix = `${Date.now()}-${project.replace(/[^a-z0-9]/gi, '')}`
   const email = `ai-selection-${suffix}@own-web.test`
   const password = 'OwnWebAiSelectionA1!'
@@ -38,6 +38,7 @@ test.describe('AI guest experience', () => {
     const partialLength = await assistant.innerText().then((text) => text.length)
     await expect.poll(async () => (await assistant.innerText()).length).toBeGreaterThan(partialLength)
     await expect(assistant.locator('.ai-message__state')).toHaveCount(0)
+    await expect(page.locator('.ai-history-item').first()).toContainText('给出一条清晰')
 
     await expect(page.getByTestId('ai-launcher')).toBeHidden()
     await page.goto('/')

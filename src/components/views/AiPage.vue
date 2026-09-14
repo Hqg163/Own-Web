@@ -1,5 +1,6 @@
 <template>
   <main class="container ai-page">
+    <h1 class="visually-hidden">Own-Web AI 对话</h1>
     <section v-if="!canChat" class="ai-page__availability card" aria-live="polite">
       <AppIcon name="info" :size="22" />
       <div>
@@ -19,9 +20,16 @@
           </div>
         </div>
         <p v-if="!ai.loggedIn()" class="ai-page__guest-note">访客会话仅在当前浏览器会话中保留。</p>
-        <p v-else-if="ai.loadingHistory.value" class="ai-page__guest-note" role="status">正在读取历史…</p>
-        <p v-else-if="!ai.conversations.value.length" class="ai-page__guest-note">还没有历史对话。</p>
-        <div v-else class="ai-history-list">
+        <p v-if="ai.loggedIn() && ai.loadingHistory.value" class="ai-page__guest-note" role="status">正在读取历史…</p>
+        <p v-else-if="ai.loggedIn() && !ai.conversations.value.length && !currentConversation" class="ai-page__guest-note">还没有历史对话。</p>
+        <div v-if="(!ai.loggedIn() || !ai.loadingHistory.value) && (currentConversation || ai.conversations.value.length)" class="ai-history-list">
+          <div v-if="currentConversation && !ai.conversations.value.length" class="ai-history-item active">
+            <button type="button" @click="openConversation(currentConversation.id)">{{ currentConversation.title }}</button>
+            <span>
+              <button class="ai-history-icon" type="button" :aria-label="`重命名 ${currentConversation.title}`" @click="startRename(currentConversation)"><AppIcon name="pen" :size="14" /></button>
+              <button class="ai-history-icon" type="button" :aria-label="`删除 ${currentConversation.title}`" @click="confirmDelete(currentConversation)"><AppIcon name="trash" :size="14" /></button>
+            </span>
+          </div>
           <div v-for="conversation in ai.conversations.value" :key="conversation.id" class="ai-history-item" :class="{ active: ai.state.conversationId === conversation.id }">
             <button type="button" @click="openConversation(conversation.id)">{{ conversation.title || '新对话' }}</button>
             <span>
@@ -77,6 +85,9 @@ const deleteConfirm = ref<HTMLButtonElement | null>(null)
 const returnFocus = ref<HTMLElement | null>(null)
 const canChat = computed(() => ai.state.availability === 'available')
 const activeTitle = computed(() => ai.state.conversationTitle || ai.conversations.value.find((item) => item.id === ai.state.conversationId)?.title || '新对话')
+const currentConversation = computed<AiConversation | null>(() => ai.state.conversationId ? {
+  id: ai.state.conversationId, title: ai.state.conversationTitle || '新对话', selectedModel: ai.state.selectedModel,
+} : null)
 const unavailableTitle = computed(() => ai.state.availability === 'unknown' ? '正在检查 AI 服务' : 'AI 助手暂不可用')
 const unavailableMessage = computed(() => ai.state.error || (ai.state.availability === 'unknown' ? '正在读取服务状态，请稍候。' : '服务尚未完成配置。你可以稍后再试。'))
 

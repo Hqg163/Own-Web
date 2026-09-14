@@ -20,7 +20,7 @@ function cleanTitle(value) {
     .trim()
     .replace(/[。！？!?；;，,、.]+$/u, '')
     .trim();
-  if (!title || /^(新对话|new chat)$/i.test(title)) return '';
+  if (!title || /^(新对话|new chat)$/i.test(title) || /^这是一个\s*mock\s*模式/i.test(title)) return '';
   title = compact(title, /[\u3400-\u9fff]/u.test(title) ? 20 : 56).replace(/[。！？!?；;，,、.]+$/u, '').trim();
   return title;
 }
